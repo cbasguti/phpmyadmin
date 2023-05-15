@@ -65,6 +65,9 @@ final class SetValuesController extends AbstractController
         // Converts characters of $currentValue to HTML entities.
         $convertedCurrentValue = htmlentities($currentValue, ENT_COMPAT, 'UTF-8');
 
+        // Add empty at the first position of the values array.
+        array_unshift($values, '');
+
         $select = $this->template->render('sql/set_column', [
             'values' => $values,
             'current_values' => $convertedCurrentValue,
