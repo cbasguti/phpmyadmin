@@ -1,3 +1,4 @@
+
 /**
  * for table relation
  */
@@ -75,6 +76,8 @@ TableRelation.getDropdownValues = function ($dropdown) {
             return;
         }
     }
+    // initialize select2 for the column dropdown
+    $('.select2').select2();
     var $msgbox = Functions.ajaxShowMessage();
     var $form = $dropdown.parents('form');
     var $db = $form.find('input[name="db"]').val();
