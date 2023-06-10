@@ -42,8 +42,7 @@ use const LOCK_EX;
  */
 class ImportShp extends ImportPlugin
 {
-    /** @var ZipExtension|null */
-    private $zipExtension = null;
+    private ZipExtension|null $zipExtension = null;
 
     protected function init(): void
     {
@@ -54,9 +53,7 @@ class ImportShp extends ImportPlugin
         $this->zipExtension = new ZipExtension(new ZipArchive());
     }
 
-    /**
-     * @psalm-return non-empty-lowercase-string
-     */
+    /** @psalm-return non-empty-lowercase-string */
     public function getName(): string
     {
         return 'shp';
@@ -75,16 +72,18 @@ class ImportShp extends ImportPlugin
     /**
      * Handles the whole import logic
      *
-     * @param array $sql_data 2-element array with sql data
+     * @return string[]
      */
-    public function doImport(?File $importHandle = null, array &$sql_data = []): void
+    public function doImport(File|null $importHandle = null): array
     {
-        global $db, $error, $finished, $import_file, $local_import_file, $message, $dbi;
-
+        $GLOBALS['error'] ??= null;
+        $GLOBALS['import_file'] ??= null;
+        $GLOBALS['local_import_file'] ??= null;
+        $GLOBALS['message'] ??= null;
         $GLOBALS['finished'] = false;
 
         if ($importHandle === null || $this->zipExtension === null) {
-            return;
+            return [];
         }
 
         /** @see ImportShp::readFromBuffer() */
@@ -95,57 +94,61 @@ class ImportShp extends ImportPlugin
         $shp = new ShapeFileImport(1);
         // If the zip archive has more than one file,
         // get the correct content to the buffer from .shp file.
-        if ($compression === 'application/zip' && $this->zipExtension->getNumberOfFiles($import_file) > 1) {
+        if ($compression === 'application/zip' && $this->zipExtension->getNumberOfFiles($GLOBALS['import_file']) > 1) {
             if ($importHandle->openZip('/^.*\.shp$/i') === false) {
-                $message = Message::error(
-                    __('There was an error importing the ESRI shape file: "%s".')
+                $GLOBALS['message'] = Message::error(
+                    __('There was an error importing the ESRI shape file: "%s".'),
                 );
-                $message->addParam($importHandle->getError());
+                $GLOBALS['message']->addParam($importHandle->getError());
 
-                return;
+                return [];
             }
         }
 
-        $temp_dbf_file = false;
+        $tempDbfFile = false;
         // We need dbase extension to handle .dbf file
         if (extension_loaded('dbase')) {
             $temp = $GLOBALS['config']->getTempDir('shp');
             // If we can extract the zip archive to 'TempDir'
             // and use the files in it for import
             if ($compression === 'application/zip' && $temp !== null) {
-                $dbf_file_name = $this->zipExtension->findFile($import_file, '/^.*\.dbf$/i');
+                $dbfFileName = $this->zipExtension->findFile($GLOBALS['import_file'], '/^.*\.dbf$/i');
                 // If the corresponding .dbf file is in the zip archive
-                if ($dbf_file_name) {
+                if ($dbfFileName) {
                     // Extract the .dbf file and point to it.
-                    $extracted = $this->zipExtension->extract($import_file, $dbf_file_name);
+                    $extracted = $this->zipExtension->extract($GLOBALS['import_file'], $dbfFileName);
                     if ($extracted !== false) {
                         // remove filename extension, e.g.
                         // dresden_osm.shp/gis.osm_transport_a_v06.dbf
                         // to
                         // dresden_osm.shp/gis.osm_transport_a_v06
-                        $path_parts = pathinfo($dbf_file_name);
-                        $dbf_file_name = $path_parts['dirname'] . '/' . $path_parts['filename'];
+                        $pathParts = pathinfo($dbfFileName);
+                        $dbfFileName = $pathParts['dirname'] . '/' . $pathParts['filename'];
 
                         // sanitize filename
-                        $dbf_file_name = Sanitize::sanitizeFilename($dbf_file_name, true);
+                        $dbfFileName = Sanitize::sanitizeFilename($dbfFileName, true);
 
                         // concat correct filename and extension
-                        $dbf_file_path = $temp . '/' . $dbf_file_name . '.dbf';
+                        $dbfFilePath = $temp . '/' . $dbfFileName . '.dbf';
 
-                        if (file_put_contents($dbf_file_path, $extracted, LOCK_EX) !== false) {
-                            $temp_dbf_file = true;
+                        if (file_put_contents($dbfFilePath, $extracted, LOCK_EX) !== false) {
+                            $tempDbfFile = true;
 
                             // Replace the .dbf with .*, as required by the bsShapeFiles library.
-                            $shp->fileName = substr($dbf_file_path, 0, -4) . '.*';
+                            $shp->fileName = substr($dbfFilePath, 0, -4) . '.*';
                         }
                     }
                 }
-            } elseif (! empty($local_import_file) && ! empty($GLOBALS['cfg']['UploadDir']) && $compression === 'none') {
+            } elseif (
+                ! empty($GLOBALS['local_import_file'])
+                && ! empty($GLOBALS['cfg']['UploadDir'])
+                && $compression === 'none'
+            ) {
                 // If file is in UploadDir, use .dbf file in the same UploadDir
                 // to load extra data.
                 // Replace the .shp with .*,
                 // so the bsShapeFiles library correctly locates .dbf file.
-                $shp->fileName = mb_substr($import_file, 0, -4) . '.*';
+                $shp->fileName = mb_substr($GLOBALS['import_file'], 0, -4) . '.*';
             }
         }
 
@@ -153,18 +156,18 @@ class ImportShp extends ImportPlugin
         $shp->loadFromFile('');
 
         // Delete the .dbf file extracted to 'TempDir'
-        if ($temp_dbf_file && isset($dbf_file_path) && @file_exists($dbf_file_path)) {
-            unlink($dbf_file_path);
+        if ($tempDbfFile && isset($dbfFilePath) && @file_exists($dbfFilePath)) {
+            unlink($dbfFilePath);
         }
 
         if ($shp->lastError != '') {
-            $error = true;
-            $message = Message::error(
-                __('There was an error importing the ESRI shape file: "%s".')
+            $GLOBALS['error'] = true;
+            $GLOBALS['message'] = Message::error(
+                __('There was an error importing the ESRI shape file: "%s".'),
             );
-            $message->addParam($shp->lastError);
+            $GLOBALS['message']->addParam($shp->lastError);
 
-            return;
+            return [];
         }
 
         switch ($shp->shapeType) {
@@ -173,51 +176,51 @@ class ImportShp extends ImportPlugin
                 break;
             // ESRI Point
             case 1:
-                $gis_type = 'point';
+                $gisType = 'point';
                 break;
             // ESRI PolyLine
             case 3:
-                $gis_type = 'multilinestring';
+                $gisType = 'multilinestring';
                 break;
             // ESRI Polygon
             case 5:
-                $gis_type = 'multipolygon';
+                $gisType = 'multipolygon';
                 break;
             // ESRI MultiPoint
             case 8:
-                $gis_type = 'multipoint';
+                $gisType = 'multipoint';
                 break;
             default:
-                $error = true;
-                $message = Message::error(
-                    __('MySQL Spatial Extension does not support ESRI type "%s".')
+                $GLOBALS['error'] = true;
+                $GLOBALS['message'] = Message::error(
+                    __('MySQL Spatial Extension does not support ESRI type "%s".'),
                 );
-                $message->addParam($shp->getShapeName());
+                $GLOBALS['message']->addParam($shp->getShapeName());
 
-                return;
+                return [];
         }
 
-        if (isset($gis_type)) {
-            /** @var GisMultiLineString|GisMultiPoint|GisPoint|GisPolygon $gis_obj */
-            $gis_obj = GisFactory::factory($gis_type);
+        if (isset($gisType)) {
+            /** @var GisMultiLineString|GisMultiPoint|GisPoint|GisPolygon $gisObj */
+            $gisObj = GisFactory::factory($gisType);
         } else {
-            $gis_obj = null;
+            $gisObj = null;
         }
 
-        $num_rows = count($shp->records);
+        $numRows = count($shp->records);
         // If .dbf file is loaded, the number of extra data columns
-        $num_data_cols = $shp->getDBFHeader() !== null ? count($shp->getDBFHeader()) : 0;
+        $numDataCols = $shp->getDBFHeader() !== null ? count($shp->getDBFHeader()) : 0;
 
         $rows = [];
-        $col_names = [];
-        if ($num_rows != 0) {
+        $colNames = [];
+        if ($numRows != 0) {
             foreach ($shp->records as $record) {
                 $tempRow = [];
-                if ($gis_obj == null || ! method_exists($gis_obj, 'getShape')) {
+                if ($gisObj == null || ! method_exists($gisObj, 'getShape')) {
                     $tempRow[] = null;
                 } else {
                     $tempRow[] = "GeomFromText('"
-                        . $gis_obj->getShape($record->shpData) . "')";
+                        . $gisObj->getShape($record->shpData) . "')";
                 }
 
                 if ($shp->getDBFHeader() !== null) {
@@ -236,72 +239,61 @@ class ImportShp extends ImportPlugin
             }
         }
 
-        if (count($rows) === 0) {
-            $error = true;
-            $message = Message::error(
-                __('The imported file does not contain any data!')
+        if ($rows === []) {
+            $GLOBALS['error'] = true;
+            $GLOBALS['message'] = Message::error(
+                __('The imported file does not contain any data!'),
             );
 
-            return;
+            return [];
         }
 
         // Column names for spatial column and the rest of the columns,
         // if they are available
-        $col_names[] = 'SPATIAL';
+        $colNames[] = 'SPATIAL';
         $dbfHeader = $shp->getDBFHeader();
-        for ($n = 0; $n < $num_data_cols; $n++) {
+        for ($n = 0; $n < $numDataCols; $n++) {
             if ($dbfHeader === null) {
                 continue;
             }
 
-            $col_names[] = $dbfHeader[$n][0];
+            $colNames[] = $dbfHeader[$n][0];
         }
 
         // Set table name based on the number of tables
-        if (strlen((string) $db) > 0) {
-            $result = $dbi->fetchResult('SHOW TABLES');
-            $table_name = 'TABLE ' . (count($result) + 1);
+        if (strlen((string) $GLOBALS['db']) > 0) {
+            $result = $GLOBALS['dbi']->fetchResult('SHOW TABLES');
+            $tableName = 'TABLE ' . (count($result) + 1);
         } else {
-            $table_name = 'TBL_NAME';
+            $tableName = 'TBL_NAME';
         }
 
-        $tables = [
-            [
-                $table_name,
-                $col_names,
-                $rows,
-            ],
-        ];
+        $tables = [[$tableName, $colNames, $rows]];
 
         // Use data from shape file to chose best-fit MySQL types for each column
         $analyses = [];
         $analyses[] = $this->import->analyzeTable($tables[0]);
 
-        $table_no = 0;
-        $spatial_col = 0;
-        $analyses[$table_no][Import::TYPES][$spatial_col] = Import::GEOMETRY;
-        $analyses[$table_no][Import::FORMATTEDSQL][$spatial_col] = true;
+        $tableNo = 0;
+        $spatialCol = 0;
+        $analyses[$tableNo][Import::TYPES][$spatialCol] = Import::GEOMETRY;
+        $analyses[$tableNo][Import::FORMATTEDSQL][$spatialCol] = true;
 
         // Set database name to the currently selected one, if applicable
-        if (strlen((string) $db) > 0) {
-            $db_name = $db;
-            $options = ['create_db' => false];
-        } else {
-            $db_name = 'SHP_DB';
-            $options = null;
-        }
+        $dbName = $GLOBALS['db'] !== '' ? $GLOBALS['db'] : 'SHP_DB';
+        $createDb = $GLOBALS['db'] === '';
 
         // Created and execute necessary SQL statements from data
-        $null_param = null;
-        $this->import->buildSql($db_name, $tables, $analyses, $null_param, $options, $sql_data);
+        $sqlStatements = [];
+        $this->import->buildSql($dbName, $tables, $analyses, createDb:$createDb, sqlData:$sqlStatements);
 
-        unset($tables, $analyses);
-
-        $finished = true;
-        $error = false;
+        $GLOBALS['finished'] = true;
+        $GLOBALS['error'] = false;
 
         // Commit any possible data in buffers
-        $this->import->runQuery('', '', $sql_data);
+        $this->import->runQuery('', $sqlStatements);
+
+        return $sqlStatements;
     }
 
     /**
@@ -311,25 +303,25 @@ class ImportShp extends ImportPlugin
      * Sets $eof when $GLOBALS['finished'] is set and the buffer falls short.
      *
      * @param int $length number of bytes
-     *
-     * @return string
      */
-    public static function readFromBuffer($length)
+    public static function readFromBuffer(int $length): string
     {
-        global $buffer, $eof, $importHandle;
+        $GLOBALS['buffer'] ??= null;
+        $GLOBALS['eof'] ??= null;
+        $GLOBALS['importHandle'] ??= null;
 
         $import = new Import();
 
-        if (strlen((string) $buffer) < $length) {
+        if (strlen((string) $GLOBALS['buffer']) < $length) {
             if ($GLOBALS['finished']) {
-                $eof = true;
+                $GLOBALS['eof'] = true;
             } else {
-                $buffer .= $import->getNextChunk($importHandle);
+                $GLOBALS['buffer'] .= $import->getNextChunk($GLOBALS['importHandle']);
             }
         }
 
-        $result = substr($buffer, 0, $length);
-        $buffer = substr($buffer, $length);
+        $result = substr($GLOBALS['buffer'], 0, $length);
+        $GLOBALS['buffer'] = substr($GLOBALS['buffer'], $length);
 
         return $result;
     }

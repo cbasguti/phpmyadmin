@@ -48,88 +48,72 @@ class StorageEngine
     protected const DETAILS_TYPE_BOOLEAN = 3; // 'ON' or 'OFF'
 
     /** @var string engine name */
-    public $engine = 'dummy';
+    public string $engine = 'dummy';
 
     /** @var string engine title/description */
-    public $title = 'PMA Dummy Engine Class';
+    public string $title = 'PMA Dummy Engine Class';
 
     /** @var string engine lang description */
-    public $comment = 'If you read this text inside phpMyAdmin, something went wrong...';
+    public string $comment = 'If you read this text inside phpMyAdmin, something went wrong...';
 
     /**
      * Engine supported by current server.
      *
-     * @var int
      * @psalm-var self::SUPPORT_NO|self::SUPPORT_DISABLED|self::SUPPORT_YES|self::SUPPORT_DEFAULT
      */
-    public $support = self::SUPPORT_NO;
+    public int $support = self::SUPPORT_NO;
 
-    /**
-     * @param string $engine The engine ID
-     */
-    public function __construct($engine)
+    /** @param string $engine The engine ID */
+    public function __construct(string $engine)
     {
-        $storage_engines = self::getStorageEngines();
-        if (empty($storage_engines[$engine])) {
+        $storageEngines = self::getStorageEngines();
+        if (empty($storageEngines[$engine])) {
             return;
         }
 
         $this->engine = $engine;
-        $this->title = $storage_engines[$engine]['Engine'];
-        $this->comment = ($storage_engines[$engine]['Comment'] ?? '');
-        switch ($storage_engines[$engine]['Support']) {
-            case 'DEFAULT':
-                $this->support = self::SUPPORT_DEFAULT;
-                break;
-            case 'YES':
-                $this->support = self::SUPPORT_YES;
-                break;
-            case 'DISABLED':
-                $this->support = self::SUPPORT_DISABLED;
-                break;
-            case 'NO':
-            default:
-                $this->support = self::SUPPORT_NO;
-        }
+        $this->title = $storageEngines[$engine]['Engine'];
+        $this->comment = ($storageEngines[$engine]['Comment'] ?? '');
+        $this->support = match ($storageEngines[$engine]['Support']) {
+            'DEFAULT' => self::SUPPORT_DEFAULT,
+            'YES' => self::SUPPORT_YES,
+            'DISABLED' => self::SUPPORT_DISABLED,
+            default => self::SUPPORT_NO,
+        };
     }
 
     /**
      * Returns array of storage engines
      *
-     * @return array[] array of storage engines
+     * @return mixed[][] array of storage engines
      *
-     * @static
      * @staticvar array $storage_engines storage engines
      */
-    public static function getStorageEngines()
+    public static function getStorageEngines(): array
     {
-        global $dbi;
+        static $storageEngines = null;
 
-        static $storage_engines = null;
-
-        if ($storage_engines == null) {
-            $storage_engines = $dbi->fetchResult('SHOW STORAGE ENGINES', 'Engine');
-            if (! $dbi->isMariaDB() && $dbi->getVersion() >= 50708) {
+        if ($storageEngines == null) {
+            $storageEngines = $GLOBALS['dbi']->fetchResult('SHOW STORAGE ENGINES', 'Engine');
+            if (! $GLOBALS['dbi']->isMariaDB() && $GLOBALS['dbi']->getVersion() >= 50708) {
                 $disabled = (string) SessionCache::get(
                     'disabled_storage_engines',
                     /** @return mixed|false */
-                    static function () use ($dbi) {
-                        return $dbi->fetchValue(
-                            'SELECT @@disabled_storage_engines'
-                        );
-                    }
+                    static fn () => $GLOBALS['dbi']->fetchValue(
+                        'SELECT @@disabled_storage_engines',
+                    )
                 );
                 foreach (explode(',', $disabled) as $engine) {
-                    if (! isset($storage_engines[$engine])) {
+                    if (! isset($storageEngines[$engine])) {
                         continue;
                     }
 
-                    $storage_engines[$engine]['Support'] = 'DISABLED';
+                    $storageEngines[$engine]['Support'] = 'DISABLED';
                 }
             }
         }
 
-        return $storage_engines;
+        return $storageEngines;
     }
 
     /**
@@ -141,14 +125,13 @@ class StorageEngine
      */
     public static function hasMroongaEngine(): bool
     {
-        global $dbi;
         $cacheKey = 'storage-engine.mroonga.has.mroonga_command';
 
         if (Cache::has($cacheKey)) {
             return (bool) Cache::get($cacheKey, false);
         }
 
-        $supportsMroonga = $dbi->tryQuery('SELECT mroonga_command(\'object_list\');') !== false;
+        $supportsMroonga = $GLOBALS['dbi']->tryQuery('SELECT mroonga_command(\'object_list\');') !== false;
         Cache::set($cacheKey, $supportsMroonga);
 
         return $supportsMroonga;
@@ -164,13 +147,15 @@ class StorageEngine
      */
     public static function getMroongaLengths(string $dbName, string $tableName): array
     {
-        global $dbi;
         $cacheKey = 'storage-engine.mroonga.object_list.' . $dbName;
 
-        $dbi->selectDb($dbName);// Needed for mroonga_command calls
+        $GLOBALS['dbi']->selectDb($dbName);// Needed for mroonga_command calls
 
         if (! Cache::has($cacheKey)) {
-            $result = $dbi->fetchSingleRow('SELECT mroonga_command(\'object_list\');', DatabaseInterface::FETCH_NUM);
+            $result = $GLOBALS['dbi']->fetchSingleRow(
+                'SELECT mroonga_command(\'object_list\');',
+                DatabaseInterface::FETCH_NUM,
+            );
             $objectList = (array) json_decode($result[0] ?? '', true);
             foreach ($objectList as $mroongaName => $mroongaData) {
                 /**
@@ -200,9 +185,9 @@ class StorageEngine
                 continue;
             }
 
-            $result = $dbi->fetchSingleRow(
+            $result = $GLOBALS['dbi']->fetchSingleRow(
                 'SELECT mroonga_command(\'object_inspect ' . $mroongaName . '\');',
-                DatabaseInterface::FETCH_NUM
+                DatabaseInterface::FETCH_NUM,
             );
             $decodedData = json_decode($result[0] ?? '', true);
             if ($decodedData === null) {
@@ -222,9 +207,7 @@ class StorageEngine
         return [$dataLength, $indexLength];
     }
 
-    /**
-     * @return array<int|string, array<string, mixed>>
-     */
+    /** @return array<int|string, array<string, mixed>> */
     public static function getArray(): array
     {
         $engines = [];
@@ -255,69 +238,40 @@ class StorageEngine
      * @param string $engine The engine ID
      *
      * @return StorageEngine The engine plugin
-     *
-     * @static
      */
-    public static function getEngine($engine)
+    public static function getEngine(string $engine): StorageEngine
     {
-        switch (mb_strtolower($engine)) {
-            case 'bdb':
-                return new Bdb($engine);
-
-            case 'berkeleydb':
-                return new Berkeleydb($engine);
-
-            case 'binlog':
-                return new Binlog($engine);
-
-            case 'innobase':
-                return new Innobase($engine);
-
-            case 'innodb':
-                return new Innodb($engine);
-
-            case 'memory':
-                return new Memory($engine);
-
-            case 'merge':
-                return new Merge($engine);
-
-            case 'mrg_myisam':
-                return new MrgMyisam($engine);
-
-            case 'myisam':
-                return new Myisam($engine);
-
-            case 'ndbcluster':
-                return new Ndbcluster($engine);
-
-            case 'pbxt':
-                return new Pbxt($engine);
-
-            case 'performance_schema':
-                return new PerformanceSchema($engine);
-
-            default:
-                return new StorageEngine($engine);
-        }
+        return match (mb_strtolower($engine)) {
+            'bdb' => new Bdb($engine),
+            'berkeleydb' => new Berkeleydb($engine),
+            'binlog' => new Binlog($engine),
+            'innobase' => new Innobase($engine),
+            'innodb' => new Innodb($engine),
+            'memory' => new Memory($engine),
+            'merge' => new Merge($engine),
+            'mrg_myisam' => new MrgMyisam($engine),
+            'myisam' => new Myisam($engine),
+            'ndbcluster' => new Ndbcluster($engine),
+            'pbxt' => new Pbxt($engine),
+            'performance_schema' => new PerformanceSchema($engine),
+            default => new StorageEngine($engine),
+        };
     }
 
     /**
      * Returns true if given engine name is supported/valid, otherwise false
      *
      * @param string $engine name of engine
-     *
-     * @static
      */
-    public static function isValid($engine): bool
+    public static function isValid(string $engine): bool
     {
         if ($engine === 'PBMS') {
             return true;
         }
 
-        $storage_engines = self::getStorageEngines();
+        $storageEngines = self::getStorageEngines();
 
-        return isset($storage_engines[$engine]);
+        return isset($storageEngines[$engine]);
     }
 
     /**
@@ -326,7 +280,7 @@ class StorageEngine
      * @return string The table that was generated based on the retrieved
      *                information
      */
-    public function getHtmlVariables()
+    public function getHtmlVariables(): string
     {
         $ret = '';
 
@@ -345,9 +299,9 @@ class StorageEngine
                   . '    <td class="font-monospace text-end">';
             switch ($details['type']) {
                 case self::DETAILS_TYPE_SIZE:
-                    $parsed_size = $this->resolveTypeSize($details['value']);
-                    if ($parsed_size !== null) {
-                        $ret .= $parsed_size[0] . '&nbsp;' . $parsed_size[1];
+                    $parsedSize = $this->resolveTypeSize($details['value']);
+                    if ($parsedSize !== null) {
+                        $ret .= $parsedSize[0] . '&nbsp;' . $parsedSize[1];
                     }
 
                     break;
@@ -363,17 +317,15 @@ class StorageEngine
         }
 
         if (! $ret) {
-            $ret = '<p>' . "\n"
+            return '<p>' . "\n"
                 . '    '
                 . __('There is no detailed status information available for this storage engine.')
                 . "\n"
                 . '</p>' . "\n";
-        } else {
-            $ret = '<table class="table table-striped table-hover w-auto">'
-                . "\n" . $ret . '</table>' . "\n";
         }
 
-        return $ret;
+        return '<table class="table table-striped table-hover w-auto">'
+            . "\n" . $ret . '</table>' . "\n";
     }
 
     /**
@@ -384,11 +336,11 @@ class StorageEngine
      * DETAILS_TYPE_SIZE type needs to be
      * handled differently for a particular engine.
      *
-     * @param int $value Value to format
+     * @param int|string $value Value to format
      *
-     * @return array|null the formatted value and its unit
+     * @return mixed[]|null the formatted value and its unit
      */
-    public function resolveTypeSize($value): ?array
+    public function resolveTypeSize(int|string $value): array|null
     {
         return Util::formatByteDown($value);
     }
@@ -396,12 +348,10 @@ class StorageEngine
     /**
      * Returns array with detailed info about engine specific server variables
      *
-     * @return array array with detailed info about specific engine server variables
+     * @return mixed[] array with detailed info about specific engine server variables
      */
-    public function getVariablesStatus()
+    public function getVariablesStatus(): array
     {
-        global $dbi;
-
         $variables = $this->getVariables();
         $like = $this->getVariablesLikePattern();
 
@@ -411,31 +361,31 @@ class StorageEngine
             $like = '';
         }
 
-        $mysql_vars = [];
+        $mysqlVars = [];
 
-        $sql_query = 'SHOW GLOBAL VARIABLES ' . $like . ';';
-        $res = $dbi->query($sql_query);
+        $sqlQuery = 'SHOW GLOBAL VARIABLES ' . $like . ';';
+        $res = $GLOBALS['dbi']->query($sqlQuery);
         foreach ($res as $row) {
             if (isset($variables[$row['Variable_name']])) {
-                $mysql_vars[$row['Variable_name']] = $variables[$row['Variable_name']];
+                $mysqlVars[$row['Variable_name']] = $variables[$row['Variable_name']];
             } elseif (! $like && mb_stripos($row['Variable_name'], $this->engine) !== 0) {
                 continue;
             }
 
-            $mysql_vars[$row['Variable_name']]['value'] = $row['Value'];
+            $mysqlVars[$row['Variable_name']]['value'] = $row['Value'];
 
-            if (empty($mysql_vars[$row['Variable_name']]['title'])) {
-                $mysql_vars[$row['Variable_name']]['title'] = $row['Variable_name'];
+            if (empty($mysqlVars[$row['Variable_name']]['title'])) {
+                $mysqlVars[$row['Variable_name']]['title'] = $row['Variable_name'];
             }
 
-            if (isset($mysql_vars[$row['Variable_name']]['type'])) {
+            if (isset($mysqlVars[$row['Variable_name']]['type'])) {
                 continue;
             }
 
-            $mysql_vars[$row['Variable_name']]['type'] = self::DETAILS_TYPE_PLAINTEXT;
+            $mysqlVars[$row['Variable_name']]['type'] = self::DETAILS_TYPE_PLAINTEXT;
         }
 
-        return $mysql_vars;
+        return $mysqlVars;
     }
 
     /**
@@ -443,7 +393,7 @@ class StorageEngine
      *
      * @return string The title
      */
-    public function getTitle()
+    public function getTitle(): string
     {
         return $this->title;
     }
@@ -453,7 +403,7 @@ class StorageEngine
      *
      * @return string The comment
      */
-    public function getComment()
+    public function getComment(): string
     {
         return $this->comment;
     }
@@ -463,22 +413,14 @@ class StorageEngine
      *
      * @return string The localized message.
      */
-    public function getSupportInformationMessage()
+    public function getSupportInformationMessage(): string
     {
-        switch ($this->support) {
-            case self::SUPPORT_DEFAULT:
-                $message = __('%s is the default storage engine on this MySQL server.');
-                break;
-            case self::SUPPORT_YES:
-                $message = __('%s is available on this MySQL server.');
-                break;
-            case self::SUPPORT_DISABLED:
-                $message = __('%s has been disabled for this MySQL server.');
-                break;
-            case self::SUPPORT_NO:
-            default:
-                $message = __('This MySQL server does not support the %s storage engine.');
-        }
+        $message = match ($this->support) {
+            self::SUPPORT_DEFAULT => __('%s is the default storage engine on this MySQL server.'),
+            self::SUPPORT_YES => __('%s is available on this MySQL server.'),
+            self::SUPPORT_DISABLED => __('%s has been disabled for this MySQL server.'),
+            default => __('This MySQL server does not support the %s storage engine.'),
+        };
 
         return sprintf($message, htmlspecialchars($this->title));
     }
@@ -488,9 +430,9 @@ class StorageEngine
      * engine. This function should be overridden when extending this class
      * for a particular engine.
      *
-     * @return array The list of variables.
+     * @return mixed[] The list of variables.
      */
-    public function getVariables()
+    public function getVariables(): array
     {
         return [];
     }
@@ -501,7 +443,7 @@ class StorageEngine
      *
      * @return string MySQL help page filename
      */
-    public function getMysqlHelpPage()
+    public function getMysqlHelpPage(): string
     {
         return $this->engine . '-storage-engine';
     }
@@ -512,7 +454,7 @@ class StorageEngine
      *
      * @return string SQL query LIKE pattern
      */
-    public function getVariablesLikePattern()
+    public function getVariablesLikePattern(): string
     {
         return '';
     }
@@ -522,7 +464,7 @@ class StorageEngine
      *
      * @return string[] The list
      */
-    public function getInfoPages()
+    public function getInfoPages(): array
     {
         return [];
     }
@@ -534,7 +476,7 @@ class StorageEngine
      *
      * @return string html output
      */
-    public function getPage($id)
+    public function getPage(string $id): string
     {
         if (! array_key_exists($id, $this->getInfoPages())) {
             return '';

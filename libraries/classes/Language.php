@@ -22,20 +22,7 @@ use function strcmp;
  */
 class Language
 {
-    /** @var string */
-    protected $code;
-
-    /** @var string */
-    protected $name;
-
-    /** @var string */
-    protected $native;
-
-    /** @var string */
-    protected $regex;
-
-    /** @var string */
-    protected $mysql;
+    protected string $regex;
 
     /**
      * Constructs the Language object
@@ -46,45 +33,40 @@ class Language
      * @param string $regex  Match regular expression
      * @param string $mysql  MySQL locale code
      */
-    public function __construct($code, $name, $native, $regex, $mysql)
-    {
-        $this->code = $code;
-        $this->name = $name;
-        $this->native = $native;
+    public function __construct(
+        protected string $code,
+        protected string $name,
+        protected string $native,
+        string $regex,
+        protected string $mysql,
+    ) {
         if (! str_contains($regex, '[-_]')) {
             $regex = str_replace('|', '([-_][[:alpha:]]{2,3})?|', $regex);
         }
 
         $this->regex = $regex;
-        $this->mysql = $mysql;
     }
 
     /**
      * Returns native name for language
-     *
-     * @return string
      */
-    public function getNativeName()
+    public function getNativeName(): string
     {
         return $this->native;
     }
 
     /**
      * Returns English name for language
-     *
-     * @return string
      */
-    public function getEnglishName()
+    public function getEnglishName(): string
     {
         return $this->name;
     }
 
     /**
      * Returns verbose name for language
-     *
-     * @return string
      */
-    public function getName()
+    public function getName(): string
     {
         if (! empty($this->native)) {
             return $this->native . ' - ' . $this->name;
@@ -95,20 +77,16 @@ class Language
 
     /**
      * Returns language code
-     *
-     * @return string
      */
-    public function getCode()
+    public function getCode(): string
     {
         return $this->code;
     }
 
     /**
      * Returns MySQL locale code, can be empty
-     *
-     * @return string
      */
-    public function getMySQLLocale()
+    public function getMySQLLocale(): string
     {
         return $this->mysql;
     }
@@ -138,7 +116,7 @@ class Language
      *
      * @param string $header Header content
      */
-    public function matchesAcceptLanguage($header): bool
+    public function matchesAcceptLanguage(string $header): bool
     {
         $pattern = '/^('
             . addcslashes($this->regex, '/')
@@ -152,7 +130,7 @@ class Language
      *
      * @param string $header Header content
      */
-    public function matchesUserAgent($header): bool
+    public function matchesUserAgent(string $header): bool
     {
         $pattern = '/(\(|\[|;[[:space:]])('
             . addcslashes($this->regex, '/')

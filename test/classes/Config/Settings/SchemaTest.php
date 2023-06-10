@@ -5,18 +5,18 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Config\Settings;
 
 use PhpMyAdmin\Config\Settings\Schema;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function array_keys;
 use function array_merge;
 
-/**
- * @covers \PhpMyAdmin\Config\Settings\Schema
- */
+#[CoversClass(Schema::class)]
 class SchemaTest extends TestCase
 {
     /** @var array<string, bool|string> */
-    private $defaultValues = [
+    private array $defaultValues = [
         'format' => 'pdf',
         'pdf_show_color' => true,
         'pdf_show_keys' => false,
@@ -42,9 +42,8 @@ class SchemaTest extends TestCase
     /**
      * @param mixed[][] $values
      * @psalm-param (array{0: string, 1: mixed, 2: mixed})[] $values
-     *
-     * @dataProvider providerForTestConstructor
      */
+    #[DataProvider('providerForTestConstructor')]
     public function testConstructor(array $values): void
     {
         $actualValues = [];
@@ -57,9 +56,12 @@ class SchemaTest extends TestCase
 
         $expected = array_merge($this->defaultValues, $expectedValues);
         $settings = new Schema($actualValues);
+        $schemaArray = $settings->asArray();
 
         foreach (array_keys($expectedValues) as $key) {
             $this->assertSame($expected[$key], $settings->$key);
+            $this->assertArrayHasKey($key, $schemaArray);
+            $this->assertSame($expected[$key], $schemaArray[$key]);
         }
     }
 
@@ -69,7 +71,7 @@ class SchemaTest extends TestCase
      * @return mixed[][][][]
      * @psalm-return (array{0: string, 1: mixed, 2: mixed})[][][]
      */
-    public function providerForTestConstructor(): array
+    public static function providerForTestConstructor(): array
     {
         return [
             'null values' => [
@@ -142,12 +144,7 @@ class SchemaTest extends TestCase
                     ['svg_all_tables_same_width', true, true],
                 ],
             ],
-            'valid values 3' => [
-                [
-                    ['format', 'dia', 'dia'],
-                    ['pdf_table_order', 'name_desc', 'name_desc'],
-                ],
-            ],
+            'valid values 3' => [[['format','dia','dia'], ['pdf_table_order','name_desc','name_desc']]],
             'valid values 4' => [[['format', 'svg', 'svg']]],
             'valid values with type coercion' => [
                 [

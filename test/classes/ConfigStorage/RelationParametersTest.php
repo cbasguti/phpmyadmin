@@ -4,32 +4,50 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\ConfigStorage;
 
+use PhpMyAdmin\ConfigStorage\Features\BookmarkFeature;
+use PhpMyAdmin\ConfigStorage\Features\BrowserTransformationFeature;
+use PhpMyAdmin\ConfigStorage\Features\CentralColumnsFeature;
+use PhpMyAdmin\ConfigStorage\Features\ColumnCommentsFeature;
+use PhpMyAdmin\ConfigStorage\Features\ConfigurableMenusFeature;
+use PhpMyAdmin\ConfigStorage\Features\DatabaseDesignerSettingsFeature;
+use PhpMyAdmin\ConfigStorage\Features\DisplayFeature;
+use PhpMyAdmin\ConfigStorage\Features\ExportTemplatesFeature;
+use PhpMyAdmin\ConfigStorage\Features\FavoriteTablesFeature;
+use PhpMyAdmin\ConfigStorage\Features\NavigationItemsHidingFeature;
+use PhpMyAdmin\ConfigStorage\Features\PdfFeature;
+use PhpMyAdmin\ConfigStorage\Features\RecentlyUsedTablesFeature;
+use PhpMyAdmin\ConfigStorage\Features\RelationFeature;
+use PhpMyAdmin\ConfigStorage\Features\SavedQueryByExampleSearchesFeature;
+use PhpMyAdmin\ConfigStorage\Features\SqlHistoryFeature;
+use PhpMyAdmin\ConfigStorage\Features\TrackingFeature;
+use PhpMyAdmin\ConfigStorage\Features\UiPreferencesFeature;
+use PhpMyAdmin\ConfigStorage\Features\UserPreferencesFeature;
 use PhpMyAdmin\ConfigStorage\RelationParameters;
-use PhpMyAdmin\Dbal\DatabaseName;
+use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Version;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-/**
- * @covers \PhpMyAdmin\ConfigStorage\RelationParameters
- * @covers \PhpMyAdmin\ConfigStorage\Features\BookmarkFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\BrowserTransformationFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\CentralColumnsFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\ColumnCommentsFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\ConfigurableMenusFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\DatabaseDesignerSettingsFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\DisplayFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\ExportTemplatesFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\FavoriteTablesFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\NavigationItemsHidingFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\PdfFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\RecentlyUsedTablesFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\RelationFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\SavedQueryByExampleSearchesFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\SqlHistoryFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\TrackingFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\UiPreferencesFeature
- * @covers \PhpMyAdmin\ConfigStorage\Features\UserPreferencesFeature
- */
+#[CoversClass(RelationParameters::class)]
+#[CoversClass(BookmarkFeature::class)]
+#[CoversClass(BrowserTransformationFeature::class)]
+#[CoversClass(CentralColumnsFeature::class)]
+#[CoversClass(ColumnCommentsFeature::class)]
+#[CoversClass(ConfigurableMenusFeature::class)]
+#[CoversClass(DatabaseDesignerSettingsFeature::class)]
+#[CoversClass(DisplayFeature::class)]
+#[CoversClass(ExportTemplatesFeature::class)]
+#[CoversClass(FavoriteTablesFeature::class)]
+#[CoversClass(NavigationItemsHidingFeature::class)]
+#[CoversClass(PdfFeature::class)]
+#[CoversClass(RecentlyUsedTablesFeature::class)]
+#[CoversClass(RelationFeature::class)]
+#[CoversClass(SavedQueryByExampleSearchesFeature::class)]
+#[CoversClass(SqlHistoryFeature::class)]
+#[CoversClass(TrackingFeature::class)]
+#[CoversClass(UiPreferencesFeature::class)]
+#[CoversClass(UserPreferencesFeature::class)]
 class RelationParametersTest extends TestCase
 {
     public function testFeaturesWithTwoTables(): void
@@ -90,11 +108,11 @@ class RelationParametersTest extends TestCase
         $this->assertNotNull($relationParameters->relationFeature);
         $this->assertSame(
             $relationParameters->browserTransformationFeature->columnInfo,
-            $relationParameters->columnCommentsFeature->columnInfo
+            $relationParameters->columnCommentsFeature->columnInfo,
         );
         $this->assertSame(
             $relationParameters->relationFeature->relation,
-            $relationParameters->displayFeature->relation
+            $relationParameters->displayFeature->relation,
         );
 
         $relationParameters = RelationParameters::fromArray([
@@ -246,18 +264,15 @@ class RelationParametersTest extends TestCase
     /**
      * @param mixed[] $params
      * @param mixed[] $expected
-     *
-     * @dataProvider providerForTestToArray
      */
+    #[DataProvider('providerForTestToArray')]
     public function testToArray(array $params, array $expected): void
     {
         $this->assertSame($expected, RelationParameters::fromArray($params)->toArray());
     }
 
-    /**
-     * @return array<string, array<int, array<string, mixed>>>
-     */
-    public function providerForTestToArray(): array
+    /** @return array<string, array<int, array<string, mixed>>> */
+    public static function providerForTestToArray(): array
     {
         return [
             'default values' => [
@@ -692,12 +707,7 @@ class RelationParametersTest extends TestCase
                 ],
             ],
             'invalid values 3' => [
-                [
-                    'user' => '',
-                    'db' => 'db',
-                    'bookmarkwork' => true,
-                    'bookmark' => ' invalid name ',
-                ],
+                ['user' => '', 'db' => 'db', 'bookmarkwork' => true, 'bookmark' => ' invalid name '],
                 [
                     'version' => Version::VERSION,
                     'user' => null,
@@ -743,10 +753,7 @@ class RelationParametersTest extends TestCase
                 ],
             ],
             'invalid values 4' => [
-                [
-                    'user' => '',
-                    'db' => '',
-                ],
+                ['user' => '', 'db' => ''],
                 [
                     'version' => Version::VERSION,
                     'user' => null,

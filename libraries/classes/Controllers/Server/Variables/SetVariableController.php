@@ -22,19 +22,15 @@ use function trim;
 
 final class SetVariableController extends AbstractController
 {
-    /** @var DatabaseInterface */
-    private $dbi;
-
-    public function __construct(ResponseRenderer $response, Template $template, DatabaseInterface $dbi)
+    public function __construct(ResponseRenderer $response, Template $template, private DatabaseInterface $dbi)
     {
         parent::__construct($response, $template);
-        $this->dbi = $dbi;
     }
 
     /**
      * Handle the AJAX request for setting value for a single variable
      *
-     * @param array $vars Request parameters
+     * @param mixed[] $vars Request parameters
      */
     public function __invoke(ServerRequest $request, array $vars): void
     {
@@ -51,24 +47,13 @@ final class SetVariableController extends AbstractController
             $variableType === 'byte' && preg_match(
                 '/^\s*(\d+(\.\d+)?)\s*(mb|kb|mib|kib|gb|gib)\s*$/i',
                 $value,
-                $matches
+                $matches,
             )
         ) {
-            $exp = [
-                'kb' => 1,
-                'kib' => 1,
-                'mb' => 2,
-                'mib' => 2,
-                'gb' => 3,
-                'gib' => 3,
-            ];
+            $exp = ['kb' => 1, 'kib' => 1, 'mb' => 2, 'mib' => 2, 'gb' => 3, 'gib' => 3];
             $value = (float) $matches[1] * 1024 ** $exp[mb_strtolower($matches[3])];
         } else {
-            $value = $this->dbi->escapeString($value);
-        }
-
-        if (! is_numeric($value)) {
-            $value = "'" . $value . "'";
+            $value = $this->dbi->quoteString($value);
         }
 
         $json = [];
@@ -76,10 +61,10 @@ final class SetVariableController extends AbstractController
             $this->dbi->query('SET GLOBAL ' . $variableName . ' = ' . $value);
             // Some values are rounded down etc.
             $varValue = $this->dbi->fetchSingleRow(
-                'SHOW GLOBAL VARIABLES WHERE Variable_name="'
-                . $this->dbi->escapeString($variableName)
-                . '";',
-                DatabaseInterface::FETCH_NUM
+                'SHOW GLOBAL VARIABLES WHERE Variable_name='
+                . $this->dbi->quoteString($variableName)
+                . ';',
+                DatabaseInterface::FETCH_NUM,
             );
             [$formattedValue, $isHtmlFormatted] = $this->formatVariable($variableName, $varValue[1]);
 
@@ -102,9 +87,9 @@ final class SetVariableController extends AbstractController
      * @param string     $name  variable name
      * @param int|string $value variable value
      *
-     * @return array formatted string and bool if string is HTML formatted
+     * @return mixed[] formatted string and bool if string is HTML formatted
      */
-    private function formatVariable($name, $value): array
+    private function formatVariable(string $name, int|string $value): array
     {
         $isHtmlFormatted = false;
         $formattedValue = $value;
@@ -119,20 +104,14 @@ final class SetVariableController extends AbstractController
                 $formattedValue = trim(
                     $this->template->render(
                         'server/variables/format_variable',
-                        [
-                            'valueTitle' => Util::formatNumber($value, 0),
-                            'value' => implode(' ', $bytes),
-                        ]
-                    )
+                        ['valueTitle' => Util::formatNumber($value, 0), 'value' => implode(' ', $bytes)],
+                    ),
                 );
             } else {
                 $formattedValue = Util::formatNumber($value, 0);
             }
         }
 
-        return [
-            $formattedValue,
-            $isHtmlFormatted,
-        ];
+        return [$formattedValue, $isHtmlFormatted];
     }
 }

@@ -47,55 +47,45 @@ use const PHP_SAPI;
  */
 class HttpRequest
 {
-    /** @var string */
-    private $proxyUrl;
+    private string $proxyUrl;
 
-    /** @var string */
-    private $proxyUser;
+    private string $proxyUser;
 
-    /** @var string */
-    private $proxyPass;
+    private string $proxyPass;
 
     public function __construct()
     {
-        global $cfg;
-
-        $this->proxyUrl = $cfg['ProxyUrl'];
-        $this->proxyUser = $cfg['ProxyUser'];
-        $this->proxyPass = $cfg['ProxyPass'];
+        $this->proxyUrl = $GLOBALS['cfg']['ProxyUrl'];
+        $this->proxyUser = $GLOBALS['cfg']['ProxyUser'];
+        $this->proxyPass = $GLOBALS['cfg']['ProxyPass'];
     }
 
     public static function setProxySettingsFromEnv(): void
     {
-        global $cfg;
-
         $httpProxy = getenv('http_proxy');
         $urlInfo = parse_url((string) $httpProxy);
         if (PHP_SAPI !== 'cli' || ! is_array($urlInfo)) {
             return;
         }
 
-        $cfg['ProxyUrl'] = ($urlInfo['host'] ?? '')
+        $GLOBALS['cfg']['ProxyUrl'] = ($urlInfo['host'] ?? '')
             . (isset($urlInfo['port']) ? ':' . $urlInfo['port'] : '');
-        $cfg['ProxyUser'] = $urlInfo['user'] ?? '';
-        $cfg['ProxyPass'] = $urlInfo['pass'] ?? '';
+        $GLOBALS['cfg']['ProxyUser'] = $urlInfo['user'] ?? '';
+        $GLOBALS['cfg']['ProxyPass'] = $urlInfo['pass'] ?? '';
     }
 
     /**
      * Returns information with regards to handling the http request
      *
-     * @param array $context Data about the context for which
+     * @param mixed[] $context Data about the context for which
      *                       to http request is sent
      *
-     * @return array of updated context information
+     * @return mixed[] of updated context information
      */
-    private function handleContext(array $context)
+    private function handleContext(array $context): array
     {
         if (strlen($this->proxyUrl) > 0) {
-            $context['http'] = [
-                'proxy' => $this->proxyUrl,
-                'request_fulluri' => true,
-            ];
+            $context['http'] = ['proxy' => $this->proxyUrl, 'request_fulluri' => true];
             if (strlen($this->proxyUser) > 0) {
                 $auth = base64_encode($this->proxyUser . ':' . $this->proxyPass);
                 $context['http']['header'] = 'Proxy-Authorization: Basic '
@@ -112,14 +102,12 @@ class HttpRequest
      * @param mixed $response         HTTP response
      * @param int   $httpStatus       HTTP response status code
      * @param bool  $returnOnlyStatus If set to true, the method would only return response status
-     *
-     * @return string|bool|null
      */
     private function response(
-        $response,
-        $httpStatus,
-        $returnOnlyStatus
-    ) {
+        mixed $response,
+        int $httpStatus,
+        bool $returnOnlyStatus,
+    ): string|bool|null {
         if ($httpStatus == 404) {
             return false;
         }
@@ -143,16 +131,14 @@ class HttpRequest
      * @param bool   $returnOnlyStatus If set to true, the method would only return response status
      * @param mixed  $content          Content to be sent with HTTP request
      * @param string $header           Header to be set for the HTTP request
-     *
-     * @return string|bool|null
      */
     private function curl(
-        $url,
-        $method,
-        $returnOnlyStatus = false,
-        $content = null,
-        $header = ''
-    ) {
+        string $url,
+        string $method,
+        bool $returnOnlyStatus = false,
+        mixed $content = null,
+        string $header = '',
+    ): string|bool|null {
         $curlHandle = curl_init($url);
         if ($curlHandle === false) {
             return null;
@@ -165,7 +151,7 @@ class HttpRequest
                 $curlStatus &= (int) curl_setopt(
                     $curlHandle,
                     CURLOPT_PROXYUSERPWD,
-                    $this->proxyUser . ':' . $this->proxyPass
+                    $this->proxyUser . ':' . $this->proxyPass,
                 );
             }
         }
@@ -222,16 +208,14 @@ class HttpRequest
      * @param bool   $returnOnlyStatus If set to true, the method would only return response status
      * @param mixed  $content          Content to be sent with HTTP request
      * @param string $header           Header to be set for the HTTP request
-     *
-     * @return string|bool|null
      */
     private function fopen(
-        $url,
-        $method,
-        $returnOnlyStatus = false,
-        $content = null,
-        $header = ''
-    ) {
+        string $url,
+        string $method,
+        bool $returnOnlyStatus = false,
+        mixed $content = null,
+        string $header = '',
+    ): string|bool|null {
         $context = [
             'http' => [
                 'method' => $method,
@@ -240,10 +224,7 @@ class HttpRequest
                 'user_agent' => 'phpMyAdmin',
                 'header' => 'Accept: */*',
             ],
-            'ssl' => [
-                'verify_peer' => true,
-                'verify_peer_name' => true,
-            ],
+            'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
         ];
         if ($header) {
             $context['http']['header'] .= "\n" . $header;
@@ -264,7 +245,7 @@ class HttpRequest
         $response = @file_get_contents(
             $url,
             false,
-            stream_context_create($context)
+            stream_context_create($context),
         );
 
         if (! isset($http_response_header)) {
@@ -285,16 +266,14 @@ class HttpRequest
      * @param bool   $returnOnlyStatus If set to true, the method would only return response status
      * @param mixed  $content          Content to be sent with HTTP request
      * @param string $header           Header to be set for the HTTP request
-     *
-     * @return string|bool|null
      */
     public function create(
-        $url,
-        $method,
-        $returnOnlyStatus = false,
-        $content = null,
-        $header = ''
-    ) {
+        string $url,
+        string $method,
+        bool $returnOnlyStatus = false,
+        mixed $content = null,
+        string $header = '',
+    ): string|bool|null {
         if (function_exists('curl_init')) {
             return $this->curl($url, $method, $returnOnlyStatus, $content, $header);
         }

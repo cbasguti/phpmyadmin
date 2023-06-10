@@ -4,29 +4,28 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Selenium;
 
-/**
- * @coversNothing
- */
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
+
+#[CoversNothing]
 class XssTest extends TestBase
 {
     /**
      * Create a test database for this test class
-     *
-     * @var bool
      */
-    protected static $createDatabase = false;
+    protected static bool $createDatabase = false;
 
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->login();
     }
 
     /**
      * Tests the SQL query tab with a null query
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testQueryTabWithNullValue(): void
     {
         if ($this->isSafari()) {

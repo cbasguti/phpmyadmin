@@ -62,7 +62,7 @@
                         </td>
                         <td name="col_type" class="text-nowrap">
                           <select class="column_type" name="field_type[0]" id="field_0_1">
-                            {{ get_supported_datatypes(true) }}
+                            {{ get_supported_datatypes('') }}
                           </select>
                         </td>
                         <td class="text-nowrap" name="col_length">
@@ -163,8 +163,14 @@
             {% endif %}
             <td class="navigation_separator"></td>
             <td>
-                <span>{% trans 'Filter rows' %}:</span>
-                <input type="text" class="filter_rows" placeholder="{% trans 'Search this table' %}">
+              <div class="row align-items-center">
+                <div class="col-auto">
+                  <label for="filterRows" class="col-form-label">{% trans 'Filter rows:' %}</label>
+                </div>
+                <div class="col-auto">
+                  <input type="text" id="filterRows" class="filter_rows form-control" placeholder="{% trans 'Search this table' %}">
+                </div>
+              </div>
             </td>
             <td class="navigation_separator"></td>
         </tr>
@@ -265,7 +271,7 @@
                                 <a href="#"> {{ get_icon('b_edit', 'Edit' | trans) | raw }}</a>
                             </td>
                             <td class="del_row" data-rownum = "{{ row_num }}">
-                                <a hrf="#">{{ get_icon('b_drop', 'Delete' | trans) }}</a>
+                                <a href="#">{{ get_icon('b_drop', 'Delete' | trans) }}</a>
                                 <input type="submit" data-rownum = "{{ row_num }}" class="btn btn-secondary edit_cancel_form" value="{{ 'Cancel'|trans }}">
                             </td>
                             <td id="{{ 'save_' ~ row_num  }}" class="hide">
@@ -288,7 +294,7 @@
                             <td name="col_type" class="text-nowrap">
                               <span>{{ row['col_type'] }}</span>
                               <select class="column_type" name="field_type[{{ row_num }}]" id="field_{{ row_num }}_1">
-                                {{ get_supported_datatypes(true, types_upper[row_num]) }}
+                                {{ get_supported_datatypes(types_upper[row_num]) }}
                               </select>
                             </td>
                             <td class="text-nowrap" name="col_length">

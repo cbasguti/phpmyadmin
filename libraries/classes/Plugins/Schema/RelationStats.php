@@ -22,88 +22,74 @@ use function min;
  */
 abstract class RelationStats
 {
-    /** @var object */
-    protected $diagram;
+    public mixed $xSrc;
 
-    /** @var mixed */
-    public $xSrc;
+    public mixed $ySrc;
 
-    /** @var mixed */
-    public $ySrc;
+    public int $srcDir;
 
-    /** @var int */
-    public $srcDir;
+    public int $destDir;
 
-    /** @var int */
-    public $destDir;
+    public mixed $xDest;
 
-    /** @var mixed */
-    public $xDest;
+    public mixed $yDest;
 
-    /** @var mixed */
-    public $yDest;
-
-    /** @var int */
-    public $wTick = 0;
+    public int $wTick = 0;
 
     /**
-     * @param object $diagram       The diagram
-     * @param string $master_table  The master table name
-     * @param string $master_field  The relation field in the master table
-     * @param string $foreign_table The foreign table name
-     * @param string $foreign_field The relation field in the foreign table
+     * @param object     $diagram      The diagram
+     * @param TableStats $masterTable  The master table name
+     * @param string     $masterField  The relation field in the master table
+     * @param TableStats $foreignTable The foreign table name
+     * @param string     $foreignField The relation field in the foreign table
      */
     public function __construct(
-        $diagram,
-        $master_table,
-        $master_field,
-        $foreign_table,
-        $foreign_field
+        protected object $diagram,
+        TableStats $masterTable,
+        string $masterField,
+        TableStats $foreignTable,
+        string $foreignField,
     ) {
-        $this->diagram = $diagram;
+        $srcPos = $this->getXy($masterTable, $masterField);
+        $destPos = $this->getXy($foreignTable, $foreignField);
+        // [0] is x-left
+        // [1] is x-right
+        // [2] is y
+        $srcLeft = $srcPos[0] - $this->wTick;
+        $srcRight = $srcPos[1] + $this->wTick;
+        $destLeft = $destPos[0] - $this->wTick;
+        $destRight = $destPos[1] + $this->wTick;
 
-        $src_pos = $this->getXy($master_table, $master_field);
-        $dest_pos = $this->getXy($foreign_table, $foreign_field);
-        /*
-         * [0] is x-left
-        * [1] is x-right
-        * [2] is y
-        */
-        $src_left = $src_pos[0] - $this->wTick;
-        $src_right = $src_pos[1] + $this->wTick;
-        $dest_left = $dest_pos[0] - $this->wTick;
-        $dest_right = $dest_pos[1] + $this->wTick;
-
-        $d1 = abs($src_left - $dest_left);
-        $d2 = abs($src_right - $dest_left);
-        $d3 = abs($src_left - $dest_right);
-        $d4 = abs($src_right - $dest_right);
+        $d1 = abs($srcLeft - $destLeft);
+        $d2 = abs($srcRight - $destLeft);
+        $d3 = abs($srcLeft - $destRight);
+        $d4 = abs($srcRight - $destRight);
         $d = min($d1, $d2, $d3, $d4);
 
         if ($d == $d1) {
-            $this->xSrc = $src_pos[0];
+            $this->xSrc = $srcPos[0];
             $this->srcDir = -1;
-            $this->xDest = $dest_pos[0];
+            $this->xDest = $destPos[0];
             $this->destDir = -1;
         } elseif ($d == $d2) {
-            $this->xSrc = $src_pos[1];
+            $this->xSrc = $srcPos[1];
             $this->srcDir = 1;
-            $this->xDest = $dest_pos[0];
+            $this->xDest = $destPos[0];
             $this->destDir = -1;
         } elseif ($d == $d3) {
-            $this->xSrc = $src_pos[0];
+            $this->xSrc = $srcPos[0];
             $this->srcDir = -1;
-            $this->xDest = $dest_pos[1];
+            $this->xDest = $destPos[1];
             $this->destDir = 1;
         } else {
-            $this->xSrc = $src_pos[1];
+            $this->xSrc = $srcPos[1];
             $this->srcDir = 1;
-            $this->xDest = $dest_pos[1];
+            $this->xDest = $destPos[1];
             $this->destDir = 1;
         }
 
-        $this->ySrc = $src_pos[2];
-        $this->yDest = $dest_pos[2];
+        $this->ySrc = $srcPos[2];
+        $this->yDest = $destPos[2];
     }
 
     /**
@@ -112,17 +98,13 @@ abstract class RelationStats
      * @param TableStats $table  The table
      * @param string     $column The relation column name
      *
-     * @return array Arrows coordinates
+     * @return mixed[] Arrows coordinates
      */
-    private function getXy($table, $column)
+    private function getXy(TableStats $table, string $column): array
     {
         $pos = array_search($column, $table->fields);
 
         // x_left, x_right, y
-        return [
-            $table->x,
-            $table->x + $table->width,
-            $table->y + ($pos + 1.5) * $table->heightCell,
-        ];
+        return [$table->x, $table->x + $table->width, $table->y + ($pos + 1.5) * $table->heightCell];
     }
 }

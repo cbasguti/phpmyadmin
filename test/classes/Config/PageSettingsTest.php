@@ -6,10 +6,9 @@ namespace PhpMyAdmin\Tests\Config;
 
 use PhpMyAdmin\Config\PageSettings;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Config\PageSettings
- */
+#[CoversClass(PageSettings::class)]
 class PageSettingsTest extends AbstractTestCase
 {
     /**
@@ -18,14 +17,18 @@ class PageSettingsTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
+
         parent::setGlobalConfig();
+
         parent::setTheme();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 1;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = '';
         $_SERVER['SCRIPT_NAME'] = 'index.php';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
     }
 
@@ -53,18 +56,18 @@ class PageSettingsTest extends AbstractTestCase
             '<div id="page_settings_modal">'
             . '<div class="page_settings">'
             . '<form method="post" '
-            . 'action="index.php&#x3F;db&#x3D;db&amp;server&#x3D;1&amp;lang&#x3D;en" '
+            . 'action="index.php&#x3F;route&#x3D;&#x25;2F&amp;db&#x3D;db&amp;server&#x3D;1&amp;lang&#x3D;en" '
             . 'class="config-form disableAjax">',
-            $html
+            $html,
         );
 
         $this->assertStringContainsString('<input type="hidden" name="submit_save" value="Browse">', $html);
 
         $this->assertStringContainsString(
-            "registerFieldValidator('MaxRows', 'validatePositiveNumber', true);\n"
-            . "registerFieldValidator('RepeatCells', 'validateNonNegativeNumber', true);\n"
-            . "registerFieldValidator('LimitChars', 'validatePositiveNumber', true);\n",
-            $html
+            "window.Config.registerFieldValidator('MaxRows', 'validatePositiveNumber', true);\n"
+            . "window.Config.registerFieldValidator('RepeatCells', 'validateNonNegativeNumber', true);\n"
+            . "window.Config.registerFieldValidator('LimitChars', 'validatePositiveNumber', true);\n",
+            $html,
         );
     }
 

@@ -21,18 +21,11 @@ use function preg_split;
 class Linux extends Base
 {
     /**
-     * The OS name
-     *
-     * @var string
-     */
-    public $os = 'Linux';
-
-    /**
      * Gets load information
      *
      * @return array<string, int> with load data
      */
-    public function loadavg()
+    public function loadavg(): array
     {
         $buf = file_get_contents('/proc/stat');
         if ($buf === false) {
@@ -49,24 +42,21 @@ class Linux extends Base
             mb_substr(
                 $buf,
                 0,
-                $pos
-            )
+                $pos,
+            ),
         );
 
         if (! is_array($nums)) {
             return ['busy' => 0, 'idle' => 0];
         }
 
-        return [
-            'busy' => (int) $nums[1] + (int) $nums[2] + (int) $nums[3],
-            'idle' => (int) $nums[4],
-        ];
+        return ['busy' => (int) $nums[1] + (int) $nums[2] + (int) $nums[3], 'idle' => (int) $nums[4]];
     }
 
     /**
      * Checks whether class is supported in this environment
      */
-    public function supported(): bool
+    public static function isSupported(): bool
     {
         return @is_readable('/proc/meminfo') && @is_readable('/proc/stat');
     }
@@ -74,9 +64,9 @@ class Linux extends Base
     /**
      * Gets information about memory usage
      *
-     * @return array with memory usage data
+     * @return array<string, int> with memory usage data
      */
-    public function memory()
+    public function memory(): array
     {
         $content = @file_get_contents('/proc/meminfo');
         if ($content === false) {

@@ -7,59 +7,60 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Gis;
 
-use PhpMyAdmin\Gis\GisGeometry;
-use PhpMyAdmin\Gis\GisPolygon;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use ReflectionProperty;
+use TCPDF;
+
+use function getcwd;
+use function md5;
+use function php_uname;
+
+use const PHP_INT_MAX;
 
 /**
  * Abstract parent class for all Gis<Geom_type> test classes
  */
 abstract class GisGeomTestCase extends AbstractTestCase
 {
-    /** @var GisGeometry */
-    protected $object;
+    protected string $testDir = '';
 
-    /**
-     * test generateParams method
-     *
-     * @param string   $wkt    point in WKT form
-     * @param int|null $index  index
-     * @param array    $params expected output array
-     *
-     * @dataProvider providerForTestGenerateParams
-     */
-    public function testGenerateParams(string $wkt, ?int $index, array $params): void
+    protected function setUp(): void
     {
-        if ($index === null) {
-            $this->assertEquals(
-                $params,
-                $this->object->generateParams($wkt)
-            );
+        parent::setUp();
 
-            return;
+        $this->testDir = 'file://' . getcwd() . '/test/test_data/gis';
+    }
+
+    protected function getArch(): string
+    {
+        $arch = php_uname('m');
+        if ($arch === 'x86_64' && PHP_INT_MAX === 2147483647) {
+            $arch = 'x86';
         }
 
-        /** @var GisPolygon $obj or another GisGeometry that supports this definition */
-        $obj = $this->object;
-        $this->assertEquals(
-            $params,
-            $obj->generateParams($wkt, $index)
-        );
+        return $arch;
     }
 
     /**
-     * test scaleRow method
+     * Create a new pdf document with predictable timestamps and ids.
      *
-     * @param string $spatial spatial data of a row
-     * @param array  $min_max expected results
+     * @param string $id Used as a seed for the internal file_id
      *
-     * @dataProvider providerForTestScaleRow
+     * @return TCPDF A pdf document with an empty page
      */
-    public function testScaleRow(string $spatial, array $min_max): void
+    protected static function createEmptyPdf(string $id): TCPDF
     {
-        $this->assertEquals(
-            $min_max,
-            $this->object->scaleRow($spatial)
-        );
+        $pdf = new TCPDF();
+        $prop = new ReflectionProperty($pdf, 'file_id');
+        $prop->setValue($pdf, md5($id));
+        $pdf->setDocCreationTimestamp(1600000000);
+        $pdf->setDocModificationTimestamp(1600000000);
+        $pdf->setAutoPageBreak(false);
+        $pdf->setCompression(false);
+        $pdf->setPrintFooter(false);
+        $pdf->setPrintHeader(false);
+        $pdf->AddPage();
+
+        return $pdf;
     }
 }

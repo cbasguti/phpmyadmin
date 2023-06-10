@@ -12,8 +12,8 @@ namespace PhpMyAdmin;
  */
 class InternalRelations
 {
-    /** @var array */
-    private static $informationSchema = [
+    /** @var mixed[] */
+    private static array $informationSchema = [
         'CHARACTER_SETS' => [
             'DEFAULT_COLLATE_NAME' => [
                 'foreign_db' => 'information_schema',
@@ -325,8 +325,8 @@ class InternalRelations
         ],
     ];
 
-    /** @var array */
-    private static $mysql = [
+    /** @var mixed[] */
+    private static array $mysql = [
         'columns_priv' => [
             'Db' => [
                 'foreign_db' => 'information_schema',
@@ -481,17 +481,13 @@ class InternalRelations
         ],
     ];
 
-    /**
-     * @return array
-     */
+    /** @return mixed[] */
     public static function getInformationSchema(): array
     {
         return self::$informationSchema;
     }
 
-    /**
-     * @return array
-     */
+    /** @return mixed[] */
     public static function getMySql(): array
     {
         return self::$mysql;

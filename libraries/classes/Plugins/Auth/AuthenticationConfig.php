@@ -15,7 +15,6 @@ use PhpMyAdmin\Util;
 
 use function __;
 use function count;
-use function defined;
 use function sprintf;
 use function trigger_error;
 
@@ -29,24 +28,18 @@ class AuthenticationConfig extends AuthenticationPlugin
 {
     /**
      * Displays authentication form
-     *
-     * @return bool always true
      */
-    public function showLoginForm(): bool
+    public function showLoginForm(): void
     {
         $response = ResponseRenderer::getInstance();
-        if ($response->isAjax()) {
-            $response->setRequestStatus(false);
-            // reload_flag removes the token parameter from the URL and reloads
-            $response->addJSON('reload_flag', '1');
-            if (defined('TESTSUITE')) {
-                return true;
-            }
-
-            exit;
+        if (! $response->isAjax()) {
+            return;
         }
 
-        return true;
+        $response->setRequestStatus(false);
+        // reload_flag removes the token parameter from the URL and reloads
+        $response->addJSON('reload_flag', '1');
+        $response->callExit();
     }
 
     /**
@@ -71,20 +64,18 @@ class AuthenticationConfig extends AuthenticationPlugin
      *
      * @param string $failure String describing why authentication has failed
      */
-    public function showFailure($failure): void
+    public function showFailure(string $failure): never
     {
-        global $dbi;
-
         parent::showFailure($failure);
-        $conn_error = $dbi->getError();
-        if (! $conn_error) {
-            $conn_error = __('Cannot connect: invalid settings.');
+
+        $connError = $GLOBALS['dbi']->getError();
+        if (! $connError) {
+            $connError = __('Cannot connect: invalid settings.');
         }
 
         /* HTML header */
         $response = ResponseRenderer::getInstance();
-        $response->getFooter()
-            ->setMinimal();
+        $response->setMinimalFooter();
         $header = $response->getHeader();
         $header->setBodyId('loginform');
         $header->setTitle(__('Access denied!'));
@@ -108,10 +99,10 @@ class AuthenticationConfig extends AuthenticationPlugin
                     __(
                         'You probably did not create a configuration file.'
                         . ' You might want to use the %1$ssetup script%2$s to'
-                        . ' create one.'
+                        . ' create one.',
                     ),
                     '<a href="setup/">',
-                    '</a>'
+                    '</a>',
                 ) , '</p>' , "\n";
             } elseif (
                 ! isset($GLOBALS['errno'])
@@ -131,13 +122,13 @@ class AuthenticationConfig extends AuthenticationPlugin
                         . ' server rejected the connection. You should check the'
                         . ' host, username and password in your configuration and'
                         . ' make sure that they correspond to the information given'
-                        . ' by the administrator of the MySQL server.'
+                        . ' by the administrator of the MySQL server.',
                     ),
-                    E_USER_WARNING
+                    E_USER_WARNING,
                 );
             }
 
-            echo Generator::mysqlDie($conn_error, '', true, '', false);
+            echo Generator::mysqlDie($connError, '', true, '', false);
         }
 
         $GLOBALS['errorHandler']->dispUserErrors();
@@ -162,8 +153,6 @@ class AuthenticationConfig extends AuthenticationPlugin
         }
 
         echo '</table>' , "\n";
-        if (! defined('TESTSUITE')) {
-            exit;
-        }
+        $response->callExit();
     }
 }

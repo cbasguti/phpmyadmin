@@ -6,14 +6,13 @@ namespace PhpMyAdmin\Tests\Plugins\Export\Helpers;
 
 use PhpMyAdmin\Plugins\Export\Helpers\TableProperty;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * @covers \PhpMyAdmin\Plugins\Export\Helpers\TableProperty
- */
+#[CoversClass(TableProperty::class)]
 class TablePropertyTest extends AbstractTestCase
 {
-    /** @var TableProperty */
-    protected $object;
+    protected TableProperty $object;
 
     /**
      * Configures global environment.
@@ -21,15 +20,9 @@ class TablePropertyTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         $GLOBALS['server'] = 0;
-        $row = [
-            ' name ',
-            'int ',
-            true,
-            ' PRI',
-            '0',
-            'mysql',
-        ];
+        $row = [' name ', 'int ', true, ' PRI', '0', 'mysql'];
         $this->object = new TableProperty($row);
     }
 
@@ -39,6 +32,7 @@ class TablePropertyTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
@@ -63,242 +57,138 @@ class TablePropertyTest extends AbstractTestCase
 
         $this->assertEquals(
             'int',
-            $this->object->getPureType()
+            $this->object->getPureType(),
         );
 
         $this->object->type = 'char';
 
         $this->assertEquals(
             'char',
-            $this->object->getPureType()
+            $this->object->getPureType(),
         );
     }
 
     /**
      * @param string $nullable nullable value
      * @param string $expected expected output
-     *
-     * @dataProvider isNotNullProvider
      */
+    #[DataProvider('isNotNullProvider')]
     public function testIsNotNull(string $nullable, string $expected): void
     {
         $this->object->nullable = $nullable;
 
         $this->assertEquals(
             $expected,
-            $this->object->isNotNull()
+            $this->object->isNotNull(),
         );
     }
 
     /**
      * Data provider for testIsNotNull
      *
-     * @return array Test Data
+     * @return mixed[] Test Data
      */
-    public function isNotNullProvider(): array
+    public static function isNotNullProvider(): array
     {
-        return [
-            [
-                'NO',
-                'true',
-            ],
-            [
-                '',
-                'false',
-            ],
-            [
-                'no',
-                'false',
-            ],
-        ];
+        return [['NO', 'true'], ['', 'false'], ['no', 'false']];
     }
 
     /**
      * @param string $key      key value
      * @param string $expected expected output
-     *
-     * @dataProvider isUniqueProvider
      */
+    #[DataProvider('isUniqueProvider')]
     public function testIsUnique(string $key, string $expected): void
     {
         $this->object->key = $key;
 
         $this->assertEquals(
             $expected,
-            $this->object->isUnique()
+            $this->object->isUnique(),
         );
     }
 
     /**
      * Data provider for testIsUnique
      *
-     * @return array Test Data
+     * @return mixed[] Test Data
      */
-    public function isUniqueProvider(): array
+    public static function isUniqueProvider(): array
     {
-        return [
-            [
-                'PRI',
-                'true',
-            ],
-            [
-                'UNI',
-                'true',
-            ],
-            [
-                '',
-                'false',
-            ],
-            [
-                'pri',
-                'false',
-            ],
-            [
-                'uni',
-                'false',
-            ],
-        ];
+        return [['PRI', 'true'], ['UNI', 'true'], ['', 'false'], ['pri', 'false'], ['uni', 'false']];
     }
 
     /**
      * @param string $type     type value
      * @param string $expected expected output
-     *
-     * @dataProvider getDotNetPrimitiveTypeProvider
      */
+    #[DataProvider('getDotNetPrimitiveTypeProvider')]
     public function testGetDotNetPrimitiveType(string $type, string $expected): void
     {
         $this->object->type = $type;
 
         $this->assertEquals(
             $expected,
-            $this->object->getDotNetPrimitiveType()
+            $this->object->getDotNetPrimitiveType(),
         );
     }
 
     /**
      * Data provider for testGetDotNetPrimitiveType
      *
-     * @return array Test Data
+     * @return mixed[] Test Data
      */
-    public function getDotNetPrimitiveTypeProvider(): array
+    public static function getDotNetPrimitiveTypeProvider(): array
     {
         return [
-            [
-                'int',
-                'int',
-            ],
-            [
-                'long',
-                'long',
-            ],
-            [
-                'char',
-                'string',
-            ],
-            [
-                'varchar',
-                'string',
-            ],
-            [
-                'text',
-                'string',
-            ],
-            [
-                'longtext',
-                'string',
-            ],
-            [
-                'tinyint',
-                'bool',
-            ],
-            [
-                'datetime',
-                'DateTime',
-            ],
-            [
-                '',
-                'unknown',
-            ],
-            [
-                'dummy',
-                'unknown',
-            ],
-            [
-                'INT',
-                'unknown',
-            ],
+            ['int', 'int'],
+            ['long', 'long'],
+            ['char', 'string'],
+            ['varchar', 'string'],
+            ['text', 'string'],
+            ['longtext', 'string'],
+            ['tinyint', 'bool'],
+            ['datetime', 'DateTime'],
+            ['', 'unknown'],
+            ['dummy', 'unknown'],
+            ['INT', 'unknown'],
         ];
     }
 
     /**
      * @param string $type     type value
      * @param string $expected expected output
-     *
-     * @dataProvider getDotNetObjectTypeProvider
      */
+    #[DataProvider('getDotNetObjectTypeProvider')]
     public function testGetDotNetObjectType(string $type, string $expected): void
     {
         $this->object->type = $type;
 
         $this->assertEquals(
             $expected,
-            $this->object->getDotNetObjectType()
+            $this->object->getDotNetObjectType(),
         );
     }
 
     /**
      * Data provider for testGetDotNetObjectType
      *
-     * @return array Test Data
+     * @return mixed[] Test Data
      */
-    public function getDotNetObjectTypeProvider(): array
+    public static function getDotNetObjectTypeProvider(): array
     {
         return [
-            [
-                'int',
-                'Int32',
-            ],
-            [
-                'long',
-                'Long',
-            ],
-            [
-                'char',
-                'String',
-            ],
-            [
-                'varchar',
-                'String',
-            ],
-            [
-                'text',
-                'String',
-            ],
-            [
-                'longtext',
-                'String',
-            ],
-            [
-                'tinyint',
-                'Boolean',
-            ],
-            [
-                'datetime',
-                'DateTime',
-            ],
-            [
-                '',
-                'Unknown',
-            ],
-            [
-                'dummy',
-                'Unknown',
-            ],
-            [
-                'INT',
-                'Unknown',
-            ],
+            ['int', 'Int32'],
+            ['long', 'Long'],
+            ['char', 'String'],
+            ['varchar', 'String'],
+            ['text', 'String'],
+            ['longtext', 'String'],
+            ['tinyint', 'Boolean'],
+            ['datetime', 'DateTime'],
+            ['', 'Unknown'],
+            ['dummy', 'Unknown'],
+            ['INT', 'Unknown'],
         ];
     }
 
@@ -309,14 +199,14 @@ class TablePropertyTest extends AbstractTestCase
 
         $this->assertEquals(
             "index=\"ä'7&lt;ab&gt;\"",
-            $this->object->getIndexName()
+            $this->object->getIndexName(),
         );
 
         $this->object->key = '';
 
         $this->assertEquals(
             '',
-            $this->object->getIndexName()
+            $this->object->getIndexName(),
         );
     }
 
@@ -325,13 +215,13 @@ class TablePropertyTest extends AbstractTestCase
         $this->object->key = 'PRI';
 
         $this->assertTrue(
-            $this->object->isPK()
+            $this->object->isPK(),
         );
 
         $this->object->key = '';
 
         $this->assertFalse(
-            $this->object->isPK()
+            $this->object->isPK(),
         );
     }
 
@@ -341,7 +231,7 @@ class TablePropertyTest extends AbstractTestCase
 
         $this->assertEquals(
             'text123Namename',
-            $this->object->formatCs('text123#name#')
+            $this->object->formatCs('text123#name#'),
         );
     }
 
@@ -351,7 +241,7 @@ class TablePropertyTest extends AbstractTestCase
 
         $this->assertEquals(
             '&quot;a\'index="&quot;a\'"',
-            $this->object->formatXml('#name##indexName#')
+            $this->object->formatXml('#name##indexName#'),
         );
     }
 
@@ -360,8 +250,8 @@ class TablePropertyTest extends AbstractTestCase
         $this->assertEquals(
             'NameintInt32intfalsetrue',
             $this->object->format(
-                '#ucfirstName##dotNetPrimitiveType##dotNetObjectType##type##notNull##unique#'
-            )
+                '#ucfirstName##dotNetPrimitiveType##dotNetObjectType##type##notNull##unique#',
+            ),
         );
     }
 }

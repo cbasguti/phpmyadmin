@@ -1,12 +1,12 @@
-{% if selectable_tables_num_rows > 0 %}
+{% if selectable_tables_entries|length > 0 %}
     <form method="post" action="{{ url('/table/tracking', url_params) }}">
         {{ get_hidden_inputs(db, table) }}
         <select name="table" class="autosubmit">
             {% for entry in selectable_tables_entries %}
-                <option value="{{ entry.table_name }}"
-                    {{- entry.table_name == selected_table ? ' selected' }}>
-                    {{ entry.db_name }}.{{ entry.table_name }}
-                    {% if entry.is_tracked %}
+                <option value="{{ entry.name }}"
+                    {{- entry.name == selected_table ? ' selected' }}>
+                    {{ db }}.{{ entry.name }}
+                    {% if entry.active %}
                         ({% trans 'active' %})
                     {% else %}
                         ({% trans 'not active' %})
@@ -93,29 +93,27 @@
         </button>
     </form>
     {% set last_version_element = versions|first %}
-    <div>
-        <form method="post" action="{{ url('/table/tracking', url_params) }}">
-            {{ get_hidden_inputs(db, table) }}
-            <fieldset class="pma-fieldset">
-                <legend>
-                    {% if last_version_element['tracking_active'] == 0 %}
-                        {% set legend = 'Activate tracking for %s'|trans %}
-                        {% set value = 'activate_now' %}
-                        {% set button = 'Activate now'|trans %}
-                    {% else %}
-                        {% set legend = 'Deactivate tracking for %s'|trans %}
-                        {% set value = 'deactivate_now' %}
-                        {% set button = 'Deactivate now'|trans %}
-                    {% endif %}
+    <form method="post" action="{{ url('/table/tracking', url_params) }}" class="card">
+      {{ get_hidden_inputs(db, table) }}
+      <div class="card-header">
+        {% if last_version_element['tracking_active'] == 0 %}
+          {% set legend = 'Activate tracking for %s'|trans %}
+          {% set value = 'activate_now' %}
+          {% set button = 'Activate now'|trans %}
+        {% else %}
+          {% set legend = 'Deactivate tracking for %s'|trans %}
+          {% set value = 'deactivate_now' %}
+          {% set button = 'Deactivate now'|trans %}
+        {% endif %}
 
-                    {{ legend|format(db ~ '.' ~ table) }}
-                </legend>
-                <input type="hidden" name="version" value="{{ last_version }}">
-                <input type="hidden" name="toggle_activation" value="{{ value }}">
-                <input class="btn btn-secondary" type="submit" value="{{ button }}">
-            </fieldset>
-        </form>
-    </div>
+        {{ legend|format(db ~ '.' ~ table) }}
+      </div>
+      <div class="card-body">
+        <input type="hidden" name="version" value="{{ last_version }}">
+        <input type="hidden" name="toggle_activation" value="{{ value }}">
+        <input class="btn btn-secondary" type="submit" value="{{ button }}">
+      </div>
+    </form>
 {% endif %}
 {% include 'create_tracking_version.twig' with {
     'route': '/table/tracking',

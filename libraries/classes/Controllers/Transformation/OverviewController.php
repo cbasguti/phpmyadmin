@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Controllers\Transformation;
 
 use PhpMyAdmin\Controllers\AbstractController;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Transformations;
@@ -16,16 +17,15 @@ use function array_keys;
  */
 class OverviewController extends AbstractController
 {
-    /** @var Transformations */
-    private $transformations;
-
-    public function __construct(ResponseRenderer $response, Template $template, Transformations $transformations)
-    {
+    public function __construct(
+        ResponseRenderer $response,
+        Template $template,
+        private Transformations $transformations,
+    ) {
         parent::__construct($response, $template);
-        $this->transformations = $transformations;
     }
 
-    public function __invoke(): void
+    public function __invoke(ServerRequest $request): void
     {
         $header = $this->response->getHeader();
         $header->disableMenuAndConsole();
@@ -34,16 +34,10 @@ class OverviewController extends AbstractController
 
         $mimeTypes = [];
         foreach ($types['mimetype'] as $mimeType) {
-            $mimeTypes[] = [
-                'name' => $mimeType,
-                'is_empty' => isset($types['empty_mimetype'][$mimeType]),
-            ];
+            $mimeTypes[] = ['name' => $mimeType, 'is_empty' => isset($types['empty_mimetype'][$mimeType])];
         }
 
-        $transformations = [
-            'transformation' => [],
-            'input_transformation' => [],
-        ];
+        $transformations = ['transformation' => [], 'input_transformation' => []];
 
         foreach (array_keys($transformations) as $type) {
             foreach ($types[$type] as $key => $transformation) {
@@ -54,9 +48,6 @@ class OverviewController extends AbstractController
             }
         }
 
-        $this->render('transformation_overview', [
-            'mime_types' => $mimeTypes,
-            'transformations' => $transformations,
-        ]);
+        $this->render('transformation_overview', ['mime_types' => $mimeTypes, 'transformations' => $transformations]);
     }
 }

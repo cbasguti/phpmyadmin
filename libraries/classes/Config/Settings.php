@@ -13,16 +13,15 @@ use PhpMyAdmin\Config\Settings\Server;
 use PhpMyAdmin\Config\Settings\SqlQueryBox;
 use PhpMyAdmin\Config\Settings\Transformations;
 
-use function array_keys;
-use function count;
+use function __;
+use function array_map;
 use function defined;
-use function get_object_vars;
 use function in_array;
 use function is_array;
 use function is_int;
 use function is_string;
 use function min;
-use function strlen;
+use function sprintf;
 
 use const DIRECTORY_SEPARATOR;
 use const ROOT_PATH;
@@ -31,9 +30,7 @@ use const VERSION_CHECK_DEFAULT;
 
 // phpcs:disable Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
 
-/**
- * @psalm-immutable
- */
+/** @psalm-immutable */
 final class Settings
 {
     /**
@@ -43,7 +40,7 @@ final class Settings
      *    https://example.com/path_to_your_phpMyAdmin_directory/
      *
      * It must contain characters that are valid for a URL, and the path is
-     * case sensitive on some Web servers, for example Unix-based servers.
+     * case-sensitive on some Web servers, for example Unix-based servers.
      *
      * In most cases you can leave this variable empty, as the correct value
      * will be detected automatically. However, we recommend that you do
@@ -51,60 +48,92 @@ final class Settings
      * test is to browse a table, then edit a row and save it.  There will be
      * an error message if phpMyAdmin cannot auto-detect the correct value.
      *
-     * @var string
+     * ```php
+     * $cfg['PmaAbsoluteUri'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_PmaAbsoluteUri
      */
-    public $PmaAbsoluteUri;
+    public string $PmaAbsoluteUri;
 
     /**
      * Configure authentication logging destination
      *
-     * @var string
+     * ```php
+     * $cfg['AuthLog'] = 'auto';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_AuthLog
      */
-    public $AuthLog;
+    public string $authLog;
 
     /**
      * Whether to log successful authentication attempts
      *
-     * @var bool
+     * ```php
+     * $cfg['AuthLogSuccess'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_AuthLogSuccess
      */
-    public $AuthLogSuccess;
+    public bool $authLogSuccess;
 
     /**
      * Disable the default warning that is displayed on the DB Details Structure page if
      * any of the required Tables for the configuration storage could not be found
      *
-     * @var bool
+     * ```php
+     * $cfg['PmaNoRelation_DisableWarning'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_PmaNoRelation_DisableWarning
      */
-    public $PmaNoRelation_DisableWarning;
+    public bool $PmaNoRelation_DisableWarning;
 
     /**
      * Disable the default warning that is displayed if Suhosin is detected
      *
-     * @var bool
+     * ```php
+     * $cfg['SuhosinDisableWarning'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_SuhosinDisableWarning
      */
-    public $SuhosinDisableWarning;
+    public bool $SuhosinDisableWarning;
 
     /**
      * Disable the default warning that is displayed if session.gc_maxlifetime
      * is less than `LoginCookieValidity`
      *
-     * @var bool
+     * ```php
+     * $cfg['LoginCookieValidityDisableWarning'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LoginCookieValidityDisableWarning
      */
-    public $LoginCookieValidityDisableWarning;
+    public bool $LoginCookieValidityDisableWarning;
 
     /**
      * Disable the default warning about MySQL reserved words in column names
      *
-     * @var bool
+     * ```php
+     * $cfg['ReservedWordDisableWarning'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ReservedWordDisableWarning
      */
-    public $ReservedWordDisableWarning;
+    public bool $ReservedWordDisableWarning;
 
     /**
      * Show warning about incomplete translations on certain threshold.
      *
-     * @var int
+     * ```php
+     * $cfg['TranslationWarningThreshold'] = 80;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TranslationWarningThreshold
      */
-    public $TranslationWarningThreshold;
+    public int $TranslationWarningThreshold;
 
     /**
      * Allows phpMyAdmin to be included from a other document in a frame;
@@ -112,19 +141,28 @@ final class Settings
      * 'sameorigin' prevents phpMyAdmin to be included from another document
      * in a frame, unless that document belongs to the same domain.
      *
-     * @var bool|string
+     * ```php
+     * $cfg['AllowThirdPartyFraming'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_AllowThirdPartyFraming
+     *
      * @psalm-var bool|'sameorigin'
      */
-    public $AllowThirdPartyFraming;
+    public bool|string $AllowThirdPartyFraming;
 
     /**
      * The 'cookie' auth_type uses the Sodium extension to encrypt the cookies. If at least one server configuration
      * uses 'cookie' auth_type, enter here a generated string of random bytes to be used as an encryption key. The
      * encryption key must be 32 bytes long.
      *
-     * @var string
+     * ```php
+     * $cfg['blowfish_secret'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_blowfish_secret
      */
-    public $blowfish_secret;
+    public string $blowfish_secret;
 
     /**
      * Server(s) configuration
@@ -135,10 +173,12 @@ final class Settings
      * (including $i incrementation) several times. There is no need to define
      * full server array, just define values you need to change.
      *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Servers
+     *
      * @var array<int, Server>
      * @psalm-var array<int<1, max>, Server>
      */
-    public $Servers;
+    public array $Servers;
 
     /**
      * Default server (0 = no default server)
@@ -149,17 +189,26 @@ final class Settings
      * If you have only one server configured, $cfg['ServerDefault'] *MUST* be
      * set to that server.
      *
-     * @var int
+     * ```php
+     * $cfg['ServerDefault'] = 1;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ServerDefault
+     *
      * @psalm-var 0|positive-int
      */
-    public $ServerDefault;
+    public int $ServerDefault;
 
     /**
      * whether version check is active
      *
-     * @var bool
+     * ```php
+     * $cfg['VersionCheck'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_VersionCheck
      */
-    public $VersionCheck;
+    public bool $VersionCheck;
 
     /**
      * The url of the proxy to be used when retrieving the information about
@@ -168,9 +217,13 @@ final class Settings
      * the internet.
      * The format is: "hostname:portnumber"
      *
-     * @var string
+     * ```php
+     * $cfg['ProxyUrl'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ProxyUrl
      */
-    public $ProxyUrl;
+    public string $ProxyUrl;
 
     /**
      * The username for authenticating with the proxy. By default, no
@@ -178,423 +231,668 @@ final class Settings
      * Authentication will be performed. No other types of authentication
      * are currently supported.
      *
-     * @var string
+     * ```php
+     * $cfg['ProxyUser'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ProxyUser
      */
-    public $ProxyUser;
+    public string $ProxyUser;
 
     /**
      * The password for authenticating with the proxy.
      *
-     * @var string
+     * ```php
+     * $cfg['ProxyPass'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ProxyPass
      */
-    public $ProxyPass;
+    public string $ProxyPass;
 
     /**
      * maximum number of db's displayed in database list
      *
-     * @var int
+     * ```php
+     * $cfg['MaxDbList'] = 100;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxDbList
+     *
      * @psalm-var positive-int
      */
-    public $MaxDbList;
+    public int $MaxDbList;
 
     /**
      * maximum number of tables displayed in table list
      *
-     * @var int
+     * ```php
+     * $cfg['MaxTableList'] = 250;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxTableList
+     *
      * @psalm-var positive-int
      */
-    public $MaxTableList;
+    public int $MaxTableList;
 
     /**
      * whether to show hint or not
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowHint'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowHint
      */
-    public $ShowHint;
+    public bool $ShowHint;
 
     /**
      * maximum number of characters when a SQL query is displayed
      *
-     * @var int
+     * ```php
+     * $cfg['MaxCharactersInDisplayedSQL'] = 1000;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxCharactersInDisplayedSQL
+     *
      * @psalm-var positive-int
      */
-    public $MaxCharactersInDisplayedSQL;
+    public int $MaxCharactersInDisplayedSQL;
 
     /**
      * use GZIP output buffering if possible (true|false|'auto')
      *
-     * @var string|bool
+     * ```php
+     * $cfg['OBGzip'] = 'auto';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_OBGzip
+     *
      * @psalm-var 'auto'|bool
      */
-    public $OBGzip;
+    public string|bool $OBGzip;
 
     /**
      * use persistent connections to MySQL database
      *
-     * @var bool
+     * ```php
+     * $cfg['PersistentConnections'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_PersistentConnections
      */
-    public $PersistentConnections;
+    public bool $PersistentConnections;
 
     /**
      * maximum execution time in seconds (0 for no limit)
      *
-     * @var int
+     * ```php
+     * $cfg['ExecTimeLimit'] = 300;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ExecTimeLimit
+     *
      * @psalm-var 0|positive-int
      */
-    public $ExecTimeLimit;
+    public int $ExecTimeLimit;
 
     /**
      * Path for storing session data (session_save_path PHP parameter).
      *
-     * @var string
+     * ```php
+     * $cfg['SessionSavePath'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_SessionSavePath
      */
-    public $SessionSavePath;
+    public string $SessionSavePath;
 
     /**
      * Hosts or IPs to consider safe when checking if SSL is used or not
      *
+     * ```php
+     * $cfg['MysqlSslWarningSafeHosts'] = ['127.0.0.1', 'localhost'];
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MysqlSslWarningSafeHosts
+     *
      * @var string[]
      */
-    public $MysqlSslWarningSafeHosts;
+    public array $MysqlSslWarningSafeHosts;
 
     /**
      * maximum allocated bytes ('-1' for no limit, '0' for no change)
      * this is a string because '16M' is a valid value; we must put here
      * a string as the default value so that /setup accepts strings
      *
-     * @var string
+     * ```php
+     * $cfg['MemoryLimit'] = '-1';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MemoryLimit
      */
-    public $MemoryLimit;
+    public string $MemoryLimit;
 
     /**
      * mark used tables, make possible to show locked tables (since MySQL 3.23.30)
      *
-     * @var bool
+     * ```php
+     * $cfg['SkipLockedTables'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_SkipLockedTables
      */
-    public $SkipLockedTables;
+    public bool $SkipLockedTables;
 
     /**
      * show SQL queries as run
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowSQL'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowSQL
      */
-    public $ShowSQL;
+    public bool $ShowSQL;
 
     /**
      * retain SQL input on Ajax execute
      *
-     * @var bool
+     * ```php
+     * $cfg['RetainQueryBox'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RetainQueryBox
      */
-    public $RetainQueryBox;
+    public bool $RetainQueryBox;
 
     /**
      * use CodeMirror syntax highlighting for editing SQL
      *
-     * @var bool
+     * ```php
+     * $cfg['CodemirrorEnable'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CodemirrorEnable
      */
-    public $CodemirrorEnable;
+    public bool $CodemirrorEnable;
 
     /**
      * use the parser to find any errors in the query before executing
      *
-     * @var bool
+     * ```php
+     * $cfg['LintEnable'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LintEnable
      */
-    public $LintEnable;
+    public bool $LintEnable;
 
     /**
      * show a 'Drop database' link to normal users
      *
-     * @var bool
+     * ```php
+     * $cfg['AllowUserDropDatabase'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_AllowUserDropDatabase
      */
-    public $AllowUserDropDatabase;
+    public bool $AllowUserDropDatabase;
 
     /**
      * confirm some commands that can result in loss of data
      *
-     * @var bool
+     * ```php
+     * $cfg['Confirm'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Confirm
      */
-    public $Confirm;
+    public bool $Confirm;
 
     /**
      * sets SameSite attribute of the Set-Cookie HTTP response header
      *
-     * @var string
+     * ```php
+     * $cfg['CookieSameSite'] = 'Strict';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CookieSameSite
+     *
      * @psalm-var 'Lax'|'Strict'|'None'
      */
-    public $CookieSameSite;
+    public string $CookieSameSite;
 
     /**
      * recall previous login in cookie authentication mode or not
      *
-     * @var bool
+     * ```php
+     * $cfg['LoginCookieRecall'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LoginCookieRecall
      */
-    public $LoginCookieRecall;
+    public bool $LoginCookieRecall;
 
     /**
      * validity of cookie login (in seconds; 1440 matches php.ini's
      * session.gc_maxlifetime)
      *
-     * @var int
+     * ```php
+     * $cfg['LoginCookieValidity'] = 1440;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LoginCookieValidity
+     *
      * @psalm-var positive-int
      */
-    public $LoginCookieValidity;
+    public int $LoginCookieValidity;
 
     /**
      * how long login cookie should be stored (in seconds)
      *
-     * @var int
+     * ```php
+     * $cfg['LoginCookieStore'] = 0;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LoginCookieStore
+     *
      * @psalm-var 0|positive-int
      */
-    public $LoginCookieStore;
+    public int $LoginCookieStore;
 
     /**
      * whether to delete all login cookies on logout
      *
-     * @var bool
+     * ```php
+     * $cfg['LoginCookieDeleteAll'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LoginCookieDeleteAll
      */
-    public $LoginCookieDeleteAll;
+    public bool $LoginCookieDeleteAll;
 
     /**
      * whether to enable the "database search" feature or not
      *
-     * @var bool
+     * ```php
+     * $cfg['UseDbSearch'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_UseDbSearch
      */
-    public $UseDbSearch;
+    public bool $UseDbSearch;
 
     /**
      * if set to true, PMA continues computing multiple-statement queries
      * even if one of the queries failed
      *
-     * @var bool
+     * ```php
+     * $cfg['IgnoreMultiSubmitErrors'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_IgnoreMultiSubmitErrors
      */
-    public $IgnoreMultiSubmitErrors;
+    public bool $IgnoreMultiSubmitErrors;
 
     /**
      * Define whether phpMyAdmin will encrypt sensitive data from the URL query string.
      *
-     * @var bool
+     * ```php
+     * $cfg['URLQueryEncryption'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_URLQueryEncryption
      */
-    public $URLQueryEncryption;
+    public bool $URLQueryEncryption;
 
     /**
      * A secret key used to encrypt/decrypt the URL query string. Should be 32 bytes long.
      *
-     * @var string
+     * ```php
+     * $cfg['URLQueryEncryptionSecretKey'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_URLQueryEncryptionSecretKey
      */
-    public $URLQueryEncryptionSecretKey;
+    public string $URLQueryEncryptionSecretKey;
 
     /**
      * allow login to any user entered server in cookie based authentication
      *
-     * @var bool
+     * ```php
+     * $cfg['AllowArbitraryServer'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_AllowArbitraryServer
      */
-    public $AllowArbitraryServer;
+    public bool $AllowArbitraryServer;
 
     /**
      * restrict by IP (with regular expression) the MySQL servers the user can enter
      * when $cfg['AllowArbitraryServer'] = true
      *
-     * @var string
+     * ```php
+     * $cfg['ArbitraryServerRegexp'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ArbitraryServerRegexp
      */
-    public $ArbitraryServerRegexp;
+    public string $ArbitraryServerRegexp;
 
     /**
      * To enable reCaptcha v2 checkbox mode if necessary
      *
-     * @var string
+     * ```php
+     * $cfg['CaptchaMethod'] = 'invisible';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CaptchaMethod
+     *
      * @psalm-var 'invisible'|'checkbox'
      */
-    public $CaptchaMethod;
+    public string $CaptchaMethod;
 
     /**
      * URL for the reCaptcha v2 compatible API to use
      *
-     * @var string
+     * ```php
+     * $cfg['CaptchaApi'] = 'https://www.google.com/recaptcha/api.js';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CaptchaApi
      */
-    public $CaptchaApi;
+    public string $CaptchaApi;
 
     /**
      * Content-Security-Policy snippet for the reCaptcha v2 compatible API
      *
-     * @var string
+     * ```php
+     * $cfg['CaptchaCsp'] = 'https://apis.google.com https://www.google.com/recaptcha/'
+     *     . ' https://www.gstatic.com/recaptcha/ https://ssl.gstatic.com/';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CaptchaCsp
      */
-    public $CaptchaCsp;
+    public string $CaptchaCsp;
 
     /**
      * reCaptcha API's request parameter name
      *
-     * @var string
+     * ```php
+     * $cfg['CaptchaRequestParam'] = 'g-recaptcha';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CaptchaRequestParam
      */
-    public $CaptchaRequestParam;
+    public string $CaptchaRequestParam;
 
     /**
      * reCaptcha API's response parameter name
      *
-     * @var string
+     * ```php
+     * $cfg['CaptchaResponseParam'] = 'g-recaptcha-response';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CaptchaResponseParam
      */
-    public $CaptchaResponseParam;
+    public string $CaptchaResponseParam;
 
     /**
      * if reCaptcha is enabled it needs public key to connect with the service
      *
-     * @var string
+     * ```php
+     * $cfg['CaptchaLoginPublicKey'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CaptchaLoginPublicKey
      */
-    public $CaptchaLoginPublicKey;
+    public string $CaptchaLoginPublicKey;
 
     /**
      * if reCaptcha is enabled it needs private key to connect with the service
      *
-     * @var string
+     * ```php
+     * $cfg['CaptchaLoginPrivateKey'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CaptchaLoginPrivateKey
      */
-    public $CaptchaLoginPrivateKey;
+    public string $CaptchaLoginPrivateKey;
 
     /**
      * if reCaptcha is enabled may need an URL for site verify
      *
-     * @var string
+     * ```php
+     * $cfg['CaptchaSiteVerifyURL'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CaptchaSiteVerifyURL
      */
-    public $CaptchaSiteVerifyURL;
+    public string $CaptchaSiteVerifyURL;
 
     /**
      * Enable drag and drop import
      *
-     * @see https://github.com/phpmyadmin/phpmyadmin/issues/13155
+     * ```php
+     * $cfg['enable_drag_drop_import'] = true;
+     * ```
      *
-     * @var bool
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_enable_drag_drop_import
+     * @see https://github.com/phpmyadmin/phpmyadmin/issues/13155
      */
-    public $enable_drag_drop_import;
+    public bool $enable_drag_drop_import;
 
     /**
      * In the navigation panel, replaces the database tree with a selector
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowDatabasesNavigationAsTree'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowDatabasesNavigationAsTree
      */
-    public $ShowDatabasesNavigationAsTree;
+    public bool $ShowDatabasesNavigationAsTree;
 
     /**
      * maximum number of first level databases displayed in navigation panel
      *
-     * @var int
+     * ```php
+     * $cfg['FirstLevelNavigationItems'] = 100;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_FirstLevelNavigationItems
+     *
      * @psalm-var positive-int
      */
-    public $FirstLevelNavigationItems;
+    public int $FirstLevelNavigationItems;
 
     /**
      * maximum number of items displayed in navigation panel
      *
-     * @var int
+     * ```php
+     * $cfg['MaxNavigationItems'] = 50;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxNavigationItems
+     *
      * @psalm-var positive-int
      */
-    public $MaxNavigationItems;
+    public int $MaxNavigationItems;
 
     /**
      * turn the select-based light menu into a tree
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreeEnableGrouping'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeEnableGrouping
      */
-    public $NavigationTreeEnableGrouping;
+    public bool $NavigationTreeEnableGrouping;
 
     /**
      * the separator to sub-tree the select-based light menu tree
      *
-     * @var string
+     * ```php
+     * $cfg['NavigationTreeDbSeparator'] = '_';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeDbSeparator
      */
-    public $NavigationTreeDbSeparator;
+    public string $NavigationTreeDbSeparator;
 
     /**
      * Which string will be used to generate table prefixes
      * to split/nest tables into multiple categories
      *
+     * ```php
+     * $cfg['NavigationTreeTableSeparator'] = '__';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeTableSeparator
+     *
      * @var string|string[]|false
      */
-    public $NavigationTreeTableSeparator;
+    public string|array|false $NavigationTreeTableSeparator;
 
     /**
      * How many sublevels should be displayed when splitting up tables
      * by the above Separator
      *
-     * @var int
+     * ```php
+     * $cfg['NavigationTreeTableLevel'] = 1;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeTableLevel
+     *
      * @psalm-var positive-int
      */
-    public $NavigationTreeTableLevel;
+    public int $NavigationTreeTableLevel;
 
     /**
      * link with main panel by highlighting the current db/table
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationLinkWithMainPanel'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationLinkWithMainPanel
      */
-    public $NavigationLinkWithMainPanel;
+    public bool $NavigationLinkWithMainPanel;
 
     /**
      * display logo at top of navigation panel
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationDisplayLogo'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationDisplayLogo
      */
-    public $NavigationDisplayLogo;
+    public bool $NavigationDisplayLogo;
 
     /**
      * where should logo link point to (can also contain an external URL)
      *
-     * @var string
+     * ```php
+     * $cfg['NavigationLogoLink'] = 'index.php';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationLogoLink
      */
-    public $NavigationLogoLink;
+    public string $NavigationLogoLink;
 
     /**
      * whether to open the linked page in the main window ('main') or
      * in a new window ('new')
      *
-     * @var string
+     * ```php
+     * $cfg['NavigationLogoLinkWindow'] = 'main';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationLogoLinkWindow
+     *
      * @psalm-var 'main'|'new'
      */
-    public $NavigationLogoLinkWindow;
+    public string $NavigationLogoLinkWindow;
 
     /**
      * number of recently used tables displayed in the navigation panel
      *
-     * @var int
+     * ```php
+     * $cfg['NumRecentTables'] = 10;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NumRecentTables
+     *
      * @psalm-var 0|positive-int
      */
-    public $NumRecentTables;
+    public int $NumRecentTables;
 
     /**
      * number of favorite tables displayed in the navigation panel
      *
-     * @var int
+     * ```php
+     * $cfg['NumFavoriteTables'] = 10;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NumFavoriteTables
+     *
      * @psalm-var 0|positive-int
      */
-    public $NumFavoriteTables;
+    public int $NumFavoriteTables;
 
     /**
      * display a JavaScript table filter in the navigation panel
      * when more then x tables are present
      *
-     * @var int
+     * ```php
+     * $cfg['NavigationTreeDisplayItemFilterMinimum'] = 30;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeDisplayItemFilterMinimum
+     *
      * @psalm-var positive-int
      */
-    public $NavigationTreeDisplayItemFilterMinimum;
+    public int $NavigationTreeDisplayItemFilterMinimum;
 
     /**
      * display server choice at top of navigation panel
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationDisplayServers'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationDisplayServers
      */
-    public $NavigationDisplayServers;
+    public bool $NavigationDisplayServers;
 
     /**
      * server choice as links
      *
-     * @var bool
+     * ```php
+     * $cfg['DisplayServersList'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DisplayServersList
      */
-    public $DisplayServersList;
+    public bool $DisplayServersList;
 
     /**
      * display a JavaScript database filter in the navigation panel
      * when more then x databases are present
      *
-     * @var int
+     * ```php
+     * $cfg['NavigationTreeDisplayDbFilterMinimum'] = 30;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeDisplayDbFilterMinimum
+     *
      * @psalm-var positive-int
      */
-    public $NavigationTreeDisplayDbFilterMinimum;
+    public int $NavigationTreeDisplayDbFilterMinimum;
 
     /**
      * target of the navigation panel quick access icon
@@ -606,10 +904,15 @@ final class Settings
      * 'insert' = insert row page
      * 'browse' = browse page
      *
-     * @var string
+     * ```php
+     * $cfg['NavigationTreeDefaultTabTable'] = 'structure';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeDefaultTabTable
+     *
      * @psalm-var 'structure'|'sql'|'search'|'insert'|'browse'
      */
-    public $NavigationTreeDefaultTabTable;
+    public string $NavigationTreeDefaultTabTable;
 
     /**
      * target of the navigation panel quick second access icon
@@ -622,196 +925,307 @@ final class Settings
      * 'browse' = browse page
      * '' = no link
      *
-     * @var string
+     * ```php
+     * $cfg['NavigationTreeDefaultTabTable2'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeDefaultTabTable2
+     *
      * @psalm-var 'structure'|'sql'|'search'|'insert'|'browse'|''
      */
-    public $NavigationTreeDefaultTabTable2;
+    public string $NavigationTreeDefaultTabTable2;
 
     /**
      * Enables the possibility of navigation tree expansion
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreeEnableExpansion'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeEnableExpansion
      */
-    public $NavigationTreeEnableExpansion;
+    public bool $NavigationTreeEnableExpansion;
 
     /**
      * Show tables in navigation panel
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreeShowTables'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeShowTables
      */
-    public $NavigationTreeShowTables;
+    public bool $NavigationTreeShowTables;
 
     /**
      * Show views in navigation panel
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreeShowViews'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeShowViews
      */
-    public $NavigationTreeShowViews;
+    public bool $NavigationTreeShowViews;
 
     /**
      * Show functions in navigation panel
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreeShowFunctions'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeShowFunctions
      */
-    public $NavigationTreeShowFunctions;
+    public bool $NavigationTreeShowFunctions;
 
     /**
      * Show procedures in navigation panel
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreeShowProcedures'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeShowProcedures
      */
-    public $NavigationTreeShowProcedures;
+    public bool $NavigationTreeShowProcedures;
 
     /**
      * Show events in navigation panel
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreeShowEvents'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeShowEvents
      */
-    public $NavigationTreeShowEvents;
+    public bool $NavigationTreeShowEvents;
 
     /**
      * Width of navigation panel
      *
-     * @var int
+     * ```php
+     * $cfg['NavigationWidth'] = 240;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationWidth
+     *
      * @psalm-var 0|positive-int
      */
-    public $NavigationWidth;
+    public int $NavigationWidth;
 
     /**
      * Automatically expands single database in navigation panel
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreeAutoexpandSingleDb'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreeAutoexpandSingleDb
      */
-    public $NavigationTreeAutoexpandSingleDb;
+    public bool $NavigationTreeAutoexpandSingleDb;
 
     /**
      * allow to display statistics and space usage in the pages about database
      * details and table properties
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowStats'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowStats
      */
-    public $ShowStats;
+    public bool $ShowStats;
 
     /**
      * show PHP info link
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowPhpInfo'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowPhpInfo
      */
-    public $ShowPhpInfo;
+    public bool $ShowPhpInfo;
 
     /**
-     * show MySQL server and web server information
+     * show MySQL server and/or web server information (true|false|'database-server'|'web-server')
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowServerInfo'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowServerInfo
+     *
+     * @psalm-var bool|'database-server'|'web-server'
      */
-    public $ShowServerInfo;
+    public bool|string $ShowServerInfo;
 
     /**
      * show change password link
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowChgPassword'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowChgPassword
      */
-    public $ShowChgPassword;
+    public bool $ShowChgPassword;
 
     /**
      * show create database form
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowCreateDb'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowCreateDb
      */
-    public $ShowCreateDb;
+    public bool $ShowCreateDb;
 
     /**
      * show charset column in database structure (true|false)?
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowDbStructureCharset'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowDbStructureCharset
      */
-    public $ShowDbStructureCharset;
+    public bool $ShowDbStructureCharset;
 
     /**
      * show comment column in database structure (true|false)?
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowDbStructureComment'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowDbStructureComment
      */
-    public $ShowDbStructureComment;
+    public bool $ShowDbStructureComment;
 
     /**
      * show creation timestamp column in database structure (true|false)?
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowDbStructureCreation'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowDbStructureCreation
      */
-    public $ShowDbStructureCreation;
+    public bool $ShowDbStructureCreation;
 
     /**
      * show last update timestamp column in database structure (true|false)?
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowDbStructureLastUpdate'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowDbStructureLastUpdate
      */
-    public $ShowDbStructureLastUpdate;
+    public bool $ShowDbStructureLastUpdate;
 
     /**
      * show last check timestamp column in database structure (true|false)?
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowDbStructureLastCheck'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowDbStructureLastCheck
      */
-    public $ShowDbStructureLastCheck;
+    public bool $ShowDbStructureLastCheck;
 
     /**
      * allow hide action columns to drop down menu in database structure (true|false)?
      *
-     * @var bool
+     * ```php
+     * $cfg['HideStructureActions'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_HideStructureActions
      */
-    public $HideStructureActions;
+    public bool $HideStructureActions;
 
     /**
      * Show column comments in table structure view (true|false)?
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowColumnComments'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowColumnComments
      */
-    public $ShowColumnComments;
+    public bool $ShowColumnComments;
 
     /**
      * Use icons instead of text for the navigation bar buttons (table browse)
      * ('text'|'icons'|'both')
      *
-     * @var string
+     * ```php
+     * $cfg['TableNavigationLinksMode'] = 'icons';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TableNavigationLinksMode
+     *
      * @psalm-var 'text'|'icons'|'both'
      */
-    public $TableNavigationLinksMode;
+    public string $TableNavigationLinksMode;
 
     /**
      * Defines whether a user should be displayed a "show all (records)"
      * button in browse mode or not.
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowAll'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowAll
      */
-    public $ShowAll;
+    public bool $showAll;
 
     /**
      * Number of rows displayed when browsing a result set. If the result
      * set contains more rows, "Previous" and "Next".
      * Possible values: 25,50,100,250,500
      *
-     * @var int
+     * ```php
+     * $cfg['MaxRows'] = 25;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxRows
+     *
      * @psalm-var positive-int
      */
-    public $MaxRows;
+    public int $maxRows;
 
     /**
      * default for 'ORDER BY' clause (valid values are 'ASC', 'DESC' or 'SMART' -ie
      * descending order for fields of type TIME, DATE, DATETIME & TIMESTAMP,
      * ascending order else-)
      *
-     * @var string
+     * ```php
+     * $cfg['Order'] = 'SMART';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Order
+     *
      * @psalm-var 'ASC'|'DESC'|'SMART'
      */
-    public $Order;
+    public string $Order;
 
     /**
      * grid editing: save edited cell(s) in browse-mode at once
      *
-     * @var bool
+     * ```php
+     * $cfg['SaveCellsAtOnce'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_SaveCellsAtOnce
      */
-    public $SaveCellsAtOnce;
+    public bool $SaveCellsAtOnce;
 
     /**
      * grid editing: which action triggers it, or completely disable the feature
@@ -821,10 +1235,15 @@ final class Settings
      * 'double-click'
      * 'disabled'
      *
-     * @var string
+     * ```php
+     * $cfg['GridEditing'] = 'double-click';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_GridEditing
+     *
      * @psalm-var 'double-click'|'click'|'disabled'
      */
-    public $GridEditing;
+    public string $GridEditing;
 
     /**
      * Options > Relational display
@@ -833,10 +1252,15 @@ final class Settings
      * 'K' for key value
      * 'D' for display column
      *
-     * @var string
+     * ```php
+     * $cfg['RelationalDisplay'] = 'K';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RelationalDisplay
+     *
      * @psalm-var 'K'|'D'
      */
-    public $RelationalDisplay;
+    public string $RelationalDisplay;
 
     /**
      * disallow editing of binary fields
@@ -846,137 +1270,217 @@ final class Settings
      *   'noblob' disallow editing except for BLOB fields
      *   'all'    disallow editing
      *
-     * @var string|false
+     * ```php
+     * $cfg['ProtectBinary'] = 'blob';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ProtectBinary
+     *
      * @psalm-var 'blob'|'noblob'|'all'|false
      */
-    public $ProtectBinary;
+    public string|false $ProtectBinary;
 
     /**
      * Display the function fields in edit/insert mode
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowFunctionFields'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowFunctionFields
      */
-    public $ShowFunctionFields;
+    public bool $ShowFunctionFields;
 
     /**
      * Display the type fields in edit/insert mode
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowFieldTypesInDataEditView'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowFieldTypesInDataEditView
      */
-    public $ShowFieldTypesInDataEditView;
+    public bool $ShowFieldTypesInDataEditView;
 
     /**
      * Which editor should be used for CHAR/VARCHAR fields:
      *  input - allows limiting of input length
      *  textarea - allows newlines in fields
      *
-     * @var string
+     * ```php
+     * $cfg['CharEditing'] = 'input';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CharEditing
+     *
      * @psalm-var 'input'|'textarea'
      */
-    public $CharEditing;
+    public string $CharEditing;
 
     /**
      * The minimum size for character input fields
      *
-     * @var int
+     * ```php
+     * $cfg['MinSizeForInputField'] = 4;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MinSizeForInputField
+     *
      * @psalm-var 0|positive-int
      */
-    public $MinSizeForInputField;
+    public int $MinSizeForInputField;
 
     /**
      * The maximum size for character input fields
      *
-     * @var int
+     * ```php
+     * $cfg['MaxSizeForInputField'] = 60;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxSizeForInputField
+     *
      * @psalm-var positive-int
      */
-    public $MaxSizeForInputField;
+    public int $MaxSizeForInputField;
 
     /**
      * How many rows can be inserted at one time
      *
-     * @var int
+     * ```php
+     * $cfg['InsertRows'] = 2;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_InsertRows
+     *
      * @psalm-var positive-int
      */
-    public $InsertRows;
+    public int $InsertRows;
 
     /**
      * Sort order for items in a foreign-key drop-down list.
      * 'content' is the referenced data, 'id' is the key value.
      *
+     * ```php
+     * $cfg['ForeignKeyDropdownOrder'] = ['content-id', 'id-content'];
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ForeignKeyDropdownOrder
+     *
      * @var string[]
      * @psalm-var array{0: 'content-id'|'id-content', 1?: 'content-id'|'id-content'}
      */
-    public $ForeignKeyDropdownOrder;
+    public array $ForeignKeyDropdownOrder;
 
     /**
      * A drop-down list will be used if fewer items are present
      *
-     * @var int
+     * ```php
+     * $cfg['ForeignKeyMaxLimit'] = 100;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ForeignKeyMaxLimit
+     *
      * @psalm-var positive-int
      */
-    public $ForeignKeyMaxLimit;
+    public int $ForeignKeyMaxLimit;
 
     /**
      * Whether to disable foreign key checks while importing
      *
-     * @var string
+     * ```php
+     * $cfg['DefaultForeignKeyChecks'] = 'default';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultForeignKeyChecks
+     *
      * @psalm-var 'default'|'enable'|'disable'
      */
-    public $DefaultForeignKeyChecks;
+    public string $DefaultForeignKeyChecks;
 
     /**
      * Allow for the use of zip compression (requires zip support to be enabled)
      *
-     * @var bool
+     * ```php
+     * $cfg['ZipDump'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ZipDump
      */
-    public $ZipDump;
+    public bool $ZipDump;
 
     /**
      * Allow for the use of gzip compression (requires zlib)
      *
-     * @var bool
+     * ```php
+     * $cfg['GZipDump'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_GZipDump
      */
-    public $GZipDump;
+    public bool $GZipDump;
 
     /**
      * Allow for the use of bzip2 decompression (requires bz2 extension)
      *
-     * @var bool
+     * ```php
+     * $cfg['BZipDump'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_BZipDump
      */
-    public $BZipDump;
+    public bool $BZipDump;
 
     /**
      * Will compress gzip exports on the fly without the need for much memory.
      * If you encounter problems with created gzip files disable this feature.
      *
-     * @var bool
+     * ```php
+     * $cfg['CompressOnFly'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CompressOnFly
      */
-    public $CompressOnFly;
+    public bool $CompressOnFly;
 
     /**
      * How to display the menu tabs ('icons'|'text'|'both')
      *
-     * @var string
+     * ```php
+     * $cfg['TabsMode'] = 'both';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TabsMode
+     *
      * @psalm-var 'icons'|'text'|'both'
      */
-    public $TabsMode;
+    public string $TabsMode;
 
     /**
      * How to display various action links ('icons'|'text'|'both')
      *
-     * @var string
+     * ```php
+     * $cfg['ActionLinksMode'] = 'both';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ActionLinksMode
+     *
      * @psalm-var 'icons'|'text'|'both'
      */
-    public $ActionLinksMode;
+    public string $ActionLinksMode;
 
     /**
      * How many columns should be used for table display of a database?
      * (a value larger than 1 results in some information being hidden)
      *
-     * @var int
+     * ```php
+     * $cfg['PropertiesNumColumns'] = 1;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_PropertiesNumColumns
+     *
      * @psalm-var positive-int
      */
-    public $PropertiesNumColumns;
+    public int $PropertiesNumColumns;
 
     /**
      * Possible values:
@@ -986,10 +1490,15 @@ final class Settings
      * 'variables' = MySQL server variables
      * 'privileges' = user management
      *
-     * @var string
+     * ```php
+     * $cfg['DefaultTabServer'] = 'welcome';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultTabServer
+     *
      * @psalm-var 'welcome'|'databases'|'status'|'variables'|'privileges'
      */
-    public $DefaultTabServer;
+    public string $DefaultTabServer;
 
     /**
      * Possible values:
@@ -998,10 +1507,15 @@ final class Settings
      * 'search' = search query
      * 'operations' = operations on database
      *
-     * @var string
+     * ```php
+     * $cfg['DefaultTabDatabase'] = 'structure';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultTabDatabase
+     *
      * @psalm-var 'structure'|'sql'|'search'|'operations'
      */
-    public $DefaultTabDatabase;
+    public string $DefaultTabDatabase;
 
     /**
      * Possible values:
@@ -1011,63 +1525,119 @@ final class Settings
      * 'insert' = insert row page
      * 'browse' = browse page
      *
-     * @var string
+     * ```php
+     * $cfg['DefaultTabTable'] = 'browse';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultTabTable
+     *
      * @psalm-var 'structure'|'sql'|'search'|'insert'|'browse'
      */
-    public $DefaultTabTable;
+    public string $DefaultTabTable;
 
     /**
      * Whether to display image or text or both image and text in table row
      * action segment. Value can be either of ``image``, ``text`` or ``both``.
      *
-     * @var string
+     * ```php
+     * $cfg['RowActionType'] = 'both';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RowActionType
+     *
      * @psalm-var 'icons'|'text'|'both'
      */
-    public $RowActionType;
+    public string $RowActionType;
 
-    /** @var Export */
-    public $Export;
+    /**
+     * Export defaults
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Export
+     */
+    public Export $Export;
 
-    /** @var Import */
-    public $Import;
+    /**
+     * Import defaults
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Import
+     */
+    public Import $Import;
 
-    /** @var Schema */
-    public $Schema;
+    /**
+     * Schema export defaults
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Schema
+     */
+    public Schema $Schema;
 
-    /** @var string[] */
-    public $PDFPageSizes;
+    /**
+     * Possible paper sizes for creating PDF pages.
+     *
+     * ```php
+     * $cfg['PDFPageSizes'] = ['A3', 'A4', 'A5', 'letter', 'legal'];
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_PDFPageSizes
+     *
+     * @var string[]
+     */
+    public array $PDFPageSizes;
 
-    /** @var string */
-    public $PDFDefaultPageSize;
+    /**
+     * Default page size to use when creating PDF pages.
+     *
+     * ```php
+     * $cfg['PDFDefaultPageSize'] = 'A4';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_PDFDefaultPageSize
+     */
+    public string $PDFDefaultPageSize;
 
     /**
      * Default language to use, if not browser-defined or user-defined
      *
-     * @var string
+     * ```php
+     * $cfg['DefaultLang'] = 'en';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultLang
      */
-    public $DefaultLang;
+    public string $DefaultLang;
 
     /**
      * Default connection collation
      *
-     * @var string
+     * ```php
+     * $cfg['DefaultConnectionCollation'] = 'utf8mb4_unicode_ci';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultConnectionCollation
      */
-    public $DefaultConnectionCollation;
+    public string $DefaultConnectionCollation;
 
     /**
      * Force: always use this language, e.g. 'en'
      *
-     * @var string
+     * ```php
+     * $cfg['Lang'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Lang
      */
-    public $Lang;
+    public string $Lang;
 
     /**
      * Regular expression to limit listed languages, e.g. '^(cs|en)' for Czech and
      * English only
      *
-     * @var string
+     * ```php
+     * $cfg['FilterLanguages'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_FilterLanguages
      */
-    public $FilterLanguages;
+    public string $FilterLanguages;
 
     /**
      * You can select here which functions will be used for character set conversion.
@@ -1078,19 +1648,28 @@ final class Settings
      *      mb     - use mbstring extension
      *      none   - disable encoding conversion
      *
-     * @var string
+     * ```php
+     * $cfg['RecodingEngine'] = 'auto';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RecodingEngine
+     *
      * @psalm-var 'auto'|'iconv'|'recode'|'mb'|'none'
      */
-    public $RecodingEngine;
+    public string $RecodingEngine;
 
     /**
      * Specify some parameters for iconv used in character set conversion. See iconv
      * documentation for details:
      * https://www.gnu.org/savannah-checkouts/gnu/libiconv/documentation/libiconv-1.15/iconv_open.3.html
      *
-     * @var string
+     * ```php
+     * $cfg['IconvExtraParams'] = '//TRANSLIT';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_IconvExtraParams
      */
-    public $IconvExtraParams;
+    public string $IconvExtraParams;
 
     /**
      * Available character sets for MySQL conversion. currently contains all which could
@@ -1098,331 +1677,531 @@ final class Settings
      * Character sets will be shown in same order as here listed, so if you frequently
      * use some of these move them to the top.
      *
+     * ```php
+     * $cfg['AvailableCharsets'] = [
+     *   'iso-8859-1', 'iso-8859-2', 'iso-8859-3', 'iso-8859-4', 'iso-8859-5', 'iso-8859-6', 'iso-8859-7', 'iso-8859-8',
+     *   'iso-8859-9', 'iso-8859-10', 'iso-8859-11', 'iso-8859-12', 'iso-8859-13', 'iso-8859-14', 'iso-8859-15',
+     *   'windows-1250', 'windows-1251', 'windows-1252', 'windows-1256', 'windows-1257', 'koi8-r', 'big5', 'gb2312',
+     *   'utf-16', 'utf-8', 'utf-7', 'x-user-defined', 'euc-jp', 'ks_c_5601-1987', 'tis-620',
+     *   'SHIFT_JIS', 'SJIS', 'SJIS-win'
+     * ];
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_AvailableCharsets
+     *
      * @var string[]
      */
-    public $AvailableCharsets;
+    public array $AvailableCharsets;
 
     /**
      * enable the left panel pointer
      *
-     * @var bool
+     * ```php
+     * $cfg['NavigationTreePointerEnable'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NavigationTreePointerEnable
      */
-    public $NavigationTreePointerEnable;
+    public bool $NavigationTreePointerEnable;
 
     /**
      * enable the browse pointer
      *
-     * @var bool
+     * ```php
+     * $cfg['BrowsePointerEnable'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_BrowsePointerEnable
      */
-    public $BrowsePointerEnable;
+    public bool $BrowsePointerEnable;
 
     /**
      * enable the browse marker
      *
-     * @var bool
+     * ```php
+     * $cfg['BrowseMarkerEnable'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_BrowseMarkerEnable
      */
-    public $BrowseMarkerEnable;
+    public bool $BrowseMarkerEnable;
 
     /**
      * textarea size (columns) in edit mode
      * (this value will be emphasized (*2) for SQL
      * query textareas and (*1.25) for query window)
      *
-     * @var int
+     * ```php
+     * $cfg['TextareaCols'] = 40;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TextareaCols
+     *
      * @psalm-var positive-int
      */
-    public $TextareaCols;
+    public int $TextareaCols;
 
     /**
      * textarea size (rows) in edit mode
      *
-     * @var int
+     * ```php
+     * $cfg['TextareaRows'] = 15;
+     * ```
+     *
      * @psalm-var positive-int
      */
-    public $TextareaRows;
+    public int $TextareaRows;
 
     /**
      * double size of textarea size for LONGTEXT columns
      *
-     * @var bool
+     * ```php
+     * $cfg['LongtextDoubleTextarea'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LongtextDoubleTextarea
      */
-    public $LongtextDoubleTextarea;
+    public bool $LongtextDoubleTextarea;
 
     /**
      * auto-select when clicking in the textarea of the query-box
      *
-     * @var bool
+     * ```php
+     * $cfg['TextareaAutoSelect'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TextareaAutoSelect
      */
-    public $TextareaAutoSelect;
+    public bool $TextareaAutoSelect;
 
     /**
      * textarea size (columns) for CHAR/VARCHAR
      *
-     * @var int
+     * ```php
+     * $cfg['CharTextareaCols'] = 40;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CharTextareaCols
+     *
      * @psalm-var positive-int
      */
-    public $CharTextareaCols;
+    public int $CharTextareaCols;
 
     /**
      * textarea size (rows) for CHAR/VARCHAR
      *
-     * @var int
+     * ```php
+     * $cfg['CharTextareaRows'] = 7;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CharTextareaRows
+     *
      * @psalm-var positive-int
      */
-    public $CharTextareaRows;
+    public int $CharTextareaRows;
 
     /**
      * Max field data length in browse mode for all non-numeric fields
      *
-     * @var int
+     * ```php
+     * $cfg['LimitChars'] = 50;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LimitChars
+     *
      * @psalm-var positive-int
      */
-    public $LimitChars;
+    public int $limitChars;
 
     /**
      * Where to show the edit/copy/delete links in browse mode
      * Possible values are 'left', 'right', 'both' and 'none'.
      *
-     * @var string
+     * ```php
+     * $cfg['RowActionLinks'] = 'left';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RowActionLinks
+     *
      * @psalm-var 'left'|'right'|'both'|'none'
      */
-    public $RowActionLinks;
+    public string $RowActionLinks;
 
     /**
      * Whether to show row links (Edit, Copy, Delete) and checkboxes for
      * multiple row operations even when the selection does not have a unique key.
      *
-     * @var bool
+     * ```php
+     * $cfg['RowActionLinksWithoutUnique'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RowActionLinksWithoutUnique
      */
-    public $RowActionLinksWithoutUnique;
+    public bool $RowActionLinksWithoutUnique;
 
     /**
      * Default sort order by primary key.
      *
-     * @var string
+     * ```php
+     * $cfg['TablePrimaryKeyOrder'] = 'NONE';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TablePrimaryKeyOrder
+     *
      * @psalm-var 'NONE'|'ASC'|'DESC'
      */
-    public $TablePrimaryKeyOrder;
+    public string $TablePrimaryKeyOrder;
 
     /**
      * remember the last way a table sorted
      *
-     * @var bool
+     * ```php
+     * $cfg['RememberSorting'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RememberSorting
      */
-    public $RememberSorting;
+    public bool $RememberSorting;
 
     /**
      * shows column comments in 'browse' mode.
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowBrowseComments'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowBrowseComments
      */
-    public $ShowBrowseComments;
+    public bool $ShowBrowseComments;
 
     /**
      * shows column comments in 'table property' mode.
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowPropertyComments'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowPropertyComments
      */
-    public $ShowPropertyComments;
+    public bool $ShowPropertyComments;
 
     /**
      * repeat header names every X cells? (0 = deactivate)
      *
-     * @var int
+     * ```php
+     * $cfg['RepeatCells'] = 100;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_RepeatCells
+     *
      * @psalm-var 0|positive-int
      */
-    public $RepeatCells;
+    public int $repeatCells;
 
     /**
      * Set to true if you want DB-based query history.If false, this utilizes
      * JS-routines to display query history (lost by window close)
      *
-     * @var bool
+     * ```php
+     * $cfg['QueryHistoryDB'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_QueryHistoryDB
      */
-    public $QueryHistoryDB;
+    public bool $QueryHistoryDB;
 
     /**
      * When using DB-based query history, how many entries should be kept?
      *
-     * @var int
+     * ```php
+     * $cfg['QueryHistoryMax'] = 25;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_QueryHistoryMax
+     *
      * @psalm-var positive-int
      */
-    public $QueryHistoryMax;
+    public int $QueryHistoryMax;
+
+    /**
+     * Allow shared bookmarks between users
+     *
+     * ```php
+     * $cfg['AllowSharedBookmarks'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_AllowSharedBookmarks
+     */
+    public bool $AllowSharedBookmarks;
 
     /**
      * Use MIME-Types (stored in column comments table) for
      *
-     * @var bool
+     * ```php
+     * $cfg['BrowseMIME'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_BrowseMIME
      */
-    public $BrowseMIME;
+    public bool $BrowseMIME;
 
     /**
      * When approximate count < this, PMA will get exact count for table rows.
      *
-     * @var int
+     * ```php
+     * $cfg['MaxExactCount'] = 50000;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxExactCount
+     *
      * @psalm-var positive-int
      */
-    public $MaxExactCount;
+    public int $MaxExactCount;
 
     /**
      * Zero means that no row count is done for views; see the doc
      *
-     * @var int
+     * ```php
+     * $cfg['MaxExactCountViews'] = 0;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MaxExactCountViews
+     *
      * @psalm-var 0|positive-int
      */
-    public $MaxExactCountViews;
+    public int $MaxExactCountViews;
 
     /**
      * Sort table and database in natural order
      *
-     * @var bool
+     * ```php
+     * $cfg['NaturalOrder'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_NaturalOrder
      */
-    public $NaturalOrder;
+    public bool $NaturalOrder;
 
     /**
      * Initial state for sliders
      * (open | closed | disabled)
      *
-     * @var string
+     * ```php
+     * $cfg['InitialSlidersState'] = 'closed';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_InitialSlidersState
+     *
      * @psalm-var 'open'|'closed'|'disabled'
      */
-    public $InitialSlidersState;
+    public string $InitialSlidersState;
 
     /**
      * User preferences: disallow these settings
-     * For possible setting names look in libraries/config/user_preferences.forms.php
+     * For possible setting names look in libraries/classes/Config/Forms/User/
+     *
+     * ```php
+     * $cfg['UserprefsDisallow'] = [];
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_UserprefsDisallow
      *
      * @var string[]
      */
-    public $UserprefsDisallow;
+    public array $UserprefsDisallow;
 
     /**
      * User preferences: enable the Developer tab
      *
-     * @var bool
+     * ```php
+     * $cfg['UserprefsDeveloperTab'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_UserprefsDeveloperTab
      */
-    public $UserprefsDeveloperTab;
+    public bool $UserprefsDeveloperTab;
 
     /**
      * title of browser window when a table is selected
      *
-     * @var string
+     * ```php
+     * $cfg['TitleTable'] = '@HTTP_HOST@ / @VSERVER@ / @DATABASE@ / @TABLE@ | @PHPMYADMIN@';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TitleTable
      */
-    public $TitleTable;
+    public string $TitleTable;
 
     /**
      * title of browser window when a database is selected
      *
-     * @var string
+     * ```php
+     * $cfg['TitleDatabase'] = '@HTTP_HOST@ / @VSERVER@ / @DATABASE@ | @PHPMYADMIN@';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TitleDatabase
      */
-    public $TitleDatabase;
+    public string $TitleDatabase;
 
     /**
      * title of browser window when a server is selected
      *
-     * @var string
+     * ```php
+     * $cfg['TitleServer'] = '@HTTP_HOST@ / @VSERVER@ | @PHPMYADMIN@';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TitleServer
      */
-    public $TitleServer;
+    public string $TitleServer;
 
     /**
      * title of browser window when nothing is selected
      *
-     * @var string
+     * ```php
+     * $cfg['TitleDefault'] = '@HTTP_HOST@ | @PHPMYADMIN@';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TitleDefault
      */
-    public $TitleDefault;
+    public string $TitleDefault;
 
     /**
      * if you want to use selectable themes and if ThemesPath not empty
      * set it to true, else set it to false (default is false);
      *
-     * @var bool
+     * ```php
+     * $cfg['ThemeManager'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ThemeManager
      */
-    public $ThemeManager;
+    public bool $ThemeManager;
 
     /**
      * set up default theme, you can set up here an valid
      * path to themes or 'original' for the original pma-theme
      *
-     * @var string
+     * ```php
+     * $cfg['ThemeDefault'] = 'pmahomme';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ThemeDefault
      */
-    public $ThemeDefault;
+    public string $ThemeDefault;
 
     /**
      * allow different theme for each configured server
      *
-     * @var bool
+     * ```php
+     * $cfg['ThemePerServer'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ThemePerServer
      */
-    public $ThemePerServer;
+    public bool $ThemePerServer;
 
     /**
      * Default query for table
      *
-     * @var string
+     * ```php
+     * $cfg['DefaultQueryTable'] = 'SELECT * FROM @TABLE@ WHERE 1';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultQueryTable
      */
-    public $DefaultQueryTable;
+    public string $DefaultQueryTable;
 
     /**
      * Default query for database
      *
-     * @var string
+     * ```php
+     * $cfg['DefaultQueryDatabase'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultQueryDatabase
      */
-    public $DefaultQueryDatabase;
+    public string $DefaultQueryDatabase;
 
     /**
      * SQL Query box settings
      * These are the links display in all of the SQL Query boxes
-     *
-     * @var SqlQueryBox
      */
-    public $SQLQuery;
+    public SqlQueryBox $SQLQuery;
 
     /**
      * Enables autoComplete for table & column names in SQL queries
      *
-     * @var bool
+     * ```php
+     * $cfg['EnableAutocompleteForTablesAndColumns'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_EnableAutocompleteForTablesAndColumns
      */
-    public $EnableAutocompleteForTablesAndColumns;
+    public bool $EnableAutocompleteForTablesAndColumns;
 
     /**
      * Directory for uploaded files that can be executed by phpMyAdmin.
      * For example './upload'. Leave empty for no upload directory support.
      * Use %u for username inclusion.
      *
-     * @var string
+     * ```php
+     * $cfg['UploadDir'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_UploadDir
      */
-    public $UploadDir;
+    public string $UploadDir;
 
     /**
      * Directory where phpMyAdmin can save exported data on server.
      * For example './save'. Leave empty for no save directory support.
      * Use %u for username inclusion.
      *
-     * @var string
+     * ```php
+     * $cfg['SaveDir'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_SaveDir
      */
-    public $SaveDir;
+    public string $SaveDir;
 
     /**
      * Directory where phpMyAdmin can save temporary files.
      *
-     * @var string
+     * ```php
+     * $cfg['TempDir'] = './tmp/';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TempDir
      */
-    public $TempDir;
+    public string $TempDir;
 
     /**
      * Is GD >= 2 available? Set to yes/no/auto. 'auto' does auto-detection,
      * which is the only safe way to determine GD version.
      *
-     * @var string
+     * ```php
+     * $cfg['GD2Available'] = 'auto';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_GD2Available
+     *
      * @psalm-var 'auto'|'yes'|'no'
      */
-    public $GD2Available;
+    public string $GD2Available;
 
     /**
      * Lists proxy IP and HTTP header combinations which are trusted for IP allow/deny
      *
+     * ```php
+     * $cfg['TrustedProxies'] = [];
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_TrustedProxies
+     *
      * @var array<string, string>
      */
-    public $TrustedProxies;
+    public array $TrustedProxies;
 
     /**
      * We normally check the permissions on the configuration file to ensure
@@ -1431,9 +2210,13 @@ final class Settings
      * permissions seems wrong but in fact cannot be detected. In this case
      * a sysadmin would set the following to false.
      *
-     * @var bool
+     * ```php
+     * $cfg['CheckConfigurationPermissions'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CheckConfigurationPermissions
      */
-    public $CheckConfigurationPermissions;
+    public bool $CheckConfigurationPermissions;
 
     /**
      * Limit for length of URL in links. When length would be above this limit, it
@@ -1443,26 +2226,39 @@ final class Settings
      * (see https://www.boutell.com/newfaq/misc/urllength.html) but we put
      * 1000 to accommodate Suhosin, see bug #3358750.
      *
-     * @var int
+     * ```php
+     * $cfg['LinkLengthLimit'] = 1000;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_LinkLengthLimit
+     *
      * @psalm-var positive-int
      */
-    public $LinkLengthLimit;
+    public int $LinkLengthLimit;
 
     /**
      * Additional string to allow in CSP headers.
      *
-     * @var string
+     * ```php
+     * $cfg['CSPAllow'] = '';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_CSPAllow
      */
-    public $CSPAllow;
+    public string $CSPAllow;
 
     /**
      * Disable the table maintenance mass operations, like optimizing or
      * repairing the selected tables of a database. An accidental execution
      * of such a maintenance task can enormously slow down a bigger database.
      *
-     * @var bool
+     * ```php
+     * $cfg['DisableMultiTableMaintenance'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DisableMultiTableMaintenance
      */
-    public $DisableMultiTableMaintenance;
+    public bool $DisableMultiTableMaintenance;
 
     /**
      * Whether or not to query the user before sending the error report to
@@ -1471,31 +2267,44 @@ final class Settings
      * Available options
      * (ask | always | never)
      *
-     * @var string
+     * ```php
+     * $cfg['SendErrorReports'] = 'ask';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_SendErrorReports
+     *
      * @psalm-var 'ask'|'always'|'never'
      */
-    public $SendErrorReports;
+    public string $SendErrorReports;
 
     /**
      * Whether Enter or Ctrl+Enter executes queries in the console.
      *
-     * @var bool
+     * ```php
+     * $cfg['ConsoleEnterExecutes'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ConsoleEnterExecutes
      */
-    public $ConsoleEnterExecutes;
+    public bool $ConsoleEnterExecutes;
 
     /**
      * Zero Configuration mode.
      *
-     * @var bool
+     * ```php
+     * $cfg['ZeroConf'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ZeroConf
      */
-    public $ZeroConf;
+    public bool $zeroConf;
 
     /**
      * Developers ONLY!
      *
-     * @var Debug
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DBG
      */
-    public $DBG;
+    public Debug $DBG;
 
     /**
      * Sets the working environment
@@ -1505,80 +2314,118 @@ final class Settings
      *
      * Possible values are 'production' or 'development'
      *
-     * @var string
+     * ```php
+     * $cfg['environment'] = 'production';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_environment
+     *
      * @psalm-var 'production'|'development'
      */
-    public $environment;
+    public string $environment;
 
     /**
      * Default functions for above defined groups
      *
+     * ```php
+     * $cfg['DefaultFunctions'] = [
+     *     'FUNC_CHAR' => '',
+     *     'FUNC_DATE' => '',
+     *     'FUNC_NUMBER' => '',
+     *     'FUNC_SPATIAL' => 'GeomFromText',
+     *     'FUNC_UUID' => 'UUID',
+     *     'first_timestamp' => 'NOW',
+     * ];
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultFunctions
+     *
      * @var array<string, string>
      */
-    public $DefaultFunctions;
+    public array $DefaultFunctions;
 
     /**
      * Max rows retrieved for zoom search
      *
-     * @var int
+     * ```php
+     * $cfg['maxRowPlotLimit'] = 500;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_maxRowPlotLimit
+     *
      * @psalm-var positive-int
      */
-    public $maxRowPlotLimit;
+    public int $maxRowPlotLimit;
 
     /**
      * Show Git revision if applicable
      *
-     * @var bool
+     * ```php
+     * $cfg['ShowGitRevision'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_ShowGitRevision
      */
-    public $ShowGitRevision;
+    public bool $ShowGitRevision;
 
     /**
      * MySQL minimal version required
      *
+     * ```php
+     * $cfg['MysqlMinVersion'] = ['internal' => 50500, 'human' => '5.5.0'];
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_MysqlMinVersion
+     *
      * @var array<string, int|string>
      * @psalm-var array{internal: int, human: string}
      */
-    public $MysqlMinVersion;
+    public array $mysqlMinVersion;
 
     /**
      * Disable shortcuts
      *
-     * @var bool
+     * ```php
+     * $cfg['DisableShortcutKeys'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DisableShortcutKeys
      */
-    public $DisableShortcutKeys;
+    public bool $DisableShortcutKeys;
 
     /**
      * Console configuration
      *
      * This is mostly meant for user preferences.
-     *
-     * @var Console
      */
-    public $Console;
+    public Console $Console;
 
     /**
      * Initialize default transformations array
      *
-     * @var Transformations
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_DefaultTransformations
      */
-    public $DefaultTransformations;
+    public Transformations $DefaultTransformations;
 
     /**
      * Set default for FirstDayOfCalendar
      *
-     * @var int
+     * ```php
+     * $cfg['FirstDayOfCalendar'] = 0;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_FirstDayOfCalendar
+     *
      * @psalm-var 0|positive-int
      */
-    public $FirstDayOfCalendar;
+    public int $FirstDayOfCalendar;
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     public function __construct(array $settings)
     {
         $this->PmaAbsoluteUri = $this->setPmaAbsoluteUri($settings);
-        $this->AuthLog = $this->setAuthLog($settings);
-        $this->AuthLogSuccess = $this->setAuthLogSuccess($settings);
+        $this->authLog = $this->setAuthLog($settings);
+        $this->authLogSuccess = $this->setAuthLogSuccess($settings);
         $this->PmaNoRelation_DisableWarning = $this->setPmaNoRelationDisableWarning($settings);
         $this->SuhosinDisableWarning = $this->setSuhosinDisableWarning($settings);
         $this->LoginCookieValidityDisableWarning = $this->setLoginCookieValidityDisableWarning($settings);
@@ -1669,8 +2516,8 @@ final class Settings
         $this->HideStructureActions = $this->setHideStructureActions($settings);
         $this->ShowColumnComments = $this->setShowColumnComments($settings);
         $this->TableNavigationLinksMode = $this->setTableNavigationLinksMode($settings);
-        $this->ShowAll = $this->setShowAll($settings);
-        $this->MaxRows = $this->setMaxRows($settings);
+        $this->showAll = $this->setShowAll($settings);
+        $this->maxRows = $this->setMaxRows($settings);
         $this->Order = $this->setOrder($settings);
         $this->SaveCellsAtOnce = $this->setSaveCellsAtOnce($settings);
         $this->GridEditing = $this->setGridEditing($settings);
@@ -1717,16 +2564,17 @@ final class Settings
         $this->TextareaAutoSelect = $this->setTextareaAutoSelect($settings);
         $this->CharTextareaCols = $this->setCharTextareaCols($settings);
         $this->CharTextareaRows = $this->setCharTextareaRows($settings);
-        $this->LimitChars = $this->setLimitChars($settings);
+        $this->limitChars = $this->setLimitChars($settings);
         $this->RowActionLinks = $this->setRowActionLinks($settings);
         $this->RowActionLinksWithoutUnique = $this->setRowActionLinksWithoutUnique($settings);
         $this->TablePrimaryKeyOrder = $this->setTablePrimaryKeyOrder($settings);
         $this->RememberSorting = $this->setRememberSorting($settings);
         $this->ShowBrowseComments = $this->setShowBrowseComments($settings);
         $this->ShowPropertyComments = $this->setShowPropertyComments($settings);
-        $this->RepeatCells = $this->setRepeatCells($settings);
+        $this->repeatCells = $this->setRepeatCells($settings);
         $this->QueryHistoryDB = $this->setQueryHistoryDB($settings);
         $this->QueryHistoryMax = $this->setQueryHistoryMax($settings);
+        $this->AllowSharedBookmarks = $this->setAllowSharedBookmarks($settings);
         $this->BrowseMIME = $this->setBrowseMIME($settings);
         $this->MaxExactCount = $this->setMaxExactCount($settings);
         $this->MaxExactCountViews = $this->setMaxExactCountViews($settings);
@@ -1756,43 +2604,219 @@ final class Settings
         $this->DisableMultiTableMaintenance = $this->setDisableMultiTableMaintenance($settings);
         $this->SendErrorReports = $this->setSendErrorReports($settings);
         $this->ConsoleEnterExecutes = $this->setConsoleEnterExecutes($settings);
-        $this->ZeroConf = $this->setZeroConf($settings);
+        $this->zeroConf = $this->setZeroConf($settings);
         $this->DBG = $this->setDBG($settings);
         $this->environment = $this->setEnvironment($settings);
         $this->DefaultFunctions = $this->setDefaultFunctions($settings);
         $this->maxRowPlotLimit = $this->setMaxRowPlotLimit($settings);
         $this->ShowGitRevision = $this->setShowGitRevision($settings);
-        $this->MysqlMinVersion = $this->setMysqlMinVersion($settings);
+        $this->mysqlMinVersion = $this->setMysqlMinVersion($settings);
         $this->DisableShortcutKeys = $this->setDisableShortcutKeys($settings);
         $this->Console = $this->setConsole($settings);
         $this->DefaultTransformations = $this->setDefaultTransformations($settings);
         $this->FirstDayOfCalendar = $this->setFirstDayOfCalendar($settings);
     }
 
-    /**
-     * @return array<string, array|bool|int|string|null>
-     */
-    public function toArray(): array
+    /** @return array<string, array<mixed>|bool|int|string|null> */
+    public function asArray(): array
     {
-        $settings = get_object_vars($this);
-        $settings['Console'] = get_object_vars($this->Console);
-        $settings['DBG'] = get_object_vars($this->DBG);
-        $settings['SQLQuery'] = get_object_vars($this->SQLQuery);
-        $settings['Export'] = get_object_vars($this->Export);
-        $settings['Import'] = get_object_vars($this->Import);
-        $settings['Schema'] = get_object_vars($this->Schema);
-        $settings['DefaultTransformations'] = get_object_vars($this->DefaultTransformations);
-
-        foreach (array_keys($settings['Servers']) as $key) {
-            $settings['Servers'][$key] = get_object_vars($this->Servers[$key]);
-        }
-
-        return $settings;
+        return [
+            'PmaAbsoluteUri' => $this->PmaAbsoluteUri,
+            'AuthLog' => $this->authLog,
+            'AuthLogSuccess' => $this->authLogSuccess,
+            'PmaNoRelation_DisableWarning' => $this->PmaNoRelation_DisableWarning,
+            'SuhosinDisableWarning' => $this->SuhosinDisableWarning,
+            'LoginCookieValidityDisableWarning' => $this->LoginCookieValidityDisableWarning,
+            'ReservedWordDisableWarning' => $this->ReservedWordDisableWarning,
+            'TranslationWarningThreshold' => $this->TranslationWarningThreshold,
+            'AllowThirdPartyFraming' => $this->AllowThirdPartyFraming,
+            'blowfish_secret' => $this->blowfish_secret,
+            'Servers' => array_map(static fn ($server) => $server->asArray(), $this->Servers),
+            'ServerDefault' => $this->ServerDefault,
+            'VersionCheck' => $this->VersionCheck,
+            'ProxyUrl' => $this->ProxyUrl,
+            'ProxyUser' => $this->ProxyUser,
+            'ProxyPass' => $this->ProxyPass,
+            'MaxDbList' => $this->MaxDbList,
+            'MaxTableList' => $this->MaxTableList,
+            'ShowHint' => $this->ShowHint,
+            'MaxCharactersInDisplayedSQL' => $this->MaxCharactersInDisplayedSQL,
+            'OBGzip' => $this->OBGzip,
+            'PersistentConnections' => $this->PersistentConnections,
+            'ExecTimeLimit' => $this->ExecTimeLimit,
+            'SessionSavePath' => $this->SessionSavePath,
+            'MysqlSslWarningSafeHosts' => $this->MysqlSslWarningSafeHosts,
+            'MemoryLimit' => $this->MemoryLimit,
+            'SkipLockedTables' => $this->SkipLockedTables,
+            'ShowSQL' => $this->ShowSQL,
+            'RetainQueryBox' => $this->RetainQueryBox,
+            'CodemirrorEnable' => $this->CodemirrorEnable,
+            'LintEnable' => $this->LintEnable,
+            'AllowUserDropDatabase' => $this->AllowUserDropDatabase,
+            'Confirm' => $this->Confirm,
+            'CookieSameSite' => $this->CookieSameSite,
+            'LoginCookieRecall' => $this->LoginCookieRecall,
+            'LoginCookieValidity' => $this->LoginCookieValidity,
+            'LoginCookieStore' => $this->LoginCookieStore,
+            'LoginCookieDeleteAll' => $this->LoginCookieDeleteAll,
+            'UseDbSearch' => $this->UseDbSearch,
+            'IgnoreMultiSubmitErrors' => $this->IgnoreMultiSubmitErrors,
+            'URLQueryEncryption' => $this->URLQueryEncryption,
+            'URLQueryEncryptionSecretKey' => $this->URLQueryEncryptionSecretKey,
+            'AllowArbitraryServer' => $this->AllowArbitraryServer,
+            'ArbitraryServerRegexp' => $this->ArbitraryServerRegexp,
+            'CaptchaMethod' => $this->CaptchaMethod,
+            'CaptchaApi' => $this->CaptchaApi,
+            'CaptchaCsp' => $this->CaptchaCsp,
+            'CaptchaRequestParam' => $this->CaptchaRequestParam,
+            'CaptchaResponseParam' => $this->CaptchaResponseParam,
+            'CaptchaLoginPublicKey' => $this->CaptchaLoginPublicKey,
+            'CaptchaLoginPrivateKey' => $this->CaptchaLoginPrivateKey,
+            'CaptchaSiteVerifyURL' => $this->CaptchaSiteVerifyURL,
+            'enable_drag_drop_import' => $this->enable_drag_drop_import,
+            'ShowDatabasesNavigationAsTree' => $this->ShowDatabasesNavigationAsTree,
+            'FirstLevelNavigationItems' => $this->FirstLevelNavigationItems,
+            'MaxNavigationItems' => $this->MaxNavigationItems,
+            'NavigationTreeEnableGrouping' => $this->NavigationTreeEnableGrouping,
+            'NavigationTreeDbSeparator' => $this->NavigationTreeDbSeparator,
+            'NavigationTreeTableSeparator' => $this->NavigationTreeTableSeparator,
+            'NavigationTreeTableLevel' => $this->NavigationTreeTableLevel,
+            'NavigationLinkWithMainPanel' => $this->NavigationLinkWithMainPanel,
+            'NavigationDisplayLogo' => $this->NavigationDisplayLogo,
+            'NavigationLogoLink' => $this->NavigationLogoLink,
+            'NavigationLogoLinkWindow' => $this->NavigationLogoLinkWindow,
+            'NumRecentTables' => $this->NumRecentTables,
+            'NumFavoriteTables' => $this->NumFavoriteTables,
+            'NavigationTreeDisplayItemFilterMinimum' => $this->NavigationTreeDisplayItemFilterMinimum,
+            'NavigationDisplayServers' => $this->NavigationDisplayServers,
+            'DisplayServersList' => $this->DisplayServersList,
+            'NavigationTreeDisplayDbFilterMinimum' => $this->NavigationTreeDisplayDbFilterMinimum,
+            'NavigationTreeDefaultTabTable' => $this->NavigationTreeDefaultTabTable,
+            'NavigationTreeDefaultTabTable2' => $this->NavigationTreeDefaultTabTable2,
+            'NavigationTreeEnableExpansion' => $this->NavigationTreeEnableExpansion,
+            'NavigationTreeShowTables' => $this->NavigationTreeShowTables,
+            'NavigationTreeShowViews' => $this->NavigationTreeShowViews,
+            'NavigationTreeShowFunctions' => $this->NavigationTreeShowFunctions,
+            'NavigationTreeShowProcedures' => $this->NavigationTreeShowProcedures,
+            'NavigationTreeShowEvents' => $this->NavigationTreeShowEvents,
+            'NavigationWidth' => $this->NavigationWidth,
+            'NavigationTreeAutoexpandSingleDb' => $this->NavigationTreeAutoexpandSingleDb,
+            'ShowStats' => $this->ShowStats,
+            'ShowPhpInfo' => $this->ShowPhpInfo,
+            'ShowServerInfo' => $this->ShowServerInfo,
+            'ShowChgPassword' => $this->ShowChgPassword,
+            'ShowCreateDb' => $this->ShowCreateDb,
+            'ShowDbStructureCharset' => $this->ShowDbStructureCharset,
+            'ShowDbStructureComment' => $this->ShowDbStructureComment,
+            'ShowDbStructureCreation' => $this->ShowDbStructureCreation,
+            'ShowDbStructureLastUpdate' => $this->ShowDbStructureLastUpdate,
+            'ShowDbStructureLastCheck' => $this->ShowDbStructureLastCheck,
+            'HideStructureActions' => $this->HideStructureActions,
+            'ShowColumnComments' => $this->ShowColumnComments,
+            'TableNavigationLinksMode' => $this->TableNavigationLinksMode,
+            'ShowAll' => $this->showAll,
+            'MaxRows' => $this->maxRows,
+            'Order' => $this->Order,
+            'SaveCellsAtOnce' => $this->SaveCellsAtOnce,
+            'GridEditing' => $this->GridEditing,
+            'RelationalDisplay' => $this->RelationalDisplay,
+            'ProtectBinary' => $this->ProtectBinary,
+            'ShowFunctionFields' => $this->ShowFunctionFields,
+            'ShowFieldTypesInDataEditView' => $this->ShowFieldTypesInDataEditView,
+            'CharEditing' => $this->CharEditing,
+            'MinSizeForInputField' => $this->MinSizeForInputField,
+            'MaxSizeForInputField' => $this->MaxSizeForInputField,
+            'InsertRows' => $this->InsertRows,
+            'ForeignKeyDropdownOrder' => $this->ForeignKeyDropdownOrder,
+            'ForeignKeyMaxLimit' => $this->ForeignKeyMaxLimit,
+            'DefaultForeignKeyChecks' => $this->DefaultForeignKeyChecks,
+            'ZipDump' => $this->ZipDump,
+            'GZipDump' => $this->GZipDump,
+            'BZipDump' => $this->BZipDump,
+            'CompressOnFly' => $this->CompressOnFly,
+            'TabsMode' => $this->TabsMode,
+            'ActionLinksMode' => $this->ActionLinksMode,
+            'PropertiesNumColumns' => $this->PropertiesNumColumns,
+            'DefaultTabServer' => $this->DefaultTabServer,
+            'DefaultTabDatabase' => $this->DefaultTabDatabase,
+            'DefaultTabTable' => $this->DefaultTabTable,
+            'RowActionType' => $this->RowActionType,
+            'Export' => $this->Export->asArray(),
+            'Import' => $this->Import->asArray(),
+            'Schema' => $this->Schema->asArray(),
+            'PDFPageSizes' => $this->PDFPageSizes,
+            'PDFDefaultPageSize' => $this->PDFDefaultPageSize,
+            'DefaultLang' => $this->DefaultLang,
+            'DefaultConnectionCollation' => $this->DefaultConnectionCollation,
+            'Lang' => $this->Lang,
+            'FilterLanguages' => $this->FilterLanguages,
+            'RecodingEngine' => $this->RecodingEngine,
+            'IconvExtraParams' => $this->IconvExtraParams,
+            'AvailableCharsets' => $this->AvailableCharsets,
+            'NavigationTreePointerEnable' => $this->NavigationTreePointerEnable,
+            'BrowsePointerEnable' => $this->BrowsePointerEnable,
+            'BrowseMarkerEnable' => $this->BrowseMarkerEnable,
+            'TextareaCols' => $this->TextareaCols,
+            'TextareaRows' => $this->TextareaRows,
+            'LongtextDoubleTextarea' => $this->LongtextDoubleTextarea,
+            'TextareaAutoSelect' => $this->TextareaAutoSelect,
+            'CharTextareaCols' => $this->CharTextareaCols,
+            'CharTextareaRows' => $this->CharTextareaRows,
+            'LimitChars' => $this->limitChars,
+            'RowActionLinks' => $this->RowActionLinks,
+            'RowActionLinksWithoutUnique' => $this->RowActionLinksWithoutUnique,
+            'TablePrimaryKeyOrder' => $this->TablePrimaryKeyOrder,
+            'RememberSorting' => $this->RememberSorting,
+            'ShowBrowseComments' => $this->ShowBrowseComments,
+            'ShowPropertyComments' => $this->ShowPropertyComments,
+            'RepeatCells' => $this->repeatCells,
+            'QueryHistoryDB' => $this->QueryHistoryDB,
+            'QueryHistoryMax' => $this->QueryHistoryMax,
+            'AllowSharedBookmarks' => $this->AllowSharedBookmarks,
+            'BrowseMIME' => $this->BrowseMIME,
+            'MaxExactCount' => $this->MaxExactCount,
+            'MaxExactCountViews' => $this->MaxExactCountViews,
+            'NaturalOrder' => $this->NaturalOrder,
+            'InitialSlidersState' => $this->InitialSlidersState,
+            'UserprefsDisallow' => $this->UserprefsDisallow,
+            'UserprefsDeveloperTab' => $this->UserprefsDeveloperTab,
+            'TitleTable' => $this->TitleTable,
+            'TitleDatabase' => $this->TitleDatabase,
+            'TitleServer' => $this->TitleServer,
+            'TitleDefault' => $this->TitleDefault,
+            'ThemeManager' => $this->ThemeManager,
+            'ThemeDefault' => $this->ThemeDefault,
+            'ThemePerServer' => $this->ThemePerServer,
+            'DefaultQueryTable' => $this->DefaultQueryTable,
+            'DefaultQueryDatabase' => $this->DefaultQueryDatabase,
+            'SQLQuery' => $this->SQLQuery->asArray(),
+            'EnableAutocompleteForTablesAndColumns' => $this->EnableAutocompleteForTablesAndColumns,
+            'UploadDir' => $this->UploadDir,
+            'SaveDir' => $this->SaveDir,
+            'TempDir' => $this->TempDir,
+            'GD2Available' => $this->GD2Available,
+            'TrustedProxies' => $this->TrustedProxies,
+            'CheckConfigurationPermissions' => $this->CheckConfigurationPermissions,
+            'LinkLengthLimit' => $this->LinkLengthLimit,
+            'CSPAllow' => $this->CSPAllow,
+            'DisableMultiTableMaintenance' => $this->DisableMultiTableMaintenance,
+            'SendErrorReports' => $this->SendErrorReports,
+            'ConsoleEnterExecutes' => $this->ConsoleEnterExecutes,
+            'ZeroConf' => $this->zeroConf,
+            'DBG' => $this->DBG->asArray(),
+            'environment' => $this->environment,
+            'DefaultFunctions' => $this->DefaultFunctions,
+            'maxRowPlotLimit' => $this->maxRowPlotLimit,
+            'ShowGitRevision' => $this->ShowGitRevision,
+            'MysqlMinVersion' => $this->mysqlMinVersion,
+            'DisableShortcutKeys' => $this->DisableShortcutKeys,
+            'Console' => $this->Console->asArray(),
+            'DefaultTransformations' => $this->DefaultTransformations->asArray(),
+            'FirstDayOfCalendar' => $this->FirstDayOfCalendar,
+        ];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setPmaAbsoluteUri(array $settings): string
     {
         if (! isset($settings['PmaAbsoluteUri'])) {
@@ -1802,9 +2826,7 @@ final class Settings
         return (string) $settings['PmaAbsoluteUri'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setAuthLog(array $settings): string
     {
         if (! isset($settings['AuthLog'])) {
@@ -1814,9 +2836,7 @@ final class Settings
         return (string) $settings['AuthLog'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setAuthLogSuccess(array $settings): bool
     {
         if (! isset($settings['AuthLogSuccess'])) {
@@ -1826,9 +2846,7 @@ final class Settings
         return (bool) $settings['AuthLogSuccess'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setPmaNoRelationDisableWarning(array $settings): bool
     {
         if (! isset($settings['PmaNoRelation_DisableWarning'])) {
@@ -1838,9 +2856,7 @@ final class Settings
         return (bool) $settings['PmaNoRelation_DisableWarning'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setSuhosinDisableWarning(array $settings): bool
     {
         if (! isset($settings['SuhosinDisableWarning'])) {
@@ -1850,9 +2866,7 @@ final class Settings
         return (bool) $settings['SuhosinDisableWarning'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setLoginCookieValidityDisableWarning(array $settings): bool
     {
         if (! isset($settings['LoginCookieValidityDisableWarning'])) {
@@ -1862,9 +2876,7 @@ final class Settings
         return (bool) $settings['LoginCookieValidityDisableWarning'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setReservedWordDisableWarning(array $settings): bool
     {
         if (! isset($settings['ReservedWordDisableWarning'])) {
@@ -1874,9 +2886,7 @@ final class Settings
         return (bool) $settings['ReservedWordDisableWarning'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setTranslationWarningThreshold(array $settings): int
     {
         if (! isset($settings['TranslationWarningThreshold'])) {
@@ -1894,10 +2904,9 @@ final class Settings
     /**
      * @param array<int|string, mixed> $settings
      *
-     * @return bool|string
      * @psalm-return bool|'sameorigin'
      */
-    private function setAllowThirdPartyFraming(array $settings)
+    private function setAllowThirdPartyFraming(array $settings): bool|string
     {
         if (! isset($settings['AllowThirdPartyFraming'])) {
             return false;
@@ -1910,9 +2919,7 @@ final class Settings
         return (bool) $settings['AllowThirdPartyFraming'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setBlowfishSecret(array $settings): string
     {
         if (! isset($settings['blowfish_secret'])) {
@@ -1935,19 +2942,28 @@ final class Settings
         }
 
         $servers = [];
-        /**
-         * @var int|string $key
-         * @var mixed $server
-         */
         foreach ($settings['Servers'] as $key => $server) {
             if (! is_int($key) || $key < 1 || ! is_array($server)) {
                 continue;
             }
 
             $servers[$key] = new Server($server);
+            if ($servers[$key]->host !== '' || $servers[$key]->verbose !== '') {
+                continue;
+            }
+
+            /**
+             * Ensures that the database server has a name.
+             *
+             * @link https://github.com/phpmyadmin/phpmyadmin/issues/6878
+             *
+             * @psalm-suppress ImpureFunctionCall
+             */
+            $server['verbose'] = sprintf(__('Server %d'), $key);
+            $servers[$key] = new Server($server);
         }
 
-        if (count($servers) === 0) {
+        if ($servers === []) {
             return [1 => new Server()];
         }
 
@@ -1970,9 +2986,7 @@ final class Settings
         return $serverDefault >= 0 ? $serverDefault : 1;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setVersionCheck(array $settings): bool
     {
         $versionCheck = true;
@@ -1987,9 +3001,7 @@ final class Settings
         return (bool) $settings['VersionCheck'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setProxyUrl(array $settings): string
     {
         if (! isset($settings['ProxyUrl'])) {
@@ -1999,9 +3011,7 @@ final class Settings
         return (string) $settings['ProxyUrl'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setProxyUser(array $settings): string
     {
         if (! isset($settings['ProxyUser'])) {
@@ -2011,9 +3021,7 @@ final class Settings
         return (string) $settings['ProxyUser'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setProxyPass(array $settings): string
     {
         if (! isset($settings['ProxyPass'])) {
@@ -2055,9 +3063,7 @@ final class Settings
         return $maxTableList >= 1 ? $maxTableList : 250;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowHint(array $settings): bool
     {
         if (! isset($settings['ShowHint'])) {
@@ -2086,10 +3092,9 @@ final class Settings
     /**
      * @param array<int|string, mixed> $settings
      *
-     * @return bool|string
      * @psalm-return 'auto'|bool
      */
-    private function setOBGzip(array $settings)
+    private function setOBGzip(array $settings): bool|string
     {
         if (! isset($settings['OBGzip']) || $settings['OBGzip'] === 'auto') {
             return 'auto';
@@ -2098,9 +3103,7 @@ final class Settings
         return (bool) $settings['OBGzip'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setPersistentConnections(array $settings): bool
     {
         if (! isset($settings['PersistentConnections'])) {
@@ -2126,9 +3129,7 @@ final class Settings
         return $execTimeLimit >= 0 ? $execTimeLimit : 300;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setSessionSavePath(array $settings): string
     {
         if (! isset($settings['SessionSavePath'])) {
@@ -2153,7 +3154,7 @@ final class Settings
         /** @var mixed $host */
         foreach ($settings['MysqlSslWarningSafeHosts'] as $host) {
             $safeHost = (string) $host;
-            if (strlen($safeHost) === 0) {
+            if ($safeHost === '') {
                 continue;
             }
 
@@ -2163,9 +3164,7 @@ final class Settings
         return $hosts;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setMemoryLimit(array $settings): string
     {
         if (! isset($settings['MemoryLimit'])) {
@@ -2175,9 +3174,7 @@ final class Settings
         return (string) $settings['MemoryLimit'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setSkipLockedTables(array $settings): bool
     {
         if (! isset($settings['SkipLockedTables'])) {
@@ -2187,9 +3184,7 @@ final class Settings
         return (bool) $settings['SkipLockedTables'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowSQL(array $settings): bool
     {
         if (! isset($settings['ShowSQL'])) {
@@ -2199,9 +3194,7 @@ final class Settings
         return (bool) $settings['ShowSQL'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setRetainQueryBox(array $settings): bool
     {
         if (! isset($settings['RetainQueryBox'])) {
@@ -2211,9 +3204,7 @@ final class Settings
         return (bool) $settings['RetainQueryBox'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCodemirrorEnable(array $settings): bool
     {
         if (! isset($settings['CodemirrorEnable'])) {
@@ -2223,9 +3214,7 @@ final class Settings
         return (bool) $settings['CodemirrorEnable'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setLintEnable(array $settings): bool
     {
         if (! isset($settings['LintEnable'])) {
@@ -2235,9 +3224,7 @@ final class Settings
         return (bool) $settings['LintEnable'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setAllowUserDropDatabase(array $settings): bool
     {
         if (! isset($settings['AllowUserDropDatabase'])) {
@@ -2247,9 +3234,7 @@ final class Settings
         return (bool) $settings['AllowUserDropDatabase'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setConfirm(array $settings): bool
     {
         if (! isset($settings['Confirm'])) {
@@ -2273,9 +3258,7 @@ final class Settings
         return $settings['CookieSameSite'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setLoginCookieRecall(array $settings): bool
     {
         if (! isset($settings['LoginCookieRecall'])) {
@@ -2317,9 +3300,7 @@ final class Settings
         return $loginCookieStore >= 1 ? $loginCookieStore : 0;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setLoginCookieDeleteAll(array $settings): bool
     {
         if (! isset($settings['LoginCookieDeleteAll'])) {
@@ -2329,9 +3310,7 @@ final class Settings
         return (bool) $settings['LoginCookieDeleteAll'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setUseDbSearch(array $settings): bool
     {
         if (! isset($settings['UseDbSearch'])) {
@@ -2341,9 +3320,7 @@ final class Settings
         return (bool) $settings['UseDbSearch'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setIgnoreMultiSubmitErrors(array $settings): bool
     {
         if (! isset($settings['IgnoreMultiSubmitErrors'])) {
@@ -2353,9 +3330,7 @@ final class Settings
         return (bool) $settings['IgnoreMultiSubmitErrors'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setURLQueryEncryption(array $settings): bool
     {
         if (! isset($settings['URLQueryEncryption'])) {
@@ -2365,9 +3340,7 @@ final class Settings
         return (bool) $settings['URLQueryEncryption'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setURLQueryEncryptionSecretKey(array $settings): string
     {
         if (! isset($settings['URLQueryEncryptionSecretKey'])) {
@@ -2377,9 +3350,7 @@ final class Settings
         return (string) $settings['URLQueryEncryptionSecretKey'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setAllowArbitraryServer(array $settings): bool
     {
         if (! isset($settings['AllowArbitraryServer'])) {
@@ -2389,9 +3360,7 @@ final class Settings
         return (bool) $settings['AllowArbitraryServer'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setArbitraryServerRegexp(array $settings): string
     {
         if (! isset($settings['ArbitraryServerRegexp'])) {
@@ -2415,9 +3384,7 @@ final class Settings
         return 'checkbox';
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCaptchaApi(array $settings): string
     {
         if (! isset($settings['CaptchaApi'])) {
@@ -2427,9 +3394,7 @@ final class Settings
         return (string) $settings['CaptchaApi'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCaptchaCsp(array $settings): string
     {
         if (! isset($settings['CaptchaCsp'])) {
@@ -2440,9 +3405,7 @@ final class Settings
         return (string) $settings['CaptchaCsp'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCaptchaRequestParam(array $settings): string
     {
         if (! isset($settings['CaptchaRequestParam'])) {
@@ -2452,9 +3415,7 @@ final class Settings
         return (string) $settings['CaptchaRequestParam'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCaptchaResponseParam(array $settings): string
     {
         if (! isset($settings['CaptchaResponseParam'])) {
@@ -2464,9 +3425,7 @@ final class Settings
         return (string) $settings['CaptchaResponseParam'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCaptchaLoginPublicKey(array $settings): string
     {
         if (! isset($settings['CaptchaLoginPublicKey'])) {
@@ -2476,9 +3435,7 @@ final class Settings
         return (string) $settings['CaptchaLoginPublicKey'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCaptchaLoginPrivateKey(array $settings): string
     {
         if (! isset($settings['CaptchaLoginPrivateKey'])) {
@@ -2488,9 +3445,7 @@ final class Settings
         return (string) $settings['CaptchaLoginPrivateKey'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCaptchaSiteVerifyURL(array $settings): string
     {
         if (! isset($settings['CaptchaSiteVerifyURL'])) {
@@ -2500,9 +3455,7 @@ final class Settings
         return (string) $settings['CaptchaSiteVerifyURL'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setEnableDragDropImport(array $settings): bool
     {
         if (! isset($settings['enable_drag_drop_import'])) {
@@ -2512,9 +3465,7 @@ final class Settings
         return (bool) $settings['enable_drag_drop_import'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowDatabasesNavigationAsTree(array $settings): bool
     {
         if (! isset($settings['ShowDatabasesNavigationAsTree'])) {
@@ -2556,9 +3507,7 @@ final class Settings
         return $maxNavigationItems >= 1 ? $maxNavigationItems : 50;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeEnableGrouping(array $settings): bool
     {
         if (! isset($settings['NavigationTreeEnableGrouping'])) {
@@ -2568,9 +3517,7 @@ final class Settings
         return (bool) $settings['NavigationTreeEnableGrouping'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeDbSeparator(array $settings): string
     {
         if (! isset($settings['NavigationTreeDbSeparator'])) {
@@ -2585,7 +3532,7 @@ final class Settings
      *
      * @return false|string|string[]
      */
-    private function setNavigationTreeTableSeparator(array $settings)
+    private function setNavigationTreeTableSeparator(array $settings): false|string|array
     {
         if (! isset($settings['NavigationTreeTableSeparator'])) {
             return '__';
@@ -2599,7 +3546,7 @@ final class Settings
             return (string) $settings['NavigationTreeTableSeparator'];
         }
 
-        if (count($settings['NavigationTreeTableSeparator']) > 0) {
+        if ($settings['NavigationTreeTableSeparator'] !== []) {
             $navigationTreeTableSeparator = [];
             /** @var mixed $separator */
             foreach ($settings['NavigationTreeTableSeparator'] as $separator) {
@@ -2628,9 +3575,7 @@ final class Settings
         return $navigationTreeTableLevel >= 2 ? $navigationTreeTableLevel : 1;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationLinkWithMainPanel(array $settings): bool
     {
         if (! isset($settings['NavigationLinkWithMainPanel'])) {
@@ -2640,9 +3585,7 @@ final class Settings
         return (bool) $settings['NavigationLinkWithMainPanel'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationDisplayLogo(array $settings): bool
     {
         if (! isset($settings['NavigationDisplayLogo'])) {
@@ -2652,9 +3595,7 @@ final class Settings
         return (bool) $settings['NavigationDisplayLogo'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationLogoLink(array $settings): string
     {
         if (! isset($settings['NavigationLogoLink'])) {
@@ -2726,9 +3667,7 @@ final class Settings
         return $navigationTreeDisplayItemFilterMinimum >= 1 ? $navigationTreeDisplayItemFilterMinimum : 30;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationDisplayServers(array $settings): bool
     {
         if (! isset($settings['NavigationDisplayServers'])) {
@@ -2738,9 +3677,7 @@ final class Settings
         return (bool) $settings['NavigationDisplayServers'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDisplayServersList(array $settings): bool
     {
         if (! isset($settings['DisplayServersList'])) {
@@ -2777,26 +3714,13 @@ final class Settings
             return 'structure';
         }
 
-        switch ($settings['NavigationTreeDefaultTabTable']) {
-            case 'sql':
-            case 'tbl_sql.php':
-                return 'sql';
-
-            case 'search':
-            case 'tbl_select.php':
-                return 'search';
-
-            case 'insert':
-            case 'tbl_change.php':
-                return 'insert';
-
-            case 'browse':
-            case 'sql.php':
-                return 'browse';
-
-            default:
-                return 'structure';
-        }
+        return match ($settings['NavigationTreeDefaultTabTable']) {
+            'sql', 'tbl_sql.php' => 'sql',
+            'search', 'tbl_select.php' => 'search',
+            'insert', 'tbl_change.php' => 'insert',
+            'browse', 'sql.php' => 'browse',
+            default => 'structure',
+        };
     }
 
     /**
@@ -2810,35 +3734,17 @@ final class Settings
             return '';
         }
 
-        switch ($settings['NavigationTreeDefaultTabTable2']) {
-            case 'structure':
-            case 'tbl_structure.php':
-                return 'structure';
-
-            case 'sql':
-            case 'tbl_sql.php':
-                return 'sql';
-
-            case 'search':
-            case 'tbl_select.php':
-                return 'search';
-
-            case 'insert':
-            case 'tbl_change.php':
-                return 'insert';
-
-            case 'browse':
-            case 'sql.php':
-                return 'browse';
-
-            default:
-                return '';
-        }
+        return match ($settings['NavigationTreeDefaultTabTable2']) {
+            'structure', 'tbl_structure.php' => 'structure',
+            'sql', 'tbl_sql.php' => 'sql',
+            'search', 'tbl_select.php' => 'search',
+            'insert', 'tbl_change.php' => 'insert',
+            'browse', 'sql.php' => 'browse',
+            default => '',
+        };
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeEnableExpansion(array $settings): bool
     {
         if (! isset($settings['NavigationTreeEnableExpansion'])) {
@@ -2848,9 +3754,7 @@ final class Settings
         return (bool) $settings['NavigationTreeEnableExpansion'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeShowTables(array $settings): bool
     {
         if (! isset($settings['NavigationTreeShowTables'])) {
@@ -2860,9 +3764,7 @@ final class Settings
         return (bool) $settings['NavigationTreeShowTables'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeShowViews(array $settings): bool
     {
         if (! isset($settings['NavigationTreeShowViews'])) {
@@ -2872,9 +3774,7 @@ final class Settings
         return (bool) $settings['NavigationTreeShowViews'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeShowFunctions(array $settings): bool
     {
         if (! isset($settings['NavigationTreeShowFunctions'])) {
@@ -2884,9 +3784,7 @@ final class Settings
         return (bool) $settings['NavigationTreeShowFunctions'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeShowProcedures(array $settings): bool
     {
         if (! isset($settings['NavigationTreeShowProcedures'])) {
@@ -2896,9 +3794,7 @@ final class Settings
         return (bool) $settings['NavigationTreeShowProcedures'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeShowEvents(array $settings): bool
     {
         if (! isset($settings['NavigationTreeShowEvents'])) {
@@ -2924,9 +3820,7 @@ final class Settings
         return $navigationWidth >= 0 ? $navigationWidth : 240;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreeAutoexpandSingleDb(array $settings): bool
     {
         if (! isset($settings['NavigationTreeAutoexpandSingleDb'])) {
@@ -2936,9 +3830,7 @@ final class Settings
         return (bool) $settings['NavigationTreeAutoexpandSingleDb'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowStats(array $settings): bool
     {
         if (! isset($settings['ShowStats'])) {
@@ -2948,9 +3840,7 @@ final class Settings
         return (bool) $settings['ShowStats'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowPhpInfo(array $settings): bool
     {
         if (! isset($settings['ShowPhpInfo'])) {
@@ -2962,19 +3852,27 @@ final class Settings
 
     /**
      * @param array<int|string, mixed> $settings
+     *
+     * @psalm-return bool|'database-server'|'web-server'
      */
-    private function setShowServerInfo(array $settings): bool
+    private function setShowServerInfo(array $settings): bool|string
     {
         if (! isset($settings['ShowServerInfo'])) {
             return true;
         }
 
+        if ($settings['ShowServerInfo'] === 'database-server') {
+            return 'database-server';
+        }
+
+        if ($settings['ShowServerInfo'] === 'web-server') {
+            return 'web-server';
+        }
+
         return (bool) $settings['ShowServerInfo'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowChgPassword(array $settings): bool
     {
         if (! isset($settings['ShowChgPassword'])) {
@@ -2984,9 +3882,7 @@ final class Settings
         return (bool) $settings['ShowChgPassword'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowCreateDb(array $settings): bool
     {
         if (! isset($settings['ShowCreateDb'])) {
@@ -2996,9 +3892,7 @@ final class Settings
         return (bool) $settings['ShowCreateDb'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowDbStructureCharset(array $settings): bool
     {
         if (! isset($settings['ShowDbStructureCharset'])) {
@@ -3008,9 +3902,7 @@ final class Settings
         return (bool) $settings['ShowDbStructureCharset'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowDbStructureComment(array $settings): bool
     {
         if (! isset($settings['ShowDbStructureComment'])) {
@@ -3020,9 +3912,7 @@ final class Settings
         return (bool) $settings['ShowDbStructureComment'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowDbStructureCreation(array $settings): bool
     {
         if (! isset($settings['ShowDbStructureCreation'])) {
@@ -3032,9 +3922,7 @@ final class Settings
         return (bool) $settings['ShowDbStructureCreation'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowDbStructureLastUpdate(array $settings): bool
     {
         if (! isset($settings['ShowDbStructureLastUpdate'])) {
@@ -3044,9 +3932,7 @@ final class Settings
         return (bool) $settings['ShowDbStructureLastUpdate'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowDbStructureLastCheck(array $settings): bool
     {
         if (! isset($settings['ShowDbStructureLastCheck'])) {
@@ -3056,9 +3942,7 @@ final class Settings
         return (bool) $settings['ShowDbStructureLastCheck'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setHideStructureActions(array $settings): bool
     {
         if (! isset($settings['HideStructureActions'])) {
@@ -3068,9 +3952,7 @@ final class Settings
         return (bool) $settings['HideStructureActions'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowColumnComments(array $settings): bool
     {
         if (! isset($settings['ShowColumnComments'])) {
@@ -3097,9 +3979,7 @@ final class Settings
         return $settings['TableNavigationLinksMode'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowAll(array $settings): bool
     {
         if (! isset($settings['ShowAll'])) {
@@ -3139,9 +4019,7 @@ final class Settings
         return $settings['Order'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setSaveCellsAtOnce(array $settings): bool
     {
         if (! isset($settings['SaveCellsAtOnce'])) {
@@ -3182,10 +4060,9 @@ final class Settings
     /**
      * @param array<int|string, mixed> $settings
      *
-     * @return false|string
      * @psalm-return 'blob'|'noblob'|'all'|false
      */
-    private function setProtectBinary(array $settings)
+    private function setProtectBinary(array $settings): false|string
     {
         if (
             ! isset($settings['ProtectBinary'])
@@ -3197,9 +4074,7 @@ final class Settings
         return $settings['ProtectBinary'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowFunctionFields(array $settings): bool
     {
         if (! isset($settings['ShowFunctionFields'])) {
@@ -3209,9 +4084,7 @@ final class Settings
         return (bool) $settings['ShowFunctionFields'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowFieldTypesInDataEditView(array $settings): bool
     {
         if (! isset($settings['ShowFieldTypesInDataEditView'])) {
@@ -3343,9 +4216,7 @@ final class Settings
         return $settings['DefaultForeignKeyChecks'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setZipDump(array $settings): bool
     {
         if (! isset($settings['ZipDump'])) {
@@ -3355,9 +4226,7 @@ final class Settings
         return (bool) $settings['ZipDump'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setGZipDump(array $settings): bool
     {
         if (! isset($settings['GZipDump'])) {
@@ -3367,9 +4236,7 @@ final class Settings
         return (bool) $settings['GZipDump'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setBZipDump(array $settings): bool
     {
         if (! isset($settings['BZipDump'])) {
@@ -3379,9 +4246,7 @@ final class Settings
         return (bool) $settings['BZipDump'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCompressOnFly(array $settings): bool
     {
         if (! isset($settings['CompressOnFly'])) {
@@ -3449,26 +4314,13 @@ final class Settings
             return 'welcome';
         }
 
-        switch ($settings['DefaultTabServer']) {
-            case 'databases':
-            case 'server_databases.php':
-                return 'databases';
-
-            case 'status':
-            case 'server_status.php':
-                return 'status';
-
-            case 'variables':
-            case 'server_variables.php':
-                return 'variables';
-
-            case 'privileges':
-            case 'server_privileges.php':
-                return 'privileges';
-
-            default:
-                return 'welcome';
-        }
+        return match ($settings['DefaultTabServer']) {
+            'databases', 'server_databases.php' => 'databases',
+            'status', 'server_status.php' => 'status',
+            'variables', 'server_variables.php' => 'variables',
+            'privileges', 'server_privileges.php' => 'privileges',
+            default => 'welcome',
+        };
     }
 
     /**
@@ -3482,22 +4334,12 @@ final class Settings
             return 'structure';
         }
 
-        switch ($settings['DefaultTabDatabase']) {
-            case 'sql':
-            case 'db_sql.php':
-                return 'sql';
-
-            case 'search':
-            case 'db_search.php':
-                return 'search';
-
-            case 'operations':
-            case 'db_operations.php':
-                return 'operations';
-
-            default:
-                return 'structure';
-        }
+        return match ($settings['DefaultTabDatabase']) {
+            'sql', 'db_sql.php' => 'sql',
+            'search', 'db_search.php' => 'search',
+            'operations', 'db_operations.php' => 'operations',
+            default => 'structure',
+        };
     }
 
     /**
@@ -3511,26 +4353,13 @@ final class Settings
             return 'browse';
         }
 
-        switch ($settings['DefaultTabTable']) {
-            case 'structure':
-            case 'tbl_structure.php':
-                return 'structure';
-
-            case 'sql':
-            case 'tbl_sql.php':
-                return 'sql';
-
-            case 'search':
-            case 'tbl_select.php':
-                return 'search';
-
-            case 'insert':
-            case 'tbl_change.php':
-                return 'insert';
-
-            default:
-                return 'browse';
-        }
+        return match ($settings['DefaultTabTable']) {
+            'structure', 'tbl_structure.php' => 'structure',
+            'sql', 'tbl_sql.php' => 'sql',
+            'search', 'tbl_select.php' => 'search',
+            'insert', 'tbl_change.php' => 'insert',
+            default => 'browse',
+        };
     }
 
     /**
@@ -3547,9 +4376,7 @@ final class Settings
         return $settings['RowActionType'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setExport(array $settings): Export
     {
         if (isset($settings['Export']) && is_array($settings['Export'])) {
@@ -3559,9 +4386,7 @@ final class Settings
         return new Export();
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setImport(array $settings): Import
     {
         if (isset($settings['Import']) && is_array($settings['Import'])) {
@@ -3571,9 +4396,7 @@ final class Settings
         return new Import();
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setSchema(array $settings): Schema
     {
         if (isset($settings['Schema']) && is_array($settings['Schema'])) {
@@ -3607,9 +4430,7 @@ final class Settings
         return $pdfPageSizes;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setPDFDefaultPageSize(array $settings): string
     {
         if (! isset($settings['PDFDefaultPageSize'])) {
@@ -3619,9 +4440,7 @@ final class Settings
         return (string) $settings['PDFDefaultPageSize'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDefaultLang(array $settings): string
     {
         if (! isset($settings['DefaultLang'])) {
@@ -3631,9 +4450,7 @@ final class Settings
         return (string) $settings['DefaultLang'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDefaultConnectionCollation(array $settings): string
     {
         if (! isset($settings['DefaultConnectionCollation'])) {
@@ -3643,9 +4460,7 @@ final class Settings
         return (string) $settings['DefaultConnectionCollation'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setLang(array $settings): string
     {
         if (! isset($settings['Lang'])) {
@@ -3655,9 +4470,7 @@ final class Settings
         return (string) $settings['Lang'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setFilterLanguages(array $settings): string
     {
         if (! isset($settings['FilterLanguages'])) {
@@ -3684,9 +4497,7 @@ final class Settings
         return $settings['RecodingEngine'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setIconvExtraParams(array $settings): string
     {
         if (! isset($settings['IconvExtraParams'])) {
@@ -3750,9 +4561,7 @@ final class Settings
         return $availableCharsets;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNavigationTreePointerEnable(array $settings): bool
     {
         if (! isset($settings['NavigationTreePointerEnable'])) {
@@ -3762,9 +4571,7 @@ final class Settings
         return (bool) $settings['NavigationTreePointerEnable'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setBrowsePointerEnable(array $settings): bool
     {
         if (! isset($settings['BrowsePointerEnable'])) {
@@ -3774,9 +4581,7 @@ final class Settings
         return (bool) $settings['BrowsePointerEnable'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setBrowseMarkerEnable(array $settings): bool
     {
         if (! isset($settings['BrowseMarkerEnable'])) {
@@ -3818,9 +4623,7 @@ final class Settings
         return $textareaRows >= 1 ? $textareaRows : 15;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setLongtextDoubleTextarea(array $settings): bool
     {
         if (! isset($settings['LongtextDoubleTextarea'])) {
@@ -3830,9 +4633,7 @@ final class Settings
         return (bool) $settings['LongtextDoubleTextarea'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setTextareaAutoSelect(array $settings): bool
     {
         if (! isset($settings['TextareaAutoSelect'])) {
@@ -3907,9 +4708,7 @@ final class Settings
         return $settings['RowActionLinks'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setRowActionLinksWithoutUnique(array $settings): bool
     {
         if (! isset($settings['RowActionLinksWithoutUnique'])) {
@@ -3936,9 +4735,7 @@ final class Settings
         return $settings['TablePrimaryKeyOrder'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setRememberSorting(array $settings): bool
     {
         if (! isset($settings['RememberSorting'])) {
@@ -3948,9 +4745,7 @@ final class Settings
         return (bool) $settings['RememberSorting'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowBrowseComments(array $settings): bool
     {
         if (! isset($settings['ShowBrowseComments'])) {
@@ -3960,9 +4755,7 @@ final class Settings
         return (bool) $settings['ShowBrowseComments'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowPropertyComments(array $settings): bool
     {
         if (! isset($settings['ShowPropertyComments'])) {
@@ -3988,9 +4781,7 @@ final class Settings
         return $repeatCells >= 0 ? $repeatCells : 100;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setQueryHistoryDB(array $settings): bool
     {
         if (! isset($settings['QueryHistoryDB'])) {
@@ -4016,9 +4807,17 @@ final class Settings
         return $queryHistoryMax >= 1 ? $queryHistoryMax : 25;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
+    private function setAllowSharedBookmarks(array $settings): bool
+    {
+        if (! isset($settings['AllowSharedBookmarks'])) {
+            return true;
+        }
+
+        return (bool) $settings['AllowSharedBookmarks'];
+    }
+
+    /** @param array<int|string, mixed> $settings */
     private function setBrowseMIME(array $settings): bool
     {
         if (! isset($settings['BrowseMIME'])) {
@@ -4060,9 +4859,7 @@ final class Settings
         return $maxExactCountViews >= 1 ? $maxExactCountViews : 0;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setNaturalOrder(array $settings): bool
     {
         if (! isset($settings['NaturalOrder'])) {
@@ -4109,9 +4906,7 @@ final class Settings
         return $userprefsDisallow;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setUserprefsDeveloperTab(array $settings): bool
     {
         if (! isset($settings['UserprefsDeveloperTab'])) {
@@ -4121,9 +4916,7 @@ final class Settings
         return (bool) $settings['UserprefsDeveloperTab'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setTitleTable(array $settings): string
     {
         if (! isset($settings['TitleTable'])) {
@@ -4133,9 +4926,7 @@ final class Settings
         return (string) $settings['TitleTable'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setTitleDatabase(array $settings): string
     {
         if (! isset($settings['TitleDatabase'])) {
@@ -4145,9 +4936,7 @@ final class Settings
         return (string) $settings['TitleDatabase'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setTitleServer(array $settings): string
     {
         if (! isset($settings['TitleServer'])) {
@@ -4157,9 +4946,7 @@ final class Settings
         return (string) $settings['TitleServer'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setTitleDefault(array $settings): string
     {
         if (! isset($settings['TitleDefault'])) {
@@ -4169,9 +4956,7 @@ final class Settings
         return (string) $settings['TitleDefault'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setThemeManager(array $settings): bool
     {
         if (! isset($settings['ThemeManager'])) {
@@ -4181,9 +4966,7 @@ final class Settings
         return (bool) $settings['ThemeManager'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setThemeDefault(array $settings): string
     {
         if (! isset($settings['ThemeDefault'])) {
@@ -4193,9 +4976,7 @@ final class Settings
         return (string) $settings['ThemeDefault'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setThemePerServer(array $settings): bool
     {
         if (! isset($settings['ThemePerServer'])) {
@@ -4205,9 +4986,7 @@ final class Settings
         return (bool) $settings['ThemePerServer'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDefaultQueryTable(array $settings): string
     {
         if (! isset($settings['DefaultQueryTable'])) {
@@ -4217,9 +4996,7 @@ final class Settings
         return (string) $settings['DefaultQueryTable'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDefaultQueryDatabase(array $settings): string
     {
         if (! isset($settings['DefaultQueryDatabase'])) {
@@ -4229,9 +5006,7 @@ final class Settings
         return (string) $settings['DefaultQueryDatabase'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setSQLQuery(array $settings): SqlQueryBox
     {
         if (isset($settings['SQLQuery']) && is_array($settings['SQLQuery'])) {
@@ -4241,9 +5016,7 @@ final class Settings
         return new SqlQueryBox();
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setEnableAutocompleteForTablesAndColumns(array $settings): bool
     {
         if (! isset($settings['EnableAutocompleteForTablesAndColumns'])) {
@@ -4253,9 +5026,7 @@ final class Settings
         return (bool) $settings['EnableAutocompleteForTablesAndColumns'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setUploadDir(array $settings): string
     {
         if (! isset($settings['UploadDir'])) {
@@ -4265,9 +5036,7 @@ final class Settings
         return (string) $settings['UploadDir'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setSaveDir(array $settings): string
     {
         if (! isset($settings['SaveDir'])) {
@@ -4277,9 +5046,7 @@ final class Settings
         return (string) $settings['SaveDir'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setTempDir(array $settings): string
     {
         $tempDir = ROOT_PATH . 'tmp' . DIRECTORY_SEPARATOR;
@@ -4335,9 +5102,7 @@ final class Settings
         return $trustedProxies;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCheckConfigurationPermissions(array $settings): bool
     {
         if (! isset($settings['CheckConfigurationPermissions'])) {
@@ -4363,9 +5128,7 @@ final class Settings
         return $linkLengthLimit >= 1 ? $linkLengthLimit : 1000;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setCSPAllow(array $settings): string
     {
         if (! isset($settings['CSPAllow'])) {
@@ -4375,9 +5138,7 @@ final class Settings
         return (string) $settings['CSPAllow'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDisableMultiTableMaintenance(array $settings): bool
     {
         if (! isset($settings['DisableMultiTableMaintenance'])) {
@@ -4404,9 +5165,7 @@ final class Settings
         return $settings['SendErrorReports'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setConsoleEnterExecutes(array $settings): bool
     {
         if (! isset($settings['ConsoleEnterExecutes'])) {
@@ -4416,9 +5175,7 @@ final class Settings
         return (bool) $settings['ConsoleEnterExecutes'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setZeroConf(array $settings): bool
     {
         if (! isset($settings['ZeroConf'])) {
@@ -4428,9 +5185,7 @@ final class Settings
         return (bool) $settings['ZeroConf'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDBG(array $settings): Debug
     {
         if (isset($settings['DBG']) && is_array($settings['DBG'])) {
@@ -4504,9 +5259,7 @@ final class Settings
         return $maxRowPlotLimit >= 1 ? $maxRowPlotLimit : 500;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setShowGitRevision(array $settings): bool
     {
         if (! isset($settings['ShowGitRevision'])) {
@@ -4542,9 +5295,7 @@ final class Settings
         return $mysqlMinVersion;
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDisableShortcutKeys(array $settings): bool
     {
         if (! isset($settings['DisableShortcutKeys'])) {
@@ -4554,9 +5305,7 @@ final class Settings
         return (bool) $settings['DisableShortcutKeys'];
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setConsole(array $settings): Console
     {
         if (isset($settings['Console']) && is_array($settings['Console'])) {
@@ -4566,9 +5315,7 @@ final class Settings
         return new Console();
     }
 
-    /**
-     * @param array<int|string, mixed> $settings
-     */
+    /** @param array<int|string, mixed> $settings */
     private function setDefaultTransformations(array $settings): Transformations
     {
         if (isset($settings['DefaultTransformations']) && is_array($settings['DefaultTransformations'])) {

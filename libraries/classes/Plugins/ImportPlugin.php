@@ -12,8 +12,6 @@ use PhpMyAdmin\Import;
 use PhpMyAdmin\Properties\Plugins\ImportPluginProperties;
 use PhpMyAdmin\Properties\Plugins\PluginPropertyItem;
 
-use function strlen;
-
 /**
  * Provides a common interface that will have to be implemented by all of the
  * import plugins.
@@ -22,13 +20,10 @@ abstract class ImportPlugin implements Plugin
 {
     /**
      * Object containing the import plugin properties.
-     *
-     * @var ImportPluginProperties
      */
-    protected $properties;
+    protected ImportPluginProperties $properties;
 
-    /** @var Import */
-    protected $import;
+    protected Import $import;
 
     final public function __construct()
     {
@@ -47,9 +42,9 @@ abstract class ImportPlugin implements Plugin
     /**
      * Handles the whole import logic
      *
-     * @param array $sql_data 2-element array with sql data
+     * @return string[]
      */
-    abstract public function doImport(?File $importHandle = null, array &$sql_data = []): void;
+    abstract public function doImport(File|null $importHandle = null): array;
 
     /**
      * Gets the import specific format plugin properties
@@ -65,30 +60,6 @@ abstract class ImportPlugin implements Plugin
      * Sets the export plugins properties and is implemented by each import plugin.
      */
     abstract protected function setProperties(): ImportPluginProperties;
-
-    /**
-     * Define DB name and options
-     *
-     * @param string $currentDb DB
-     * @param string $defaultDb Default DB name
-     *
-     * @return array DB name and options (an associative array of options)
-     */
-    protected function getDbnameAndOptions($currentDb, $defaultDb)
-    {
-        $db_name = $defaultDb;
-        $options = null;
-
-        if (strlen((string) $currentDb) > 0) {
-            $db_name = $currentDb;
-            $options = ['create_db' => false];
-        }
-
-        return [
-            $db_name,
-            $options,
-        ];
-    }
 
     public static function isAvailable(): bool
     {

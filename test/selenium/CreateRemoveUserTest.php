@@ -4,31 +4,29 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Selenium;
 
-/**
- * @coversNothing
- */
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
+
+use function bin2hex;
+use function random_bytes;
+
+#[CoversNothing]
 class CreateRemoveUserTest extends TestBase
 {
     /**
      * Create a test database for this test class
-     *
-     * @var bool
      */
-    protected static $createDatabase = false;
+    protected static bool $createDatabase = false;
 
     /**
      * Username for the user
-     *
-     * @var string
      */
-    private $txtUsername;
+    private string $txtUsername;
 
     /**
      * Password for the user
-     *
-     * @var string
      */
-    private $txtPassword;
+    private string $txtPassword;
 
     /**
      * Setup the browser environment to run the selenium test case
@@ -36,17 +34,17 @@ class CreateRemoveUserTest extends TestBase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->skipIfNotSuperUser();
-        $this->txtUsername = 'pma_user';
+        $this->txtUsername = 'test_user_' . bin2hex(random_bytes(4));
         $this->txtPassword = 'abc_123';
         $this->login();
     }
 
     /**
      * Creates and removes a user
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testCreateRemoveUser(): void
     {
         $this->waitForElement('partialLinkText', 'User accounts')->click();
@@ -102,13 +100,13 @@ class CreateRemoveUserTest extends TestBase
         $this->byId('dropUsersDbCheckbox')->click();
 
         $this->byId('buttonGo')->click();
-        $this->waitForElement('cssSelector', 'button.submitOK')->click();
+        $this->waitForElement('id', 'functionConfirmOkButton')->click();
         $this->acceptAlert();
 
         $success = $this->waitForElement('cssSelector', '.alert-success');
         $this->assertStringContainsString(
             'The selected users have been deleted',
-            $success->getText()
+            $success->getText(),
         );
     }
 }

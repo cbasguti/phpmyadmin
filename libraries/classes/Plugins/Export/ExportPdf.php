@@ -23,21 +23,15 @@ class ExportPdf extends ExportPlugin
 {
     /**
      * PhpMyAdmin\Plugins\Export\Helpers\Pdf instance
-     *
-     * @var Pdf
      */
-    private $pdf;
+    private Pdf $pdf;
 
     /**
      * PDF Report Title
-     *
-     * @var string
      */
-    private $pdfReportTitle = '';
+    private string $pdfReportTitle = '';
 
-    /**
-     * @psalm-return non-empty-lowercase-string
-     */
+    /** @psalm-return non-empty-lowercase-string */
     public function getName(): string
     {
         return 'pdf';
@@ -74,7 +68,7 @@ class ExportPdf extends ExportPlugin
         // create primary items and add them to the group
         $leaf = new TextPropertyItem(
             'report_title',
-            __('Report title:')
+            __('Report title:'),
         );
         $generalOptions->addProperty($leaf);
         // add the group to the root group
@@ -83,15 +77,11 @@ class ExportPdf extends ExportPlugin
         // what to dump (structure/data/both) main group
         $dumpWhat = new OptionsPropertyMainGroup(
             'dump_what',
-            __('Dump table')
+            __('Dump table'),
         );
         $leaf = new RadioPropertyItem('structure_or_data');
         $leaf->setValues(
-            [
-                'structure' => __('structure'),
-                'data' => __('data'),
-                'structure_and_data' => __('structure and data'),
-            ]
+            ['structure' => __('structure'), 'data' => __('data'), 'structure_and_data' => __('structure and data')],
         );
         $dumpWhat->addProperty($leaf);
         // add the group to the root group
@@ -135,7 +125,7 @@ class ExportPdf extends ExportPlugin
      * @param string $db      Database name
      * @param string $dbAlias Aliases of db
      */
-    public function exportDBHeader($db, $dbAlias = ''): bool
+    public function exportDBHeader(string $db, string $dbAlias = ''): bool
     {
         return true;
     }
@@ -145,7 +135,7 @@ class ExportPdf extends ExportPlugin
      *
      * @param string $db Database name
      */
-    public function exportDBFooter($db): bool
+    public function exportDBFooter(string $db): bool
     {
         return true;
     }
@@ -157,7 +147,7 @@ class ExportPdf extends ExportPlugin
      * @param string $exportType 'server', 'database', 'table'
      * @param string $dbAlias    Aliases of db
      */
-    public function exportDBCreate($db, $exportType, $dbAlias = ''): bool
+    public function exportDBCreate(string $db, string $exportType, string $dbAlias = ''): bool
     {
         return true;
     }
@@ -165,29 +155,27 @@ class ExportPdf extends ExportPlugin
     /**
      * Outputs the content of a table in NHibernate format
      *
-     * @param string $db       database name
-     * @param string $table    table name
-     * @param string $crlf     the end of line sequence
-     * @param string $errorUrl the url to go back in case of error
-     * @param string $sqlQuery SQL query for obtaining data
-     * @param array  $aliases  Aliases of db/table/columns
+     * @param string  $db       database name
+     * @param string  $table    table name
+     * @param string  $errorUrl the url to go back in case of error
+     * @param string  $sqlQuery SQL query for obtaining data
+     * @param mixed[] $aliases  Aliases of db/table/columns
      */
     public function exportData(
-        $db,
-        $table,
-        $crlf,
-        $errorUrl,
-        $sqlQuery,
-        array $aliases = []
+        string $db,
+        string $table,
+        string $errorUrl,
+        string $sqlQuery,
+        array $aliases = [],
     ): bool {
-        $db_alias = $db;
-        $table_alias = $table;
-        $this->initAlias($aliases, $db_alias, $table_alias);
+        $dbAlias = $db;
+        $tableAlias = $table;
+        $this->initAlias($aliases, $dbAlias, $tableAlias);
         $pdf = $this->getPdf();
         $pdf->setCurrentDb($db);
         $pdf->setCurrentTable($table);
-        $pdf->setDbAlias($db_alias);
-        $pdf->setTableAlias($table_alias);
+        $pdf->setDbAlias($dbAlias);
+        $pdf->setTableAlias($tableAlias);
         $pdf->setAliases($aliases);
         $pdf->setPurpose(__('Dumping data'));
         $pdf->mysqlReport($sqlQuery);
@@ -201,12 +189,9 @@ class ExportPdf extends ExportPlugin
      * @param string      $errorUrl the url to go back in case of error
      * @param string|null $db       the database where the query is executed
      * @param string      $sqlQuery the rawquery to output
-     * @param string      $crlf     the end of line sequence
      */
-    public function exportRawQuery(string $errorUrl, ?string $db, string $sqlQuery, string $crlf): bool
+    public function exportRawQuery(string $errorUrl, string|null $db, string $sqlQuery): bool
     {
-        global $dbi;
-
         $pdf = $this->getPdf();
         $pdf->setDbAlias('----');
         $pdf->setTableAlias('----');
@@ -214,7 +199,7 @@ class ExportPdf extends ExportPlugin
 
         if ($db !== null) {
             $pdf->setCurrentDb($db);
-            $dbi->selectDb($db);
+            $GLOBALS['dbi']->selectDb($db);
         }
 
         $pdf->mysqlReport($sqlQuery);
@@ -225,41 +210,39 @@ class ExportPdf extends ExportPlugin
     /**
      * Outputs table structure
      *
-     * @param string $db          database name
-     * @param string $table       table name
-     * @param string $crlf        the end of line sequence
-     * @param string $errorUrl    the url to go back in case of error
-     * @param string $exportMode  'create_table', 'triggers', 'create_view',
+     * @param string  $db         database name
+     * @param string  $table      table name
+     * @param string  $errorUrl   the url to go back in case of error
+     * @param string  $exportMode 'create_table', 'triggers', 'create_view',
      *                             'stand_in'
-     * @param string $exportType  'server', 'database', 'table'
-     * @param bool   $do_relation whether to include relation comments
-     * @param bool   $do_comments whether to include the pmadb-style column
-     *                            comments as comments in the structure;
-     *                            this is deprecated but the parameter is
-     *                            left here because /export calls
-     *                            PMA_exportStructure() also for other
-     *                            export types which use this parameter
-     * @param bool   $do_mime     whether to include mime comments
-     * @param bool   $dates       whether to include creation/update/check dates
-     * @param array  $aliases     aliases for db/table/columns
+     * @param string  $exportType 'server', 'database', 'table'
+     * @param bool    $doRelation whether to include relation comments
+     * @param bool    $doComments whether to include the pmadb-style column
+     *                             comments as comments in the structure;
+     *                             this is deprecated but the parameter is
+     *                             left here because /export calls
+     *                             PMA_exportStructure() also for other
+     *                             export types which use this parameter
+     * @param bool    $doMime     whether to include mime comments
+     * @param bool    $dates      whether to include creation/update/check dates
+     * @param mixed[] $aliases    aliases for db/table/columns
      */
     public function exportStructure(
-        $db,
-        $table,
-        $crlf,
-        $errorUrl,
-        $exportMode,
-        $exportType,
-        $do_relation = false,
-        $do_comments = false,
-        $do_mime = false,
-        $dates = false,
-        array $aliases = []
+        string $db,
+        string $table,
+        string $errorUrl,
+        string $exportMode,
+        string $exportType,
+        bool $doRelation = false,
+        bool $doComments = false,
+        bool $doMime = false,
+        bool $dates = false,
+        array $aliases = [],
     ): bool {
-        $db_alias = $db;
-        $table_alias = $table;
+        $dbAlias = $db;
+        $tableAlias = $table;
         $purpose = '';
-        $this->initAlias($aliases, $db_alias, $table_alias);
+        $this->initAlias($aliases, $dbAlias, $tableAlias);
         $pdf = $this->getPdf();
         // getting purpose to show at top
         switch ($exportMode) {
@@ -278,8 +261,8 @@ class ExportPdf extends ExportPlugin
 
         $pdf->setCurrentDb($db);
         $pdf->setCurrentTable($table);
-        $pdf->setDbAlias($db_alias);
-        $pdf->setTableAlias($table_alias);
+        $pdf->setDbAlias($dbAlias);
+        $pdf->setTableAlias($tableAlias);
         $pdf->setAliases($aliases);
         $pdf->setPurpose($purpose);
 
@@ -287,22 +270,20 @@ class ExportPdf extends ExportPlugin
          * comment display set true as presently in pdf
          * format, no option is present to take user input.
          */
-        $do_comments = true;
         switch ($exportMode) {
             case 'create_table':
-                $pdf->getTableDef($db, $table, $do_relation, $do_comments, $do_mime, false, $aliases);
+                $pdf->getTableDef($db, $table, $doRelation, true, $doMime);
                 break;
             case 'triggers':
                 $pdf->getTriggers($db, $table);
                 break;
             case 'create_view':
-                $pdf->getTableDef($db, $table, $do_relation, $do_comments, $do_mime, false, $aliases);
+                $pdf->getTableDef($db, $table, $doRelation, true, $doMime);
                 break;
             case 'stand_in':
-                /* export a stand-in definition to resolve view dependencies
-                 * Yet to develop this function
-                 * $pdf->getTableDefStandIn($db, $table, $crlf);
-                 */
+                // export a stand-in definition to resolve view dependencies
+                // Yet to develop this function
+                //$pdf->getTableDefStandIn($db, $table);
         }
 
         return true;
@@ -312,10 +293,8 @@ class ExportPdf extends ExportPlugin
 
     /**
      * Gets the PhpMyAdmin\Plugins\Export\Helpers\Pdf instance
-     *
-     * @return Pdf
      */
-    private function getPdf()
+    private function getPdf(): Pdf
     {
         return $this->pdf;
     }
@@ -325,7 +304,7 @@ class ExportPdf extends ExportPlugin
      *
      * @param Pdf $pdf The instance
      */
-    private function setPdf($pdf): void
+    private function setPdf(Pdf $pdf): void
     {
         $this->pdf = $pdf;
     }

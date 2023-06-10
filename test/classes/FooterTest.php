@@ -7,19 +7,20 @@ namespace PhpMyAdmin\Tests;
 use ArrayIterator;
 use PhpMyAdmin\ErrorHandler;
 use PhpMyAdmin\Footer;
+use PhpMyAdmin\Template;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
+use ReflectionProperty;
 
 use function json_encode;
 
-/**
- * @covers \PhpMyAdmin\Footer
- */
+#[CoversClass(Footer::class)]
 class FooterTest extends AbstractTestCase
 {
-    /** @var array store private attributes of PhpMyAdmin\Footer */
-    public $privates = [];
+    /** @var mixed[] store private attributes of PhpMyAdmin\Footer */
+    public array $privates = [];
 
-    /** @var Footer */
-    protected $object;
+    protected Footer $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -28,11 +29,15 @@ class FooterTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
+
         parent::setGlobalConfig();
+
         parent::setTheme();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $_SERVER['SCRIPT_NAME'] = 'index.php';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['db'] = '';
         $GLOBALS['table'] = '';
         $GLOBALS['text_dir'] = 'ltr';
@@ -45,7 +50,7 @@ class FooterTest extends AbstractTestCase
         unset($GLOBALS['error_message']);
         unset($GLOBALS['sql_query']);
         $GLOBALS['errorHandler'] = new ErrorHandler();
-        unset($_POST);
+        $_POST = [];
     }
 
     /**
@@ -55,34 +60,26 @@ class FooterTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
     /**
      * Test for getDebugMessage
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testGetDebugMessage(): void
     {
         $GLOBALS['cfg']['DBG']['sql'] = true;
         $_SESSION['debug']['queries'] = [
-            [
-                'count' => 1,
-                'time' => 0.2,
-                'query' => 'SELECT * FROM `pma_bookmark` WHERE 1',
-            ],
-            [
-                'count' => 1,
-                'time' => 2.5,
-                'query' => 'SELECT * FROM `db` WHERE 1',
-            ],
+            ['count' => 1, 'time' => 0.2, 'query' => 'SELECT * FROM `pma_bookmark` WHERE 1'],
+            ['count' => 1, 'time' => 2.5, 'query' => 'SELECT * FROM `db` WHERE 1'],
         ];
 
         $this->assertEquals(
             '{"queries":[{"count":1,"time":0.2,"query":"SELECT * FROM `pma_bookmark` WHERE 1"},'
             . '{"count":1,"time":2.5,"query":"SELECT * FROM `db` WHERE 1"}]}',
-            $this->object->getDebugMessage()
+            $this->object->getDebugMessage(),
         );
     }
 
@@ -99,7 +96,7 @@ class FooterTest extends AbstractTestCase
         $this->callFunction($this->object, Footer::class, 'removeRecursion', [&$object]);
         $this->assertEquals(
             '{"child":{"parent":"***RECURSION***"},"childIterator":"***ITERATOR***"}',
-            json_encode($object)
+            json_encode($object),
         );
     }
 
@@ -112,20 +109,20 @@ class FooterTest extends AbstractTestCase
         $footer->disable();
         $this->assertEquals(
             '',
-            $footer->getDisplay()
+            $footer->getDisplay(),
         );
     }
 
-    /**
-     * Test for footer when ajax enabled
-     */
-    public function testAjax(): void
+    public function testGetDisplayWhenAjaxIsEnabled(): void
     {
         $footer = new Footer();
         $footer->setAjax(true);
+        $template = new Template();
         $this->assertEquals(
-            '',
-            $footer->getDisplay()
+            $template->render('modals/function_confirm') . "\n"
+            . $template->render('modals/add_index') . "\n"
+            . $template->render('modals/page_settings') . "\n",
+            $footer->getDisplay(),
         );
     }
 
@@ -137,21 +134,20 @@ class FooterTest extends AbstractTestCase
         $footer = new Footer();
         $this->assertStringContainsString(
             '<script data-cfasync="false" type="text/javascript">',
-            $footer->getScripts()->getDisplay()
+            $footer->getScripts()->getDisplay(),
         );
     }
 
     /**
      * Test for displaying footer
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testDisplay(): void
     {
         $footer = new Footer();
         $this->assertStringContainsString(
             'Open new phpMyAdmin window',
-            $footer->getDisplay()
+            $footer->getDisplay(),
         );
     }
 
@@ -162,9 +158,25 @@ class FooterTest extends AbstractTestCase
     {
         $footer = new Footer();
         $footer->setMinimal();
+        $template = new Template();
         $this->assertEquals(
-            "  </div>\n  </body>\n</html>\n",
-            $footer->getDisplay()
+            $template->render('modals/function_confirm') . "\n"
+            . $template->render('modals/add_index') . "\n"
+            . $template->render('modals/page_settings')
+            . "\n  </div>\n  </body>\n</html>\n",
+            $footer->getDisplay(),
         );
+    }
+
+    public function testSetAjax(): void
+    {
+        $isAjax = new ReflectionProperty(Footer::class, 'isAjax');
+        $footer = new Footer();
+
+        $this->assertFalse($isAjax->getValue($footer));
+        $footer->setAjax(true);
+        $this->assertTrue($isAjax->getValue($footer));
+        $footer->setAjax(false);
+        $this->assertFalse($isAjax->getValue($footer));
     }
 }

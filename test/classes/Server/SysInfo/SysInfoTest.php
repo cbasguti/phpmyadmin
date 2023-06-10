@@ -7,10 +7,10 @@ namespace PhpMyAdmin\Tests\Server\SysInfo;
 use PhpMyAdmin\Server\SysInfo\Base;
 use PhpMyAdmin\Server\SysInfo\SysInfo;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * @covers \PhpMyAdmin\Server\SysInfo\SysInfo
- */
+#[CoversClass(SysInfo::class)]
 class SysInfoTest extends AbstractTestCase
 {
     /**
@@ -18,40 +18,24 @@ class SysInfoTest extends AbstractTestCase
      *
      * @param string $os       OS name as returned by PHP_OS
      * @param string $expected Expected detected OS name
-     *
-     * @dataProvider sysInfoOsProvider
      */
+    #[DataProvider('sysInfoOsProvider')]
     public function testGetSysInfoOs(string $os, string $expected): void
     {
         $this->assertEquals(
             $expected,
-            SysInfo::getOs($os)
+            SysInfo::getOs($os),
         );
     }
 
     /**
      * Data provider for OS detection tests.
+     *
+     * @return string[][]
      */
-    public function sysInfoOsProvider(): array
+    public static function sysInfoOsProvider(): array
     {
-        return [
-            [
-                'FreeBSD',
-                'Linux',
-            ],
-            [
-                'Linux',
-                'Linux',
-            ],
-            [
-                'Winnt',
-                'Winnt',
-            ],
-            [
-                'SunOS',
-                'SunOS',
-            ],
-        ];
+        return [['FreeBSD', 'Linux'], ['Linux', 'Linux'], ['Winnt', 'Winnt'], ['SunOS', 'SunOS']];
     }
 
     /**
@@ -67,6 +51,6 @@ class SysInfoTest extends AbstractTestCase
      */
     public function testGetSysInfoSupported(): void
     {
-        $this->assertTrue(SysInfo::get()->supported());
+        $this->assertTrue(SysInfo::get()::isSupported());
     }
 }

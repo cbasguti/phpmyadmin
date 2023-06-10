@@ -4,26 +4,34 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests;
 
-use PhpMyAdmin\Core;
+use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Menu;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Menu
- */
+#[CoversClass(Menu::class)]
 class MenuTest extends AbstractTestCase
 {
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
     /**
      * Configures global environment.
      */
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setTheme();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
 
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
         $GLOBALS['server'] = 0;
         $GLOBALS['cfg']['Server']['verbose'] = 'verbose host';
-        $GLOBALS['PMA_PHP_SELF'] = Core::getenv('PHP_SELF');
         $GLOBALS['server'] = 'server';
         $GLOBALS['db'] = 'pma_test';
         $GLOBALS['table'] = 'table1';
@@ -37,7 +45,7 @@ class MenuTest extends AbstractTestCase
         $menu = new Menu($this->dbi, '', '');
         $this->assertStringContainsString(
             'floating_menubar',
-            $menu->getDisplay()
+            $menu->getDisplay(),
         );
     }
 
@@ -49,7 +57,7 @@ class MenuTest extends AbstractTestCase
         $menu = new Menu($this->dbi, 'pma_test', '');
         $this->assertStringContainsString(
             'floating_menubar',
-            $menu->getDisplay()
+            $menu->getDisplay(),
         );
     }
 
@@ -61,7 +69,7 @@ class MenuTest extends AbstractTestCase
         $menu = new Menu($this->dbi, 'pma_test', 'table1');
         $this->assertStringContainsString(
             'floating_menubar',
-            $menu->getDisplay()
+            $menu->getDisplay(),
         );
     }
 
@@ -74,7 +82,7 @@ class MenuTest extends AbstractTestCase
         $menu->setTable('table1');
         $this->assertStringContainsString(
             'table1',
-            $menu->getDisplay()
+            $menu->getDisplay(),
         );
     }
 }

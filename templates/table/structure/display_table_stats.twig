@@ -1,6 +1,6 @@
-<div id="tablestatistics">
-    <fieldset class="pma-fieldset">
-        <legend>{% trans 'Information' %}</legend>
+<div id="tablestatistics" class="card">
+    <div class="card-header">{% trans 'Information' %}</div>
+    <div class="card-body">
         {% if showtable['TABLE_COMMENT'] %}
             <p>
                 <strong>{% trans 'Table comments:' %}</strong>
@@ -117,7 +117,7 @@
                 {% if not is_innodb and showtable['Rows'] is defined %}
                     <tr>
                     <th class="name">{% trans 'Rows' %}</th>
-                    <td class="value">{{ format_number(showtable['Rows'], 0) }}</td>
+                    <td class="value">{{ format_number(showtable['Rows'] ?? 0, 0) }}</td>
                     </tr>
                 {% endif %}
 
@@ -145,31 +145,31 @@
                 {% if showtable['Auto_increment'] is defined %}
                     <tr>
                     <th class="name">{% trans 'Next autoindex' %}</th>
-                    <td class="value">{{ format_number(showtable['Auto_increment'], 0) }}</td>
+                    <td class="value">{{ format_number(showtable['Auto_increment'] ?? 0, 0) }}</td>
                     </tr>
                 {% endif %}
 
                 {% if showtable['Create_time'] is defined %}
                     <tr>
                     <th class="name">{% trans 'Creation' %}</th>
-                    <td class="value">{{ localised_date(showtable['Create_time']|date('U')) }}</td>
+                    <td class="value">{{ showtable['Create_time'] }}</td>
                     </tr>
                 {% endif %}
 
                 {% if showtable['Update_time'] is defined %}
                     <tr>
                     <th class="name">{% trans 'Last update' %}</th>
-                    <td class="value">{{ localised_date(showtable['Update_time']|date('U')) }}</td>
+                    <td class="value">{{ showtable['Update_time'] }}</td>
                     </tr>
                 {% endif %}
 
                 {% if showtable['Check_time'] is defined %}
                     <tr>
                     <th class="name">{% trans 'Last check' %}</th>
-                    <td class="value">{{ localised_date(showtable['Check_time']|date('U')) }}</td>
+                    <td class="value">{{ showtable['Check_time'] }}</td>
                     </tr>
                 {% endif %}
             </tbody>
         </table>
-    </fieldset>
+    </div>
 </div>

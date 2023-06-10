@@ -5,39 +5,50 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Controllers\Server\Status;
 
 use PhpMyAdmin\Controllers\Server\Status\QueriesController;
+use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Server\Status\Data;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer;
 use PhpMyAdmin\Util;
+use PHPUnit\Framework\Attributes\CoversClass;
 
 use function __;
 use function array_sum;
 use function htmlspecialchars;
 
-/**
- * @covers \PhpMyAdmin\Controllers\Server\Status\QueriesController
- */
+#[CoversClass(QueriesController::class)]
 class QueriesControllerTest extends AbstractTestCase
 {
-    /** @var Data */
-    private $data;
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
+    private Data $data;
 
     protected function setUp(): void
     {
         parent::setUp();
+
         $GLOBALS['text_dir'] = 'ltr';
+
         parent::setGlobalConfig();
+
         parent::setTheme();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
 
         $GLOBALS['server'] = 1;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
         $GLOBALS['cfg']['Server']['host'] = 'localhost';
 
-        $this->data = new Data();
+        $this->data = new Data($this->dbi, $GLOBALS['config']);
         $this->data->status['Uptime'] = 36000;
         $this->data->usedQueries = [
             'Com_change_db' => '15',
@@ -51,80 +62,41 @@ class QueriesControllerTest extends AbstractTestCase
 
     public function testIndex(): void
     {
-        global $dbi;
-
         $response = new ResponseRenderer();
 
-        $controller = new QueriesController($response, new Template(), $this->data, $dbi);
+        $controller = new QueriesController($response, new Template(), $this->data, $GLOBALS['dbi']);
 
         $this->dummyDbi->addSelectDb('mysql');
-        $controller();
-        $this->assertAllSelectsConsumed();
+        $controller($this->createStub(ServerRequest::class));
+        $this->dummyDbi->assertAllSelectsConsumed();
         $html = $response->getHTMLResult();
 
         $hourFactor = 3600 / $this->data->status['Uptime'];
         $usedQueries = $this->data->usedQueries;
         $totalQueries = array_sum($usedQueries);
 
-        $questionsFromStart = __('Questions since startup:')
-            . '    ' . Util::formatNumber($totalQueries, 0);
+        $questionsFromStart = __('Questions since startup:') . ' ' . Util::formatNumber($totalQueries, 0);
 
-        $this->assertStringContainsString('<h3 id="serverstatusqueries">', $html);
+        $this->assertStringContainsString('<h3>', $html);
         $this->assertStringContainsString($questionsFromStart, $html);
 
-        $this->assertStringContainsString(
-            __('per hour:'),
-            $html
-        );
-        $this->assertStringContainsString(
-            Util::formatNumber($totalQueries * $hourFactor, 0),
-            $html
-        );
+        $this->assertStringContainsString('per hour:', $html);
+        $this->assertStringContainsString(Util::formatNumber($totalQueries * $hourFactor, 0), $html);
 
         $valuePerMinute = Util::formatNumber($totalQueries * 60 / $this->data->status['Uptime'], 0);
-        $this->assertStringContainsString(
-            __('per minute:'),
-            $html
-        );
-        $this->assertStringContainsString(
-            htmlspecialchars($valuePerMinute),
-            $html
-        );
+        $this->assertStringContainsString('per minute:', $html);
+        $this->assertStringContainsString(htmlspecialchars($valuePerMinute), $html);
 
-        $this->assertStringContainsString(
-            __('Statements'),
-            $html
-        );
+        $this->assertStringContainsString('Statements', $html);
 
-        $this->assertStringContainsString(
-            htmlspecialchars('change db'),
-            $html
-        );
+        $this->assertStringContainsString('Change Db', $html);
         $this->assertStringContainsString('54', $html);
-        $this->assertStringContainsString(
-            htmlspecialchars('select'),
-            $html
-        );
-        $this->assertStringContainsString(
-            htmlspecialchars('set option'),
-            $html
-        );
-        $this->assertStringContainsString(
-            htmlspecialchars('show databases'),
-            $html
-        );
-        $this->assertStringContainsString(
-            htmlspecialchars('show status'),
-            $html
-        );
-        $this->assertStringContainsString(
-            htmlspecialchars('show tables'),
-            $html
-        );
+        $this->assertStringContainsString('Select', $html);
+        $this->assertStringContainsString('Set Option', $html);
+        $this->assertStringContainsString('Show Databases', $html);
+        $this->assertStringContainsString('Show Status', $html);
+        $this->assertStringContainsString('Show Tables', $html);
 
-        $this->assertStringContainsString(
-            '<div id="serverstatusquerieschart" class="w-100 col-12 col-md-6" data-chart="',
-            $html
-        );
+        $this->assertStringContainsString('<canvas id="query-statistics-chart" data-chart-data="', $html);
     }
 }

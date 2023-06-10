@@ -32,11 +32,11 @@ class MySQLDocumentation
      * @return string  the html link
      */
     public static function show(
-        $link,
+        string $link,
         bool $bigIcon = false,
-        $url = null,
-        $text = null,
-        $anchor = ''
+        string|null $url = null,
+        string|null $text = null,
+        string $anchor = '',
     ): string {
         if ($url === null) {
             $url = Util::getMySQLDocuURL($link, $anchor);
@@ -46,9 +46,7 @@ class MySQLDocumentation
         $closeLink = '</a>';
 
         if ($bigIcon) {
-            $html = $openLink .
-                Generator::getImage('b_sqlhelp', __('Documentation'))
-                . $closeLink;
+            $html = $openLink . Generator::getImage('b_sqlhelp', __('Documentation')) . $closeLink;
         } elseif ($text !== null) {
             $html = $openLink . $text . $closeLink;
         } else {
@@ -61,15 +59,25 @@ class MySQLDocumentation
     /**
      * Displays a link to the phpMyAdmin documentation
      *
-     * @param string $page   Page in documentation
-     * @param string $anchor Optional anchor in page
-     * @param bool   $bbcode Optional flag indicating whether to output bbcode
+     * @param string $page            Page in documentation
+     * @param string $anchor          Optional anchor in page
+     * @param bool   $bbcode          Optional flag indicating whether to output bbcode
+     * @param bool   $disableTabIndex Optional flag indicating that a negative tabindex should be set on the link
      *
      * @return string  the html link
      */
-    public static function showDocumentation($page, $anchor = '', $bbcode = false): string
-    {
-        return Generator::showDocumentationLink(self::getDocumentationLink($page, $anchor), 'documentation', $bbcode);
+    public static function showDocumentation(
+        string $page,
+        string $anchor = '',
+        bool $bbcode = false,
+        bool $disableTabIndex = false,
+    ): string {
+        return Generator::showDocumentationLink(
+            self::getDocumentationLink($page, $anchor),
+            'documentation',
+            $bbcode,
+            $disableTabIndex,
+        );
     }
 
     /**
@@ -81,7 +89,7 @@ class MySQLDocumentation
      *
      * @return string URL
      */
-    public static function getDocumentationLink($page, $anchor = '', string $pathPrefix = './'): string
+    public static function getDocumentationLink(string $page, string $anchor = '', string $pathPrefix = './'): string
     {
         /* Construct base URL */
         $url = $page . '.html';

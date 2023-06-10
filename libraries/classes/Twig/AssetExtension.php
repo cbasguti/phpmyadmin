@@ -4,30 +4,26 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Twig;
 
-use PhpMyAdmin\Theme;
+use PhpMyAdmin\Theme\Theme;
 use Twig\Extension\AbstractExtension;
 use Twig\TwigFunction;
 
 final class AssetExtension extends AbstractExtension
 {
-    /**
-     * @return TwigFunction[]
-     */
-    public function getFunctions()
+    /** @return TwigFunction[] */
+    public function getFunctions(): array
     {
-        return [
-            new TwigFunction('image', [$this, 'getImagePath']),
-        ];
+        return [new TwigFunction('image', $this->getImagePath(...))];
     }
 
-    public function getImagePath(?string $filename = null, ?string $fallback = null): string
+    public function getImagePath(string|null $filename = null, string|null $fallback = null): string
     {
-        global $theme;
+        $GLOBALS['theme'] ??= null;
 
-        if (! $theme instanceof Theme) {
+        if (! $GLOBALS['theme'] instanceof Theme) {
             return '';
         }
 
-        return $theme->getImgPath($filename, $fallback);
+        return $GLOBALS['theme']->getImgPath($filename, $fallback);
     }
 }

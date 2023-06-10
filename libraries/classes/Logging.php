@@ -1,9 +1,4 @@
 <?php
-/**
- * Logging functionality for webserver.
- *
- * This includes web server specific code to log some information.
- */
 
 declare(strict_types=1);
 
@@ -22,31 +17,31 @@ use const LOG_PID;
 use const LOG_WARNING;
 
 /**
- * Misc logging functions
+ * Logging functionality for webserver.
+ *
+ * This includes web server specific code to log some information.
  */
 class Logging
 {
     /**
      * Get authentication logging destination
-     *
-     * @return string
      */
-    public static function getLogDestination()
+    public static function getLogDestination(string $authLog): string
     {
-        $log_file = $GLOBALS['config']->get('AuthLog');
+        $logFile = $authLog;
 
         /* Autodetect */
-        if ($log_file === 'auto') {
+        if ($logFile === 'auto') {
             if (function_exists('syslog')) {
-                $log_file = 'syslog';
+                $logFile = 'syslog';
             } elseif (function_exists('error_log')) {
-                $log_file = 'php';
+                $logFile = 'php';
             } else {
-                $log_file = '';
+                $logFile = '';
             }
         }
 
-        return $log_file;
+        return $logFile;
     }
 
     /**
@@ -54,10 +49,8 @@ class Logging
      *
      * @param string $user   user name
      * @param string $status status message
-     *
-     * @return string
      */
-    public static function getLogMessage($user, $status)
+    public static function getLogMessage(string $user, string $status): string
     {
         if ($status === 'ok') {
             return 'user authenticated: ' . $user . ' from ' . Core::getIp();
@@ -72,39 +65,43 @@ class Logging
      * @param string $user   user name
      * @param string $status status message
      */
-    public static function logUser($user, $status = 'ok'): void
+    public static function logUser(Config $config, string $user, string $status = 'ok'): void
     {
         if (function_exists('apache_note')) {
+            /** @psalm-suppress UnusedFunctionCall */
             apache_note('userID', $user);
+            /** @psalm-suppress UnusedFunctionCall */
             apache_note('userStatus', $status);
         }
 
+        $settings = $config->getSettings();
+
         /* Do not log successful authentications */
-        if (! $GLOBALS['config']->get('AuthLogSuccess') && $status === 'ok') {
+        if (! $settings->authLogSuccess && $status === 'ok') {
             return;
         }
 
-        $log_file = self::getLogDestination();
-        if (empty($log_file)) {
+        $logFile = self::getLogDestination($settings->authLog);
+        if (empty($logFile)) {
             return;
         }
 
         $message = self::getLogMessage($user, $status);
-        if ($log_file === 'syslog') {
+        if ($logFile === 'syslog') {
             if (function_exists('syslog')) {
                 @openlog('phpMyAdmin', LOG_NDELAY | LOG_PID, LOG_AUTHPRIV);
                 @syslog(LOG_WARNING, $message);
                 closelog();
             }
-        } elseif ($log_file === 'php') {
+        } elseif ($logFile === 'php') {
             @error_log($message);
-        } elseif ($log_file === 'sapi') {
+        } elseif ($logFile === 'sapi') {
             @error_log($message, 4);
         } else {
             @error_log(
                 date('M d H:i:s') . ' phpmyadmin: ' . $message . "\n",
                 3,
-                $log_file
+                $logFile,
             );
         }
     }

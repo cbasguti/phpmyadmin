@@ -4,27 +4,13 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\ConfigStorage\Features;
 
-use PhpMyAdmin\Dbal\DatabaseName;
-use PhpMyAdmin\Dbal\TableName;
+use PhpMyAdmin\Identifiers\DatabaseName;
+use PhpMyAdmin\Identifiers\TableName;
 
-/**
- * @psalm-immutable
- */
+/** @psalm-immutable */
 final class DisplayFeature
 {
-    /** @var DatabaseName */
-    public $database;
-
-    /** @var TableName */
-    public $relation;
-
-    /** @var TableName */
-    public $tableInfo;
-
-    public function __construct(DatabaseName $database, TableName $relation, TableName $tableInfo)
+    public function __construct(public DatabaseName $database, public TableName $relation, public TableName $tableInfo)
     {
-        $this->database = $database;
-        $this->relation = $relation;
-        $this->tableInfo = $tableInfo;
     }
 }

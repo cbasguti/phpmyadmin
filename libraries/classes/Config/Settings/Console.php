@@ -9,55 +9,121 @@ use function in_array;
 // phpcs:disable Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
 
 /**
+ * Console settings
+ *
+ * @link https://docs.phpmyadmin.net/en/latest/config.html#console-settings
+ *
  * @psalm-immutable
  */
 final class Console
 {
-    /** @var bool */
-    public $StartHistory;
-
-    /** @var bool */
-    public $AlwaysExpand;
-
-    /** @var bool */
-    public $CurrentQuery;
-
-    /** @var bool */
-    public $EnterExecutes;
-
-    /** @var bool */
-    public $DarkTheme;
+    /**
+     * Show query history at start
+     *
+     * ```php
+     * $cfg['Console']['StartHistory'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Console_StartHistory
+     */
+    public bool $StartHistory;
 
     /**
-     * @var string
+     * Always expand query messages
+     *
+     * ```php
+     * $cfg['Console']['AlwaysExpand'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Console_AlwaysExpand
+     */
+    public bool $AlwaysExpand;
+
+    /**
+     * Show current browsing query
+     *
+     * ```php
+     * $cfg['Console']['CurrentQuery'] = true;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Console_CurrentQuery
+     */
+    public bool $CurrentQuery;
+
+    /**
+     * Execute queries on Enter and insert new line with Shift + Enter
+     *
+     * ```php
+     * $cfg['Console']['EnterExecutes'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Console_EnterExecutes
+     */
+    public bool $EnterExecutes;
+
+    /**
+     * Switch to dark theme
+     *
+     * ```php
+     * $cfg['Console']['DarkTheme'] = false;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Console_DarkTheme
+     */
+    public bool $DarkTheme;
+
+    /**
+     * Console mode
+     *
+     * ```php
+     * $cfg['Console']['Mode'] = 'info';
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Console_Mode
+     *
      * @psalm-var 'info'|'show'|'collapse'
      */
-    public $Mode;
+    public string $Mode;
 
     /**
-     * @var int
+     * Console height
+     *
+     * ```php
+     * $cfg['Console']['Height'] = 92;
+     * ```
+     *
+     * @link https://docs.phpmyadmin.net/en/latest/config.html#cfg_Console_Height
+     *
      * @psalm-var positive-int
      */
-    public $Height;
-
-    /** @var bool */
-    public $GroupQueries;
+    public int $Height;
 
     /**
-     * @var string
+     * ```php
+     * $cfg['Console']['GroupQueries'] = false;
+     * ```
+     */
+    public bool $GroupQueries;
+
+    /**
+     * ```php
+     * $cfg['Console']['OrderBy'] = 'exec';
+     * ```
+     *
      * @psalm-var 'exec'|'time'|'count'
      */
-    public $OrderBy;
+    public string $OrderBy;
 
     /**
-     * @var string
+     * ```php
+     * $cfg['Console']['Order'] = 'asc';
+     * ```
+     *
      * @psalm-var 'asc'|'desc'
      */
-    public $Order;
+    public string $Order;
 
-    /**
-     * @param mixed[] $console
-     */
+    /** @param mixed[] $console */
     public function __construct(array $console = [])
     {
         $this->StartHistory = $this->setStartHistory($console);
@@ -72,9 +138,24 @@ final class Console
         $this->Order = $this->setOrder($console);
     }
 
-    /**
-     * @param mixed[] $console
-     */
+    /** @return array<string, string|bool|int> */
+    public function asArray(): array
+    {
+        return [
+            'StartHistory' => $this->StartHistory,
+            'AlwaysExpand' => $this->AlwaysExpand,
+            'CurrentQuery' => $this->CurrentQuery,
+            'EnterExecutes' => $this->EnterExecutes,
+            'DarkTheme' => $this->DarkTheme,
+            'Mode' => $this->Mode,
+            'Height' => $this->Height,
+            'GroupQueries' => $this->GroupQueries,
+            'OrderBy' => $this->OrderBy,
+            'Order' => $this->Order,
+        ];
+    }
+
+    /** @param mixed[] $console */
     private function setStartHistory(array $console): bool
     {
         if (isset($console['StartHistory'])) {
@@ -84,9 +165,7 @@ final class Console
         return false;
     }
 
-    /**
-     * @param mixed[] $console
-     */
+    /** @param mixed[] $console */
     private function setAlwaysExpand(array $console): bool
     {
         if (isset($console['AlwaysExpand'])) {
@@ -96,9 +175,7 @@ final class Console
         return false;
     }
 
-    /**
-     * @param mixed[] $console
-     */
+    /** @param mixed[] $console */
     private function setCurrentQuery(array $console): bool
     {
         if (isset($console['CurrentQuery'])) {
@@ -108,9 +185,7 @@ final class Console
         return true;
     }
 
-    /**
-     * @param mixed[] $console
-     */
+    /** @param mixed[] $console */
     private function setEnterExecutes(array $console): bool
     {
         if (isset($console['EnterExecutes'])) {
@@ -120,9 +195,7 @@ final class Console
         return false;
     }
 
-    /**
-     * @param mixed[] $console
-     */
+    /** @param mixed[] $console */
     private function setDarkTheme(array $console): bool
     {
         if (isset($console['DarkTheme'])) {
@@ -163,9 +236,7 @@ final class Console
         return 92;
     }
 
-    /**
-     * @param mixed[] $console
-     */
+    /** @param mixed[] $console */
     private function setGroupQueries(array $console): bool
     {
         if (isset($console['GroupQueries'])) {

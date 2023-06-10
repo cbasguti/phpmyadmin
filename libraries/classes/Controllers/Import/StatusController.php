@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Controllers\Import;
 
 use PhpMyAdmin\Core;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Import\Ajax;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\Template;
@@ -14,6 +15,7 @@ use function header;
 use function ini_get;
 use function session_start;
 use function session_write_close;
+use function sprintf;
 use function time;
 use function usleep;
 
@@ -22,28 +24,23 @@ use function usleep;
  */
 class StatusController
 {
-    /** @var Template */
-    private $template;
-
-    public function __construct(Template $template)
+    public function __construct(private Template $template)
     {
-        $this->template = $template;
     }
 
-    public function __invoke(): void
+    public function __invoke(ServerRequest $request): void
     {
-        global $SESSION_KEY, $upload_id, $plugins, $timestamp;
+        $GLOBALS['SESSION_KEY'] ??= null;
+        $GLOBALS['timestamp'] ??= null;
 
-        [
-            $SESSION_KEY,
-            $upload_id,
-            $plugins,
-        ] = Ajax::uploadProgressSetup();
+        [$GLOBALS['SESSION_KEY']] = Ajax::uploadProgressSetup();
 
         // $_GET["message"] is used for asking for an import message
-        if (isset($_GET['message']) && $_GET['message']) {
+        if ($request->hasQueryParam('message')) {
             // AJAX requests can't be cached!
-            Core::noCacheHeader();
+            foreach (Core::getNoCacheHeaders() as $name => $value) {
+                header(sprintf('%s: %s', $name, $value));
+            }
 
             header('Content-type: text/html');
 
@@ -51,7 +48,7 @@ class StatusController
             usleep(300000);
 
             $maximumTime = ini_get('max_execution_time');
-            $timestamp = time();
+            $GLOBALS['timestamp'] = time();
             // wait until message is available
             while (($_SESSION['Import_message']['message'] ?? null) == null) {
                 // close session before sleeping
@@ -61,9 +58,9 @@ class StatusController
                 // reopen session
                 session_start();
 
-                if (time() - $timestamp > $maximumTime) {
+                if (time() - $GLOBALS['timestamp'] > $maximumTime) {
                     $_SESSION['Import_message']['message'] = Message::error(
-                        __('Could not load the progress of the import.')
+                        __('Could not load the progress of the import.'),
                     )->getDisplay();
                     break;
                 }
@@ -77,7 +74,7 @@ class StatusController
                 ]);
             }
         } else {
-            Ajax::status($_GET['id']);
+            Ajax::status($request->getQueryParam('id'));
         }
     }
 }

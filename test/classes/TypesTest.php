@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\Types;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * @covers \PhpMyAdmin\Types
- */
+#[CoversClass(Types::class)]
 class TypesTest extends AbstractTestCase
 {
-    /** @var Types */
-    protected $object;
+    protected Types $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -21,6 +20,8 @@ class TypesTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $this->object = new Types($GLOBALS['dbi']);
     }
 
@@ -39,13 +40,8 @@ class TypesTest extends AbstractTestCase
     public function testGetUnaryOperators(): void
     {
         $this->assertEquals(
-            [
-                'IS NULL',
-                'IS NOT NULL',
-                "= ''",
-                "!= ''",
-            ],
-            $this->object->getUnaryOperators()
+            ['IS NULL', 'IS NOT NULL', "= ''", "!= ''"],
+            $this->object->getUnaryOperators(),
         );
     }
 
@@ -55,11 +51,8 @@ class TypesTest extends AbstractTestCase
     public function testGetNullOperators(): void
     {
         $this->assertEquals(
-            [
-                'IS NULL',
-                'IS NOT NULL',
-            ],
-            $this->object->getNullOperators()
+            ['IS NULL', 'IS NOT NULL'],
+            $this->object->getNullOperators(),
         );
     }
 
@@ -69,11 +62,8 @@ class TypesTest extends AbstractTestCase
     public function testGetEnumOperators(): void
     {
         $this->assertEquals(
-            [
-                '=',
-                '!=',
-            ],
-            $this->object->getEnumOperators()
+            ['=', '!='],
+            $this->object->getEnumOperators(),
         );
     }
 
@@ -100,7 +90,7 @@ class TypesTest extends AbstractTestCase
                 'BETWEEN',
                 'NOT BETWEEN',
             ],
-            $this->object->getTextOperators()
+            $this->object->getTextOperators(),
         );
     }
 
@@ -126,7 +116,7 @@ class TypesTest extends AbstractTestCase
                 'BETWEEN',
                 'NOT BETWEEN',
             ],
-            $this->object->getNumberOperators()
+            $this->object->getNumberOperators(),
         );
     }
 
@@ -136,53 +126,36 @@ class TypesTest extends AbstractTestCase
     public function testGetUUIDOperators(): void
     {
         $this->assertEquals(
-            [
-                '=',
-                '!=',
-                'LIKE',
-                'LIKE %...%',
-                'NOT LIKE',
-                'NOT LIKE %...%',
-                'IN (...)',
-                'NOT IN (...)',
-            ],
-            $this->object->getUUIDOperators()
+            ['=', '!=', 'LIKE', 'LIKE %...%', 'NOT LIKE', 'NOT LIKE %...%', 'IN (...)', 'NOT IN (...)'],
+            $this->object->getUUIDOperators(),
         );
     }
 
     /**
      * Test for getting type operators
      *
-     * @param string       $type   Type of field
-     * @param bool         $null   Whether field can be NULL
-     * @param string|array $output Expected output
-     *
-     * @dataProvider providerForGetTypeOperators
+     * @param string          $type   Type of field
+     * @param bool            $null   Whether field can be NULL
+     * @param string|string[] $output Expected output
      */
-    public function testGetTypeOperators(string $type, bool $null, $output): void
+    #[DataProvider('providerForGetTypeOperators')]
+    public function testGetTypeOperators(string $type, bool $null, string|array $output): void
     {
         $this->assertEquals(
             $output,
-            $this->object->getTypeOperators($type, $null)
+            $this->object->getTypeOperators($type, $null),
         );
     }
 
     /**
      * data provider for testGetTypeOperators
      *
-     * @return array data for testGetTypeOperators
+     * @return array<array{string, bool, string|string[]}>
      */
-    public function providerForGetTypeOperators(): array
+    public static function providerForGetTypeOperators(): array
     {
         return [
-            [
-                'enum',
-                false,
-                [
-                    '=',
-                    '!=',
-                ],
-            ],
+            ['enum', false, ['=', '!=']],
             [
                 'CHAR',
                 true,
@@ -205,20 +178,16 @@ class TypesTest extends AbstractTestCase
                     'IS NULL',
                     'IS NOT NULL',
                 ],
-                [
-                    'int',
-                    false,
-                    [
-                        '=',
-                        '!=',
-                    ],
-                ],
             ],
             [
-                'UUID',
+                'int',
                 false,
                 [
                     '=',
+                    '>',
+                    '>=',
+                    '<',
+                    '<=',
                     '!=',
                     'LIKE',
                     'LIKE %...%',
@@ -226,7 +195,14 @@ class TypesTest extends AbstractTestCase
                     'NOT LIKE %...%',
                     'IN (...)',
                     'NOT IN (...)',
+                    'BETWEEN',
+                    'NOT BETWEEN',
                 ],
+            ],
+            [
+                'UUID',
+                false,
+                ['=', '!=', 'LIKE', 'LIKE %...%', 'NOT LIKE', 'NOT LIKE %...%', 'IN (...)', 'NOT IN (...)'],
             ],
             [
                 'UUID',
@@ -254,35 +230,29 @@ class TypesTest extends AbstractTestCase
      * @param bool   $null             Whether field can be NULL
      * @param string $selectedOperator Option to be selected
      * @param string $output           Expected output
-     *
-     * @dataProvider providerForTestGetTypeOperatorsHtml
      */
+    #[DataProvider('providerForTestGetTypeOperatorsHtml')]
     public function testGetTypeOperatorsHtml(
         string $type,
         bool $null,
         string $selectedOperator,
-        string $output
+        string $output,
     ): void {
         $this->assertEquals(
             $output,
-            $this->object->getTypeOperatorsHtml($type, $null, $selectedOperator)
+            $this->object->getTypeOperatorsHtml($type, $null, $selectedOperator),
         );
     }
 
     /**
      * Provider for testGetTypeOperatorsHtml
      *
-     * @return array test data for getTypeOperatorsHtml
+     * @return array<array{string, bool, string, string}>
      */
-    public function providerForTestGetTypeOperatorsHtml(): array
+    public static function providerForTestGetTypeOperatorsHtml(): array
     {
         return [
-            [
-                'enum',
-                false,
-                '=',
-                '<option value="=" selected="selected">=</option><option value="!=">!=</option>',
-            ],
+            ['enum', false, '=', '<option value="=" selected="selected">=</option><option value="!=">!=</option>'],
         ];
     }
 
@@ -290,14 +260,13 @@ class TypesTest extends AbstractTestCase
      * Test for getTypeDescription
      *
      * @param string $type The data type to get a description.
-     *
-     * @dataProvider providerForTestGetTypeDescription
      */
+    #[DataProvider('providerForTestGetTypeDescription')]
     public function testGetTypeDescription(string $type): void
     {
         $this->assertNotEquals(
             '',
-            $this->object->getTypeDescription($type)
+            $this->object->getTypeDescription($type),
         );
     }
 
@@ -308,16 +277,16 @@ class TypesTest extends AbstractTestCase
     {
         $this->assertEquals(
             '',
-            $this->object->getTypeDescription('UNKNOWN')
+            $this->object->getTypeDescription('UNKNOWN'),
         );
     }
 
     /**
      * Provider for testGetTypeDescription
      *
-     * @return array
+     * @return array<array{string}>
      */
-    public function providerForTestGetTypeDescription(): array
+    public static function providerForTestGetTypeDescription(): array
     {
         return [
             ['TINYINT'],
@@ -366,23 +335,20 @@ class TypesTest extends AbstractTestCase
     }
 
     /**
-     * @param string $class  The class to get function list.
-     * @param array  $output Expected function list
-     *
-     * @dataProvider providerFortTestGetFunctionsClass
+     * @param string   $class  The class to get function list.
+     * @param string[] $output Expected function list
      */
+    #[DataProvider('providerFortTestGetFunctionsClass')]
     public function testGetFunctionsClass(string $class, array $output): void
     {
         $this->assertEquals(
             $output,
-            $this->object->getFunctionsClass($class)
+            $this->object->getFunctionsClass($class),
         );
     }
 
-    /**
-     * Data provider for testing function lists
-     */
-    public function providerFortTestGetFunctionsClass(): array
+    /** @return array<array{string, string[]}> */
+    public static function providerFortTestGetFunctionsClass(): array
     {
         return [
             [
@@ -413,6 +379,7 @@ class TypesTest extends AbstractTestCase
                     'REVERSE',
                     'RTRIM',
                     'SHA1',
+                    'SHA2',
                     'SOUNDEX',
                     'SPACE',
                     'TRIM',
@@ -524,10 +491,7 @@ class TypesTest extends AbstractTestCase
                     'YEARWEEK',
                 ],
             ],
-            [
-                'UNKNOWN',
-                [],
-            ],
+            ['UNKNOWN', []],
         ];
     }
 
@@ -563,6 +527,7 @@ class TypesTest extends AbstractTestCase
                 'REVERSE',
                 'RTRIM',
                 'SHA1',
+                'SHA2',
                 'SOUNDEX',
                 'SPACE',
                 'TRIM',
@@ -573,7 +538,7 @@ class TypesTest extends AbstractTestCase
                 'UUID',
                 'VERSION',
             ],
-            $this->object->getFunctions('enum')
+            $this->object->getFunctions('enum'),
         );
     }
 
@@ -655,6 +620,7 @@ class TypesTest extends AbstractTestCase
                 'SECOND',
                 'SEC_TO_TIME',
                 'SHA1',
+                'SHA2',
                 'SIGN',
                 'SIN',
                 'SOUNDEX',
@@ -702,7 +668,7 @@ class TypesTest extends AbstractTestCase
                 'YEAR',
                 'YEARWEEK',
             ],
-            $this->object->getAllFunctions()
+            $this->object->getAllFunctions(),
         );
     }
 
@@ -712,14 +678,8 @@ class TypesTest extends AbstractTestCase
     public function testGetAttributes(): void
     {
         $this->assertEquals(
-            [
-                '',
-                'BINARY',
-                'UNSIGNED',
-                'UNSIGNED ZEROFILL',
-                'on update CURRENT_TIMESTAMP',
-            ],
-            $this->object->getAttributes()
+            ['', 'BINARY', 'UNSIGNED', 'UNSIGNED ZEROFILL', 'on update CURRENT_TIMESTAMP'],
+            $this->object->getAttributes(),
         );
     }
 
@@ -750,13 +710,7 @@ class TypesTest extends AbstractTestCase
                     'BOOLEAN',
                     'SERIAL',
                 ],
-                'Date and time' => [
-                    'DATE',
-                    'DATETIME',
-                    'TIMESTAMP',
-                    'TIME',
-                    'YEAR',
-                ],
+                'Date and time' => ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR'],
                 'String' => [
                     'CHAR',
                     'VARCHAR',
@@ -789,60 +743,38 @@ class TypesTest extends AbstractTestCase
                 ],
                 'JSON' => ['JSON'],
             ],
-            $this->object->getColumns()
+            $this->object->getColumns(),
         );
     }
 
     /**
      * @param string $type   Type to check
      * @param string $output Expected result
-     *
-     * @dataProvider providerFortTestGetTypeClass
      */
+    #[DataProvider('providerFortTestGetTypeClass')]
     public function testGetTypeClass(string $type, string $output): void
     {
         $this->assertEquals(
             $output,
-            $this->object->getTypeClass($type)
+            $this->object->getTypeClass($type),
         );
     }
 
     /**
      * Data provider for type testing
      *
-     * @return array for testing type detection
+     * @return array<array{string, string}>
      */
-    public function providerFortTestGetTypeClass(): array
+    public static function providerFortTestGetTypeClass(): array
     {
         return [
-            [
-                'SERIAL',
-                'NUMBER',
-            ],
-            [
-                'YEAR',
-                'DATE',
-            ],
-            [
-                'GEOMETRYCOLLECTION',
-                'SPATIAL',
-            ],
-            [
-                'SET',
-                'CHAR',
-            ],
-            [
-                'JSON',
-                'JSON',
-            ],
-            [
-                'UUID',
-                'UUID',
-            ],
-            [
-                'UNKNOWN',
-                '',
-            ],
+            ['SERIAL', 'NUMBER'],
+            ['YEAR', 'DATE'],
+            ['GEOMETRYCOLLECTION', 'SPATIAL'],
+            ['SET', 'CHAR'],
+            ['JSON', 'JSON'],
+            ['UUID', 'UUID'],
+            ['UNKNOWN', ''],
         ];
     }
 }

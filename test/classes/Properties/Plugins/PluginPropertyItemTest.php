@@ -6,14 +6,12 @@ namespace PhpMyAdmin\Tests\Properties\Plugins;
 
 use PhpMyAdmin\Properties\Plugins\PluginPropertyItem;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Properties\Plugins\PluginPropertyItem
- */
+#[CoversClass(PluginPropertyItem::class)]
 class PluginPropertyItemTest extends AbstractTestCase
 {
-    /** @var PluginPropertyItem */
-    protected $stub;
+    protected PluginPropertyItem $stub;
 
     /**
      * Configures global environment.
@@ -21,6 +19,7 @@ class PluginPropertyItemTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->stub = $this->getMockForAbstractClass(PluginPropertyItem::class);
     }
 
@@ -30,6 +29,7 @@ class PluginPropertyItemTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->stub);
     }
 
@@ -37,7 +37,7 @@ class PluginPropertyItemTest extends AbstractTestCase
     {
         $this->assertEquals(
             'plugin',
-            $this->stub->getPropertyType()
+            $this->stub->getPropertyType(),
         );
     }
 }

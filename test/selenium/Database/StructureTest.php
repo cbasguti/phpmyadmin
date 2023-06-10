@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Selenium\Database;
 
 use PhpMyAdmin\Tests\Selenium\TestBase;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @coversNothing
- */
+#[CoversNothing]
 class StructureTest extends TestBase
 {
     /**
@@ -17,6 +17,7 @@ class StructureTest extends TestBase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->dbQuery(
             'USE `' . $this->databaseName . '`;'
             . 'CREATE TABLE `test_table` ('
@@ -29,7 +30,7 @@ class StructureTest extends TestBase
             . ' `val` int(11) NOT NULL,'
             . ' PRIMARY KEY (`id`)'
             . ');'
-            . 'INSERT INTO `test_table` (val) VALUES (2);'
+            . 'INSERT INTO `test_table` (val) VALUES (2);',
         );
 
         $this->login();
@@ -42,21 +43,16 @@ class StructureTest extends TestBase
 
     /**
      * Test for truncating a table
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testTruncateTable(): void
     {
         $this->byXPath("(//a[contains(., 'Empty')])[1]")->click();
 
-        $this->waitForElement('cssSelector', 'button.submitOK')->click();
+        $this->waitForElement('id', 'functionConfirmOkButton')->click();
 
-        $this->assertNotNull(
-            $this->waitForElement(
-                'xpath',
-                '//div[@class=\'alert alert-success\' and contains(., \'MySQL returned an empty result\')]'
-            )
-        );
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString('MySQL returned an empty result', $success->getText());
 
         $this->dbQuery(
             'SELECT CONCAT("Count: ", COUNT(*)) as c FROM `' . $this->databaseName . '`.`test_table`',
@@ -64,22 +60,21 @@ class StructureTest extends TestBase
                 $this->assertTrue($this->isElementPresent('className', 'table_results'));
                 // [ ] | Edit | Copy | Delete | 1 | 5
                 $this->assertEquals('Count: 0', $this->getCellByTableClass('table_results', 1, 1));
-            }
+            },
         );
     }
 
     /**
      * Tests for dropping multiple tables
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testDropMultipleTables(): void
     {
         $this->byCssSelector("label[for='tablesForm_checkall']")->click();
 
         $this->selectByLabel(
             $this->byName('submit_mult'),
-            'Drop'
+            'Drop',
         );
 
         $this->waitForElement('id', 'buttonYes')
@@ -91,7 +86,7 @@ class StructureTest extends TestBase
             'SHOW TABLES FROM `' . $this->databaseName . '`;',
             function (): void {
                 $this->assertFalse($this->isElementPresent('className', 'table_results'));
-            }
+            },
         );
     }
 }

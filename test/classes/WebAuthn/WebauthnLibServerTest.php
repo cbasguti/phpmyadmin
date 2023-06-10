@@ -6,20 +6,20 @@ namespace PhpMyAdmin\Tests\WebAuthn;
 
 use PhpMyAdmin\TwoFactor;
 use PhpMyAdmin\WebAuthn\WebauthnLibServer;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Webauthn\Server as WebauthnServer;
 
 use function base64_encode;
 use function class_exists;
 
-/**
- * @covers \PhpMyAdmin\WebAuthn\WebauthnLibServer
- */
+#[CoversClass(WebauthnLibServer::class)]
 class WebauthnLibServerTest extends TestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
+
         if (class_exists(WebauthnServer::class)) {
             return;
         }
@@ -31,11 +31,8 @@ class WebauthnLibServerTest extends TestCase
     {
         $server = new WebauthnLibServer($this->createStub(TwoFactor::class));
         $options = $server->getCredentialCreationOptions('user_name', 'user_id', 'test.localhost');
-        $this->assertArrayHasKey('challenge', $options);
         $this->assertNotEmpty($options['challenge']);
-        $this->assertArrayHasKey('pubKeyCredParams', $options);
         $this->assertNotEmpty($options['pubKeyCredParams']);
-        $this->assertArrayHasKey('attestation', $options);
         $this->assertNotEmpty($options['attestation']);
         $this->assertSame('phpMyAdmin (test.localhost)', $options['rp']['name']);
         $this->assertSame('test.localhost', $options['rp']['id']);
@@ -77,7 +74,7 @@ class WebauthnLibServerTest extends TestCase
         $this->assertSame('test.localhost', $options['rpId']);
         $this->assertEquals(
             [['type' => 'public-key', 'id' => 'cHVibGljS2V5Q3JlZGVudGlhbElkMQ==']],
-            $options['allowCredentials']
+            $options['allowCredentials'],
         );
     }
 }

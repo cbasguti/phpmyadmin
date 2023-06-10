@@ -8,14 +8,13 @@ use PhpMyAdmin\Database\Search;
 use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * @covers \PhpMyAdmin\Database\Search
- */
+#[CoversClass(Search::class)]
 class SearchTest extends AbstractTestCase
 {
-    /** @var Search */
-    protected $object;
+    protected Search $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -37,14 +36,11 @@ class SearchTest extends AbstractTestCase
         $dbi->expects($this->any())
             ->method('getColumns')
             ->with('pma', 'table1')
-            ->will($this->returnValue([
-                ['Field' => 'column1'],
-                ['Field' => 'column2'],
-            ]));
+            ->will($this->returnValue([['Field' => 'column1'], ['Field' => 'column2']]));
 
         $dbi->expects($this->any())
-            ->method('escapeString')
-            ->will($this->returnArgument(0));
+            ->method('quoteString')
+            ->will($this->returnCallback(static fn (string $string): string => "'" . $string . "'"));
 
         $GLOBALS['dbi'] = $dbi;
         $this->object = new Search($dbi, 'pma_test', new Template());
@@ -57,6 +53,7 @@ class SearchTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
@@ -65,9 +62,8 @@ class SearchTest extends AbstractTestCase
      *
      * @param string $type     type
      * @param string $expected expected result
-     *
-     * @dataProvider searchTypes
      */
+    #[DataProvider('searchTypes')]
     public function testGetWhereClause(string $type, string $expected): void
     {
         $_POST['criteriaSearchType'] = $type;
@@ -80,17 +76,17 @@ class SearchTest extends AbstractTestCase
                 $this->object,
                 Search::class,
                 'getWhereClause',
-                ['table1']
-            )
+                ['table1'],
+            ),
         );
     }
 
     /**
      * Data provider for testGetWhereClause
      *
-     * @return array
+     * @return array<array{string, string}>
      */
-    public function searchTypes(): array
+    public static function searchTypes(): array
     {
         return [
             [
@@ -132,7 +128,7 @@ class SearchTest extends AbstractTestCase
     {
         $this->assertEquals(
             [
-                'select_columns' => 'SELECT *  FROM `pma`.`table1` WHERE FALSE',
+                'select_columns' => 'SELECT * FROM `pma`.`table1` WHERE FALSE',
                 'select_count' => 'SELECT COUNT(*) AS `count` FROM `pma`.`table1` WHERE FALSE',
                 'delete' => 'DELETE FROM `pma`.`table1` WHERE FALSE',
             ],
@@ -140,8 +136,8 @@ class SearchTest extends AbstractTestCase
                 $this->object,
                 Search::class,
                 'getSearchSqls',
-                ['table1']
-            )
+                ['table1'],
+            ),
         );
     }
 
@@ -152,7 +148,7 @@ class SearchTest extends AbstractTestCase
     {
         $this->assertStringContainsString(
             'Search results for "<em></em>" :',
-            $this->object->getSearchResults()
+            $this->object->getSearchResults(),
         );
     }
 
@@ -165,7 +161,10 @@ class SearchTest extends AbstractTestCase
 
         // test selection form
         $this->assertStringContainsString('<form', $main);
-        $this->assertStringContainsString('<a id="togglesearchformlink">', $main);
+        $this->assertStringContainsString(
+            '<button id="togglesearchformlink" class="btn btn-primary my-1"></button>',
+            $main,
+        );
         $this->assertStringContainsString('criteriaSearchType', $main);
 
         // test result divs

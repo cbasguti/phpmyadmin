@@ -5,34 +5,44 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Controllers\Server\Status;
 
 use PhpMyAdmin\Controllers\Server\Status\VariablesController;
+use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Server\Status\Data;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Controllers\Server\Status\VariablesController
- */
+#[CoversClass(VariablesController::class)]
 class VariablesControllerTest extends AbstractTestCase
 {
-    /** @var Data */
-    private $data;
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
+    private Data $data;
 
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setGlobalConfig();
+
         parent::setTheme();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
 
         $GLOBALS['text_dir'] = 'ltr';
         $GLOBALS['server'] = 1;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
         $GLOBALS['cfg']['Server']['host'] = 'localhost';
 
-        $this->data = new Data();
+        $this->data = new Data($this->dbi, $GLOBALS['config']);
     }
 
     public function testIndex(): void
@@ -42,8 +52,8 @@ class VariablesControllerTest extends AbstractTestCase
         $controller = new VariablesController($response, new Template(), $this->data, $GLOBALS['dbi']);
 
         $this->dummyDbi->addSelectDb('mysql');
-        $controller();
-        $this->assertAllSelectsConsumed();
+        $controller($this->createStub(ServerRequest::class));
+        $this->dummyDbi->assertAllSelectsConsumed();
         $html = $response->getHTMLResult();
 
         $this->assertStringContainsString('<div class="card mb-3" id="tableFilter">', $html);
@@ -51,7 +61,7 @@ class VariablesControllerTest extends AbstractTestCase
 
         $this->assertStringContainsString(
             '<label class="col-12 col-form-label" for="filterText">Containing the word:</label>',
-            $html
+            $html,
         );
 
         $this->assertStringContainsString('<label class="form-check-label" for="filterAlert">', $html);
@@ -67,7 +77,7 @@ class VariablesControllerTest extends AbstractTestCase
 
         $this->assertStringContainsString(
             '<table class="table table-striped table-hover table-sm" id="serverStatusVariables">',
-            $html
+            $html,
         );
         $this->assertStringContainsString('<th scope="col">Variable</th>', $html);
         $this->assertStringContainsString('<th scope="col">Value</th>', $html);

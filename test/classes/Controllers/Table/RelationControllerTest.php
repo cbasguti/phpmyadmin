@@ -13,18 +13,14 @@ use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Tests\Stubs\DummyResult;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer as ResponseStub;
-use stdClass;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Controllers\Table\RelationController
- */
+#[CoversClass(RelationController::class)]
 class RelationControllerTest extends AbstractTestCase
 {
-    /** @var ResponseStub */
-    private $response;
+    private ResponseStub $response;
 
-    /** @var Template */
-    private $template;
+    private Template $template;
 
     /**
      * Configures environment
@@ -32,30 +28,18 @@ class RelationControllerTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setTheme();
 
         $GLOBALS['server'] = 0;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
         $GLOBALS['text_dir'] = 'ltr';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
         //$_SESSION
 
         $_POST['foreignDb'] = 'db';
         $_POST['foreignTable'] = 'table';
-
-        $GLOBALS['dblist'] = new stdClass();
-        $GLOBALS['dblist']->databases = new class
-        {
-            /**
-             * @param mixed $name name
-             */
-            public function exists($name): bool
-            {
-                return true;
-            }
-        };
 
         $dbi = $this->getMockBuilder(DatabaseInterface::class)
             ->disableOriginalConstructor()
@@ -75,11 +59,7 @@ class RelationControllerTest extends AbstractTestCase
      */
     public function testGetDropdownValueForTableActionIsView(): void
     {
-        $viewColumns = [
-            'viewCol',
-            'viewCol2',
-            'viewCol3',
-        ];
+        $viewColumns = ['viewCol', 'viewCol2', 'viewCol3'];
         $tableMock = $this->getMockBuilder(Table::class)
             ->disableOriginalConstructor()
             ->getMock();
@@ -95,10 +75,8 @@ class RelationControllerTest extends AbstractTestCase
         $ctrl = new RelationController(
             $this->response,
             $this->template,
-            $GLOBALS['db'],
-            $GLOBALS['table'],
             new Relation($GLOBALS['dbi']),
-            $GLOBALS['dbi']
+            $GLOBALS['dbi'],
         );
 
         $ctrl->getDropdownValueForTable();
@@ -130,10 +108,8 @@ class RelationControllerTest extends AbstractTestCase
         $ctrl = new RelationController(
             $this->response,
             $this->template,
-            $GLOBALS['db'],
-            $GLOBALS['table'],
             new Relation($GLOBALS['dbi']),
-            $GLOBALS['dbi']
+            $GLOBALS['dbi'],
         );
 
         $ctrl->getDropdownValueForTable();
@@ -157,21 +133,14 @@ class RelationControllerTest extends AbstractTestCase
         $resultStub->expects($this->any())
             ->method('getIterator')
             ->will($this->returnCallback(static function (): Generator {
-                yield from [
-                    [
-                        'Engine' => 'InnoDB',
-                        'Name' => 'table',
-                    ],
-                ];
+                yield from [['Engine' => 'InnoDB', 'Name' => 'table']];
             }));
 
         $ctrl = new RelationController(
             $this->response,
             $this->template,
-            $GLOBALS['db'],
-            $GLOBALS['table'],
             new Relation($GLOBALS['dbi']),
-            $GLOBALS['dbi']
+            $GLOBALS['dbi'],
         );
 
         $_POST['foreign'] = 'true';
@@ -179,7 +148,7 @@ class RelationControllerTest extends AbstractTestCase
         $json = $this->response->getJSONResult();
         $this->assertEquals(
             ['table'],
-            $json['tables']
+            $json['tables'],
         );
     }
 
@@ -203,10 +172,8 @@ class RelationControllerTest extends AbstractTestCase
         $ctrl = new RelationController(
             $this->response,
             $this->template,
-            $GLOBALS['db'],
-            $GLOBALS['table'],
             new Relation($GLOBALS['dbi']),
-            $GLOBALS['dbi']
+            $GLOBALS['dbi'],
         );
 
         $_POST['foreign'] = 'false';
@@ -214,7 +181,7 @@ class RelationControllerTest extends AbstractTestCase
         $json = $this->response->getJSONResult();
         $this->assertEquals(
             ['table'],
-            $json['tables']
+            $json['tables'],
         );
     }
 }

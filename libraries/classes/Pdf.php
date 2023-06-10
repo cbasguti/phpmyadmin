@@ -13,7 +13,6 @@ use TCPDF_FONTS;
 
 use function __;
 use function count;
-use function strlen;
 use function strtr;
 
 /**
@@ -21,11 +20,11 @@ use function strtr;
  */
 class Pdf extends TCPDF
 {
-    /** @var array */
-    public $footerset = [];
+    /** @var mixed[] */
+    public array $footerset = [];
 
-    /** @var array */
-    public $alias = [];
+    /** @var mixed[] */
+    public array $alias = [];
 
     /**
      * PDF font to use.
@@ -46,15 +45,16 @@ class Pdf extends TCPDF
      * @throws Exception
      */
     public function __construct(
-        $orientation = 'P',
-        $unit = 'mm',
-        $format = 'A4',
-        $unicode = true,
-        $encoding = 'UTF-8',
-        $diskcache = false,
-        $pdfa = false
+        string $orientation = 'P',
+        string $unit = 'mm',
+        string $format = 'A4',
+        bool $unicode = true,
+        string $encoding = 'UTF-8',
+        bool $diskcache = false,
+        false|int $pdfa = false,
     ) {
         parent::__construct($orientation, $unit, $format, $unicode, $encoding, $diskcache, $pdfa);
+
         $this->setAuthor('phpMyAdmin ' . Version::VERSION);
         $this->AddFont('DejaVuSans', '', 'dejavusans.php');
         $this->AddFont('DejaVuSans', 'B', 'dejavusansb.php');
@@ -82,7 +82,7 @@ class Pdf extends TCPDF
             . $this->getAliasNumPage() . '/' . $this->getAliasNbPages(),
             'T',
             0,
-            'C'
+            'C',
         );
         $this->Cell(0, 6, Util::localisedDate(), 0, 1, 'R');
         $this->setY(20);
@@ -97,7 +97,7 @@ class Pdf extends TCPDF
      * @param string $name  name of the alias
      * @param string $value value of the alias
      */
-    public function setAlias($name, $value): void
+    public function setAlias(string $name, string $value): void
     {
         // phpcs:disable Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
         $name = TCPDF_FONTS::UTF8ToUTF16BE($name, false, true, $this->CurrentFont);
@@ -112,7 +112,7 @@ class Pdf extends TCPDF
      */
     public function _putpages(): void
     {
-        if (count($this->alias) > 0) {
+        if ($this->alias !== []) {
             $nbPages = count($this->pages);
             for ($n = 1; $n <= $nbPages; $n++) {
                 $this->pages[$n] = strtr($this->pages[$n], $this->alias);
@@ -127,31 +127,14 @@ class Pdf extends TCPDF
     /**
      * Displays an error message
      *
-     * @param string $error_message the error message
+     * @param string $errorMessage the error message
      */
     // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
-    public function Error($error_message = ''): void
+    public function Error(mixed $errorMessage = ''): never
     {
         echo Message::error(
-            __('Error while creating PDF:') . ' ' . $error_message
+            __('Error while creating PDF:') . ' ' . $errorMessage,
         )->getDisplay();
-        exit;
-    }
-
-    /**
-     * Sends file as a download to user.
-     *
-     * @param string $filename file name
-     */
-    public function download($filename): void
-    {
-        $pdfData = $this->getPDFData();
-        ResponseRenderer::getInstance()->disable();
-        Core::downloadHeader(
-            $filename,
-            'application/pdf',
-            strlen($pdfData)
-        );
-        echo $pdfData;
+        ResponseRenderer::getInstance()->callExit();
     }
 }

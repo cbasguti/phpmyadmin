@@ -11,17 +11,20 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Stubs;
 
-use PhpMyAdmin\Dbal\DatabaseName;
+use PhpMyAdmin\Config\Settings\Server;
+use PhpMyAdmin\Dbal\Connection;
 use PhpMyAdmin\Dbal\DbiExtension;
 use PhpMyAdmin\Dbal\ResultInterface;
+use PhpMyAdmin\Dbal\Statement;
 use PhpMyAdmin\FieldMetadata;
+use PhpMyAdmin\Identifiers\DatabaseName;
+use PhpMyAdmin\Tests\FieldHelper;
 use PHPUnit\Framework\Assert;
+use stdClass;
 
 use function addslashes;
-use function count;
+use function array_map;
 use function is_array;
-use function is_bool;
-use function is_int;
 use function preg_replace;
 use function str_replace;
 use function trim;
@@ -43,21 +46,17 @@ use const MYSQLI_TYPE_STRING;
 class DbiDummy implements DbiExtension
 {
     /**
-     * First in, last out queries
+     * First in, first out queries.
+     * The results will be distributed in the fifo way
      *
-     * The results will be distributed in the filo way
-     *
-     * @var array
-     * @phpstan-var array{
-     *     'query': string,
-     *     'result': ((int[]|string[]|array{string: string})[])|bool|bool[]|empty-array,
-     *     'columns'?: string[],
-     *     'metadata'?: object[]|empty-array,
-     *     'used'?: bool,
-     *     'pos'?: int
-     * }[]
+     * @psalm-var array<int<0, max>, array{
+     *     query: string,
+     *     result: list<non-empty-list<string|float|int|null>>|bool,
+     *     columns?: list<non-empty-string>,
+     *     metadata?: list<FieldMetadata>,
+     * }>
      */
-    private $filoQueries = [];
+    private array $fifoQueries = [];
 
     /**
      * First in, last out queries
@@ -66,57 +65,41 @@ class DbiDummy implements DbiExtension
      *
      * @var string[]
      */
-    private $fifoDatabasesToSelect = [];
+    private array $fifoDatabasesToSelect = [];
 
     /**
-     * @var array
-     * @phpstan-var array{
-     *     'query': string,
-     *     'result': ((int[]|string[]|array{string: string})[])|bool|bool[]|empty-array,
-     *     'columns'?: string[],
-     *     'metadata'?: object[]|empty-array,
-     *     'pos'?: int
-     * }[]
+     * @var array<array<string,array<int,array<string,string|float|int|null>>|bool|string[]|FieldMetaData[]>>
+     * @phpstan-var list<array{
+     *     query: string,
+     *     result: list<non-empty-list<string|float|int|null>>|bool,
+     *     columns?: list<non-empty-string>,
+     *     metadata?: list<FieldMetadata>,
+     * }>
      */
-    private $dummyQueries = [];
+    private array $dummyQueries = [];
 
     /**
      * @var string[]
      * @psalm-var non-empty-string[]
      */
-    private $fifoErrorCodes = [];
-
-    public const OFFSET_GLOBAL = 1000;
+    private array $fifoErrorCodes = [];
 
     public function __construct()
     {
         $this->init();
     }
 
-    /**
-     * connects to the database server
-     *
-     * @param string $user     mysql user name
-     * @param string $password mysql user password
-     * @param array  $server   host/port/socket/persistent
-     *
-     * @return mixed false on error or a mysqli object on success
-     */
-    public function connect(
-        $user,
-        $password,
-        array $server = []
-    ) {
-        return true;
+    public function connect(Server $server): Connection|null
+    {
+        return new Connection(new stdClass());
     }
 
     /**
      * selects given database
      *
      * @param string|DatabaseName $databaseName name of db to select
-     * @param object              $link         mysql link resource
      */
-    public function selectDb($databaseName, $link): bool
+    public function selectDb(string|DatabaseName $databaseName, Connection $connection): bool
     {
         $databaseName = $databaseName instanceof DatabaseName
                         ? $databaseName->getName() : $databaseName;
@@ -135,58 +118,48 @@ class DbiDummy implements DbiExtension
         Assert::markTestIncomplete('Non expected select of database: ' . $databaseName);
     }
 
-    public function hasUnUsedErrors(): bool
+    public function assertAllQueriesConsumed(): void
     {
-        return $this->fifoErrorCodes !== [];
+        Assert::assertSame([], $this->fifoQueries, 'Some queries were not used!');
     }
 
     /**
-     * @return string[]
+     * @psalm-return array{
+     *     query: string,
+     *     result: list<non-empty-list<string|float|int|null>>|bool,
+     *     columns?: list<non-empty-string>,
+     *     metadata?: list<FieldMetadata>,
+     * }|null
      */
-    public function getUnUsedDatabaseSelects(): array
+    private function findFifoQuery(string $query): array|null
     {
-        return $this->fifoDatabasesToSelect;
-    }
-
-    /**
-     * @return array[]
-     */
-    public function getUnUsedQueries(): array
-    {
-        $unUsed = [];
-        foreach ($this->filoQueries as $query) {
-            if (($query['used'] ?? false) === true) {
+        foreach ($this->fifoQueries as $idx => $fifoQuery) {
+            if ($fifoQuery['query'] !== $query) {
                 continue;
             }
 
-            $unUsed[] = $query;
+            unset($this->fifoQueries[$idx]);
+
+            return $fifoQuery;
         }
 
-        return $unUsed;
+        return null;
     }
 
     /**
-     * @return false|int|null
+     * @psalm-return array{
+     *     query: string,
+     *     result: list<non-empty-list<string|float|int|null>>|bool,
+     *     columns?: list<non-empty-string>,
+     *     metadata?: list<FieldMetadata>,
+     * }|null
      */
-    private function findFiloQuery(string $query)
+    private function findDummyQuery(string $query): array|null
     {
-        for ($i = 0, $nb = count($this->filoQueries); $i < $nb; $i++) {
-            if ($this->filoQueries[$i]['query'] !== $query) {
-                continue;
+        foreach ($this->dummyQueries as $found) {
+            if ($found['query'] === $query) {
+                return $found;
             }
-
-            if ($this->filoQueries[$i]['used'] ?? false) {
-                continue;// Is has already been used
-            }
-
-            $this->filoQueries[$i]['pos'] = 0;
-            $this->filoQueries[$i]['used'] = true;
-
-            if (! is_array($this->filoQueries[$i]['result'])) {
-                return false;
-            }
-
-            return $i;
         }
 
         return null;
@@ -196,135 +169,56 @@ class DbiDummy implements DbiExtension
      * runs a query and returns the result
      *
      * @param string $query   query to run
-     * @param object $link    mysql link resource
      * @param int    $options query options
-     *
-     * @return DummyResult|false
      */
-    public function realQuery(string $query, $link, int $options)
+    public function realQuery(string $query, Connection $connection, int $options): DummyResult|false
     {
         $query = trim((string) preg_replace('/  */', ' ', str_replace("\n", ' ', $query)));
-        $filoQuery = $this->findFiloQuery($query);
-        if ($filoQuery === false) {
+        $found = $this->findFifoQuery($query) ?? $this->findDummyQuery($query);
+        if (! $found) {
+            Assert::markTestIncomplete('Not supported query: ' . $query);
+        }
+
+        if ($found['result'] === false) {
             return false;
         }
 
-        if ($filoQuery !== null) {// Found a matching query
-            return new DummyResult($this, $filoQuery);
+        if (is_array($found['result'])) {
+            // PMA uses mostly textual mysqli protocol. In comparison to prepared statements (binary protocol),
+            // it returns all data types as strings. PMA is not ready to enable automatic cast to int/float, so
+            // in our dummy class we will require values to be string or null.
+            $found['result'] = array_map(static function (array $row): array {
+                return array_map(static function (string|float|int|null $value): string|null {
+                    return $value === null ? null : (string) $value;
+                }, $row);
+            }, $found['result']);
         }
 
-        for ($i = 0, $nb = count($this->dummyQueries); $i < $nb; $i++) {
-            if ($this->dummyQueries[$i]['query'] !== $query) {
-                continue;
-            }
-
-            $this->dummyQueries[$i]['pos'] = 0;
-            if (! is_array($this->dummyQueries[$i]['result'])) {
-                return false;
-            }
-
-            return new DummyResult($this, $i + self::OFFSET_GLOBAL);
-        }
-
-        Assert::markTestIncomplete('Not supported query: ' . $query);
+        return new DummyResult($found);
     }
 
     /**
      * Run the multi query and output the results
      *
-     * @param object $link  connection object
      * @param string $query multi query statement to execute
-     *
-     * @return bool
      */
-    public function realMultiQuery($link, $query)
+    public function realMultiQuery(Connection $connection, string $query): bool
     {
         return false;
     }
 
     /**
-     * returns result data from $result
-     *
-     * @param int $result MySQL result
-     */
-    public function fetchAny($result): ?array
-    {
-        $query_data = &$this->getQueryData($result);
-        if ($query_data['pos'] >= count((array) $query_data['result'])) {
-            return null;
-        }
-
-        $ret = $query_data['result'][$query_data['pos']];
-        $query_data['pos'] += 1;
-
-        return $ret;
-    }
-
-    /**
-     * returns array of rows with associative keys from $result
-     *
-     * @param int $result MySQL result
-     */
-    public function fetchAssoc($result): ?array
-    {
-        $data = $this->fetchAny($result);
-        $query_data = $this->getQueryData($result);
-        if (! is_array($data) || ! isset($query_data['columns'])) {
-            return $data;
-        }
-
-        $ret = [];
-        foreach ($data as $key => $val) {
-            $ret[$query_data['columns'][$key]] = $val;
-        }
-
-        return $ret;
-    }
-
-    /**
-     * returns array of rows with numeric keys from $result
-     *
-     * @param int $result MySQL result
-     */
-    public function fetchRow($result): ?array
-    {
-        return $this->fetchAny($result);
-    }
-
-    /**
-     * Adjusts the result pointer to an arbitrary row in the result
-     *
-     * @param int $result database result
-     * @param int $offset offset to seek
-     */
-    public function dataSeek($result, $offset): bool
-    {
-        $query_data = &$this->getQueryData($result);
-        if ($offset > count($query_data['result'])) {
-            return false;
-        }
-
-        $query_data['pos'] = $offset;
-
-        return true;
-    }
-
-    /**
      * Check if there are any more query results from a multi query
-     *
-     * @param object $link the connection object
      */
-    public function moreResults($link): bool
+    public function moreResults(Connection $connection): bool
     {
         return false;
     }
 
     /**
      * Prepare next result from multi_query
-     *
-     * @param object $link the connection object
      */
-    public function nextResult($link): bool
+    public function nextResult(Connection $connection): bool
     {
         return false;
     }
@@ -332,11 +226,9 @@ class DbiDummy implements DbiExtension
     /**
      * Store the result returned from multi query
      *
-     * @param object $link the connection object
-     *
      * @return ResultInterface|false false when empty results / result set when not empty
      */
-    public function storeResult($link)
+    public function storeResult(Connection $connection): ResultInterface|false
     {
         return false;
     }
@@ -344,11 +236,9 @@ class DbiDummy implements DbiExtension
     /**
      * Returns a string representing the type of connection used
      *
-     * @param object $link mysql link
-     *
      * @return string type of connection used
      */
-    public function getHostInfo($link)
+    public function getHostInfo(Connection $connection): string
     {
         return '';
     }
@@ -356,11 +246,9 @@ class DbiDummy implements DbiExtension
     /**
      * Returns the version of the MySQL protocol used
      *
-     * @param object $link mysql link
-     *
      * @return int version of the MySQL protocol used
      */
-    public function getProtoInfo($link)
+    public function getProtoInfo(Connection $connection): int
     {
         return -1;
     }
@@ -370,17 +258,15 @@ class DbiDummy implements DbiExtension
      *
      * @return string MySQL client library version
      */
-    public function getClientInfo()
+    public function getClientInfo(): string
     {
         return 'libmysql - mysqlnd x.x.x-dev (phpMyAdmin tests)';
     }
 
     /**
      * Returns last error message or an empty string if no errors occurred.
-     *
-     * @param object $link connection link
      */
-    public function getError($link): string
+    public function getError(Connection $connection): string
     {
         foreach ($this->fifoErrorCodes as $i => $code) {
             unset($this->fifoErrorCodes[$i]);
@@ -392,91 +278,23 @@ class DbiDummy implements DbiExtension
     }
 
     /**
-     * returns the number of rows returned by last query
-     *
-     * @param int|bool $result MySQL result
-     *
-     * @return string|int
-     * @psalm-return int|numeric-string
-     */
-    public function numRows($result)
-    {
-        if (is_bool($result)) {
-            return 0;
-        }
-
-        $query_data = $this->getQueryData($result);
-
-        return count($query_data['result']);
-    }
-
-    /**
      * returns the number of rows affected by last query
      *
-     * @param object $link           the mysql object
-     * @param bool   $get_from_cache whether to retrieve from cache
-     *
-     * @return int|string
      * @psalm-return int|numeric-string
      */
-    public function affectedRows($link = null, $get_from_cache = true)
+    public function affectedRows(Connection $connection): int|string
     {
-        global $cached_affected_rows;
-
-        return $cached_affected_rows ?? 0;
-    }
-
-    /**
-     * returns metainfo for fields in $result
-     *
-     * @param int $result result set identifier
-     *
-     * @return FieldMetadata[] meta info for fields in $result
-     */
-    public function getFieldsMeta($result): array
-    {
-        $query_data = $this->getQueryData($result);
-        /** @var FieldMetadata[] $metadata */
-        $metadata = $query_data['metadata'] ?? [];
-
-        if (isset($query_data['columns'])) {
-            /** @var string[] $columns */
-            $columns = $query_data['columns'];
-            foreach ($columns as $i => $column) {
-                if (isset($metadata[$i])) {
-                    $metadata[$i]->name = $column;
-                } else {
-                    $metadata[$i] = new FieldMetadata(MYSQLI_TYPE_STRING, 0, (object) ['name' => $column]);
-                }
-            }
-        }
-
-        return $metadata;
-    }
-
-    /**
-     * return number of fields in given $result
-     *
-     * @param int $result MySQL result
-     *
-     * @return int  field count
-     */
-    public function numFields($result)
-    {
-        $query_data = $this->getQueryData($result);
-
-        return count($query_data['columns'] ?? []);
+        return $GLOBALS['cached_affected_rows'] ?? 0;
     }
 
     /**
      * returns properly escaped string for use in MySQL queries
      *
-     * @param mixed  $link   database link
      * @param string $string string to be escaped
      *
      * @return string a MySQL escaped string
      */
-    public function escapeString($link, $string)
+    public function escapeString(Connection $connection, string $string): string
     {
         return addslashes($string);
     }
@@ -489,15 +307,17 @@ class DbiDummy implements DbiExtension
     /**
      * Adds query result for testing
      *
-     * @param string     $query    SQL
-     * @param array|bool $result   Expected result
-     * @param string[]   $columns  The result columns
-     * @param object[]   $metadata The result metadata
-     * @phpstan-param array<int, array<int, array{string: string}|bool|int|string|null>|bool>|bool $result
+     * @param string                                           $query    SQL
+     * @param array<int,array<int,string|float|int|null>>|bool $result   Expected result
+     * @param string[]                                         $columns  The result columns
+     * @param FieldMetadata[]                                  $metadata The result metadata
+     * @psalm-param list<non-empty-list<string|float|int|null>>|bool $result
+     * @psalm-param list<non-empty-string> $columns
+     * @psalm-param list<FieldMetadata> $metadata
      */
-    public function addResult(string $query, $result, array $columns = [], array $metadata = []): void
+    public function addResult(string $query, array|bool $result, array $columns = [], array $metadata = []): void
     {
-        $this->filoQueries[] = [
+        $this->fifoQueries[] = [
             'query' => $query,
             'result' => $result,
             'columns' => $columns,
@@ -520,36 +340,27 @@ class DbiDummy implements DbiExtension
         $this->dummyQueries = [];
     }
 
-    /**
-     * @param mixed  $link  link
-     * @param string $query query
-     *
-     * @return object|false
-     */
-    public function prepare($link, string $query)
+    public function prepare(Connection $connection, string $query): Statement|null
     {
-        return false;
+        return null;
     }
 
     /**
-     * Return query data for ID
-     *
-     * @param object|int $result result set identifier
-     *
-     * @return array
+     * Returns the number of warnings from the last query.
      */
-    private function &getQueryData($result): array
+    public function getWarningCount(Connection $connection): int
     {
-        if (! is_int($result)) {
-            // This never happens
-            return [];
-        }
+        return 0;
+    }
 
-        if ($result >= self::OFFSET_GLOBAL) {
-            return $this->dummyQueries[$result - self::OFFSET_GLOBAL];
-        }
+    public function assertAllSelectsConsumed(): void
+    {
+        Assert::assertSame([], $this->fifoDatabasesToSelect, 'Some database selects were not used!');
+    }
 
-        return $this->filoQueries[$result];
+    public function assertAllErrorCodesConsumed(): void
+    {
+        Assert::assertSame([], $this->fifoErrorCodes, 'Some error codes were not used!');
     }
 
     private function init(): void
@@ -558,27 +369,10 @@ class DbiDummy implements DbiExtension
          * Array of queries this "driver" supports
          */
         $this->dummyQueries = [
-            [
-                'query' => 'SELECT 1',
-                'result' => [['1']],
-            ],
-            [
-                'query' => 'SELECT CURRENT_USER();',
-                'result' => [['pma_test@localhost']],
-            ],
-            [
-                'query' => "SHOW VARIABLES LIKE 'lower_case_table_names'",
-                'result' => [
-                    [
-                        'lower_case_table_names',
-                        '1',
-                    ],
-                ],
-            ],
-            [
-                'query' => 'SELECT 1 FROM mysql.user LIMIT 1',
-                'result' => [['1']],
-            ],
+            ['query' => 'SELECT 1', 'result' => [['1']]],
+            ['query' => 'SELECT CURRENT_USER();', 'result' => [['pma_test@localhost']]],
+            ['query' => "SHOW VARIABLES LIKE 'lower_case_table_names'", 'result' => [['lower_case_table_names','1']]],
+            ['query' => 'SELECT 1 FROM mysql.user LIMIT 1', 'result' => [['1']]],
             [
                 'query' => 'SELECT 1 FROM `INFORMATION_SCHEMA`.`USER_PRIVILEGES`'
                     . " WHERE `PRIVILEGE_TYPE` = 'CREATE USER'"
@@ -600,40 +394,17 @@ class DbiDummy implements DbiExtension
             ],
             [
                 'query' => 'SHOW MASTER LOGS',
-                'result' => [
-                    [
-                        'Log_name' => 'index1',
-                        'File_size' => 100,
-                    ],
-                    [
-                        'Log_name' => 'index2',
-                        'File_size' => 200,
-                    ],
-                ],
+                'columns' => ['Log_name', 'File_size'],
+                'result' => [['index1', 100], ['index2', 200]],
             ],
             [
                 'query' => 'SHOW STORAGE ENGINES',
+                'columns' => ['Engine', 'Support', 'Comment'],
                 'result' => [
-                    [
-                        'Engine' => 'dummy',
-                        'Support' => 'YES',
-                        'Comment' => 'dummy comment',
-                    ],
-                    [
-                        'Engine' => 'dummy2',
-                        'Support' => 'NO',
-                        'Comment' => 'dummy2 comment',
-                    ],
-                    [
-                        'Engine' => 'FEDERATED',
-                        'Support' => 'NO',
-                        'Comment' => 'Federated MySQL storage engine',
-                    ],
-                    [
-                        'Engine' => 'Pbxt',
-                        'Support' => 'NO',
-                        'Comment' => 'Pbxt storage engine',
-                    ],
+                    ['dummy', 'YES', 'dummy comment'],
+                    ['dummy2', 'NO', 'dummy2 comment'],
+                    ['FEDERATED', 'NO', 'Federated MySQL storage engine'],
+                    ['Pbxt', 'NO', 'Pbxt storage engine'],
                 ],
             ],
             [
@@ -641,237 +412,67 @@ class DbiDummy implements DbiExtension
                     . ' LIKE \'Innodb\\_buffer\\_pool\\_%\''
                     . ' OR Variable_name = \'Innodb_page_size\';',
                 'result' => [
-                    [
-                        'Innodb_buffer_pool_pages_data',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_pages_dirty',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_pages_flushed',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_pages_free',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_pages_misc',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_pages_total',
-                        4096,
-                    ],
-                    [
-                        'Innodb_buffer_pool_read_ahead_rnd',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_read_ahead',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_read_ahead_evicted',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_read_requests',
-                        64,
-                    ],
-                    [
-                        'Innodb_buffer_pool_reads',
-                        32,
-                    ],
-                    [
-                        'Innodb_buffer_pool_wait_free',
-                        0,
-                    ],
-                    [
-                        'Innodb_buffer_pool_write_requests',
-                        64,
-                    ],
-                    [
-                        'Innodb_page_size',
-                        16384,
-                    ],
+                    ['Innodb_buffer_pool_pages_data', 0],
+                    ['Innodb_buffer_pool_pages_dirty', 0],
+                    ['Innodb_buffer_pool_pages_flushed', 0],
+                    ['Innodb_buffer_pool_pages_free', 0],
+                    ['Innodb_buffer_pool_pages_misc', 0],
+                    ['Innodb_buffer_pool_pages_total', 4096],
+                    ['Innodb_buffer_pool_read_ahead_rnd', 0],
+                    ['Innodb_buffer_pool_read_ahead', 0],
+                    ['Innodb_buffer_pool_read_ahead_evicted', 0],
+                    ['Innodb_buffer_pool_read_requests', 64],
+                    ['Innodb_buffer_pool_reads', 32],
+                    ['Innodb_buffer_pool_wait_free', 0],
+                    ['Innodb_buffer_pool_write_requests', 64],
+                    ['Innodb_page_size', 16384],
                 ],
             ],
-            [
-                'query' => 'SHOW ENGINE INNODB STATUS;',
-                'result' => false,
-            ],
-            [
-                'query' => 'SELECT @@innodb_version;',
-                'result' => [
-                    ['1.1.8'],
-                ],
-            ],
-            [
-                'query' => 'SELECT @@disabled_storage_engines',
-                'result' => [
-                    [''],
-                ],
-            ],
-            [
-                'query' => 'SHOW GLOBAL VARIABLES ;',
-                'result' => [],
-            ],
+            ['query' => 'SHOW ENGINE INNODB STATUS;', 'result' => false],
+            ['query' => 'SELECT @@innodb_version;', 'result' => [['1.1.8']]],
+            ['query' => 'SELECT @@disabled_storage_engines', 'result' => [['']]],
+            ['query' => 'SHOW GLOBAL VARIABLES ;', 'result' => []],
             [
                 'query' => 'SHOW GLOBAL VARIABLES LIKE \'innodb_file_per_table\';',
-                'result' => [
-                    [
-                        'innodb_file_per_table',
-                        'OFF',
-                    ],
-                ],
+                'result' => [['innodb_file_per_table', 'OFF']],
             ],
             [
                 'query' => 'SHOW GLOBAL VARIABLES LIKE \'innodb_file_format\';',
-                'result' => [
-                    [
-                        'innodb_file_format',
-                        'Antelope',
-                    ],
-                ],
+                'result' => [['innodb_file_format', 'Antelope']],
             ],
-            [
-                'query' => 'SELECT @@collation_server',
-                'result' => [
-                    ['utf8_general_ci'],
-                ],
-            ],
-            [
-                'query' => 'SELECT @@lc_messages;',
-                'result' => [],
-            ],
+            ['query' => 'SELECT @@collation_server', 'result' => [['utf8_general_ci']]],
+            ['query' => 'SELECT @@lc_messages;', 'result' => []],
             [
                 'query' => 'SHOW SESSION VARIABLES LIKE \'FOREIGN_KEY_CHECKS\';',
-                'result' => [
-                    [
-                        'foreign_key_checks',
-                        'ON',
-                    ],
-                ],
+                'result' => [['foreign_key_checks', 'ON']],
             ],
-            [
-                'query' => 'SHOW TABLES FROM `pma_test`;',
-                'result' => [
-                    ['table1'],
-                    ['table2'],
-                ],
-            ],
-            [
-                'query' => 'SHOW TABLES FROM `pmadb`',
-                'result' => [
-                    ['column_info'],
-                ],
-            ],
+            ['query' => 'SHOW TABLES FROM `pma_test`;', 'result' => [['table1'], ['table2']]],
+            ['query' => 'SHOW TABLES FROM `pmadb`', 'result' => [['column_info']]],
             [
                 'query' => 'SHOW COLUMNS FROM `pma_test`.`table1`',
-                'columns' => [
-                    'Field',
-                    'Type',
-                    'Null',
-                    'Key',
-                    'Default',
-                    'Extra',
-                ],
+                'columns' => ['Field', 'Type', 'Null', 'Key', 'Default', 'Extra'],
                 'result' => [
-                    [
-                        'i',
-                        'int(11)',
-                        'NO',
-                        'PRI',
-                        'NULL',
-                        'auto_increment',
-                    ],
-                    [
-                        'o',
-                        'int(11)',
-                        'NO',
-                        'MUL',
-                        'NULL',
-                        '',
-                    ],
+                    ['i', 'int(11)', 'NO', 'PRI', 'NULL', 'auto_increment'],
+                    ['o', 'int(11)', 'NO', 'MUL', 'NULL', ''],
                 ],
             ],
-            [
-                'query' => 'SHOW INDEXES FROM `pma_test`.`table1` WHERE (Non_unique = 0)',
-                'result' => [],
-            ],
+            ['query' => 'SHOW INDEXES FROM `pma_test`.`table1` WHERE (Non_unique = 0)', 'result' => []],
             [
                 'query' => 'SHOW COLUMNS FROM `pma_test`.`table2`',
-                'columns' => [
-                    'Field',
-                    'Type',
-                    'Null',
-                    'Key',
-                    'Default',
-                    'Extra',
-                ],
+                'columns' => ['Field', 'Type', 'Null', 'Key', 'Default', 'Extra'],
                 'result' => [
-                    [
-                        'i',
-                        'int(11)',
-                        'NO',
-                        'PRI',
-                        'NULL',
-                        'auto_increment',
-                    ],
-                    [
-                        'o',
-                        'int(11)',
-                        'NO',
-                        'MUL',
-                        'NULL',
-                        '',
-                    ],
+                    ['i', 'int(11)', 'NO', 'PRI', 'NULL', 'auto_increment'],
+                    ['o', 'int(11)', 'NO', 'MUL', 'NULL', ''],
                 ],
             ],
-            [
-                'query' => 'SHOW INDEXES FROM `pma_test`.`table1`',
-                'result' => [],
-            ],
-            [
-                'query' => 'SHOW INDEXES FROM `pma_test`.`table2`',
-                'result' => [],
-            ],
+            ['query' => 'SHOW INDEXES FROM `pma_test`.`table1`', 'result' => []],
+            ['query' => 'SHOW INDEXES FROM `pma_test`.`table2`', 'result' => []],
             [
                 'query' => 'SHOW COLUMNS FROM `pma`.`table1`',
-                'columns' => [
-                    'Field',
-                    'Type',
-                    'Null',
-                    'Key',
-                    'Default',
-                    'Extra',
-                    'Privileges',
-                    'Comment',
-                ],
+                'columns' => ['Field', 'Type', 'Null', 'Key', 'Default', 'Extra', 'Privileges', 'Comment'],
                 'result' => [
-                    [
-                        'i',
-                        'int(11)',
-                        'NO',
-                        'PRI',
-                        'NULL',
-                        'auto_increment',
-                        'select,insert,update,references',
-                        '',
-                    ],
-                    [
-                        'o',
-                        'varchar(100)',
-                        'NO',
-                        'MUL',
-                        'NULL',
-                        '',
-                        'select,insert,update,references',
-                        '',
-                    ],
+                    ['i', 'int(11)', 'NO', 'PRI', 'NULL', 'auto_increment', 'select,insert,update,references', ''],
+                    ['o', 'varchar(100)', 'NO', 'MUL', 'NULL', '', 'select,insert,update,references', ''],
                 ],
             ],
             [
@@ -880,37 +481,12 @@ class DbiDummy implements DbiExtension
                     . ' `DESCRIPTION` AS `Description`,'
                     . ' `MAXLEN` AS `Maxlen`'
                     . ' FROM `information_schema`.`CHARACTER_SETS`',
-                'columns' => [
-                    'Charset',
-                    'Default collation',
-                    'Description',
-                    'Maxlen',
-                ],
+                'columns' => ['Charset', 'Default collation', 'Description', 'Maxlen'],
                 'result' => [
-                    [
-                        'armscii8',
-                        'ARMSCII-8 Armenian',
-                        'armscii8_general_ci',
-                        '1',
-                    ],
-                    [
-                        'utf8',
-                        'utf8_general_ci',
-                        'UTF-8 Unicode',
-                        '3',
-                    ],
-                    [
-                        'utf8mb4',
-                        'UTF-8 Unicode',
-                        'utf8mb4_0900_ai_ci',
-                        '4',
-                    ],
-                    [
-                        'latin1',
-                        'latin1_swedish_ci',
-                        'cp1252 West European',
-                        '1',
-                    ],
+                    ['armscii8', 'ARMSCII-8 Armenian', 'armscii8_general_ci', '1'],
+                    ['utf8', 'utf8_general_ci', 'UTF-8 Unicode', '3'],
+                    ['utf8mb4', 'UTF-8 Unicode', 'utf8mb4_0900_ai_ci', '4'],
+                    ['latin1', 'latin1_swedish_ci', 'cp1252 West European', '1'],
                 ],
             ],
             [
@@ -921,55 +497,13 @@ class DbiDummy implements DbiExtension
                     . ' `IS_COMPILED` AS `Compiled`,'
                     . ' `SORTLEN` AS `Sortlen`'
                     . ' FROM `information_schema`.`COLLATIONS`',
-                'columns' => [
-                    'Collation',
-                    'Charset',
-                    'Id',
-                    'Default',
-                    'Compiled',
-                    'Sortlen',
-                ],
+                'columns' => ['Collation', 'Charset', 'Id', 'Default', 'Compiled', 'Sortlen'],
                 'result' => [
-                    [
-                        'utf8mb4_general_ci',
-                        'utf8mb4',
-                        '45',
-                        'Yes',
-                        'Yes',
-                        '1',
-                    ],
-                    [
-                        'armscii8_general_ci',
-                        'armscii8',
-                        '32',
-                        'Yes',
-                        'Yes',
-                        '1',
-                    ],
-                    [
-                        'utf8_general_ci',
-                        'utf8',
-                        '33',
-                        'Yes',
-                        'Yes',
-                        '1',
-                    ],
-                    [
-                        'utf8_bin',
-                        'utf8',
-                        '83',
-                        '',
-                        'Yes',
-                        '1',
-                    ],
-                    [
-                        'latin1_swedish_ci',
-                        'latin1',
-                        '8',
-                        'Yes',
-                        'Yes',
-                        '1',
-                    ],
+                    ['utf8mb4_general_ci', 'utf8mb4', '45', 'Yes', 'Yes', '1'],
+                    ['armscii8_general_ci', 'armscii8', '32', 'Yes', 'Yes', '1'],
+                    ['utf8_general_ci', 'utf8', '33', 'Yes', 'Yes', '1'],
+                    ['utf8_bin', 'utf8', '83', '', 'Yes', '1'],
+                    ['latin1_swedish_ci', 'latin1', '8', 'Yes', 'Yes', '1'],
                 ],
             ],
             [
@@ -995,24 +529,7 @@ class DbiDummy implements DbiExtension
                     'input_transformation',
                     'input_transformation_options',
                 ],
-                'result' => [
-                    [
-                        'o',
-                        'text/plain',
-                        'sql',
-                        '',
-                        'regex',
-                        '/pma/i',
-                    ],
-                    [
-                        'col',
-                        't',
-                        'o/p',
-                        '',
-                        'i/p',
-                        '',
-                    ],
-                ],
+                'result' => [['o', 'text/plain', 'sql', '', 'regex', '/pma/i'], ['col', 't', 'o/p', '', 'i/p', '']],
             ],
             [
                 'query' => 'SELECT `column_name`, `mimetype`, `transformation`,'
@@ -1033,22 +550,8 @@ class DbiDummy implements DbiExtension
                     'input_transformation_options',
                 ],
                 'result' => [
-                    [
-                        'vc',
-                        '',
-                        'output/text_plain_json.php',
-                        '',
-                        'Input/Text_Plain_JsonEditor.php',
-                        '',
-                    ],
-                    [
-                        'vc',
-                        '',
-                        'output/text_plain_formatted.php',
-                        '',
-                        'Text_Plain_Substring.php',
-                        '1',
-                    ],
+                    ['vc', '', 'output/text_plain_json.php', '', 'Input/Text_Plain_JsonEditor.php', ''],
+                    ['vc', '', 'output/text_plain_formatted.php', '', 'Text_Plain_Substring.php', '1'],
                 ],
             ],
             [
@@ -1070,41 +573,27 @@ class DbiDummy implements DbiExtension
                     'input_transformation_options',
                 ],
                 'result' => [
-                    [
-                        'vc',
-                        '',
-                        'output/text_plain_json.php',
-                        '',
-                        'Input/Text_Plain_JsonEditor.php',
-                        '',
-                    ],
-                    [
-                        'vc',
-                        '',
-                        'output/text_plain_formatted.php',
-                        '',
-                        'Text_Plain_Substring.php',
-                        '1',
-                    ],
+                    ['vc', '', 'output/text_plain_json.php', '', 'Input/Text_Plain_JsonEditor.php', ''],
+                    ['vc', '', 'output/text_plain_formatted.php', '', 'Text_Plain_Substring.php', '1'],
                 ],
             ],
             [
-                'query' => 'SELECT TABLE_NAME FROM information_schema.VIEWS'
+                'query' => 'SELECT 1 FROM information_schema.VIEWS'
                     . ' WHERE TABLE_SCHEMA = \'pma_test\' AND TABLE_NAME = \'table1\'',
                 'result' => [],
             ],
             [
-                'query' => 'SELECT TABLE_NAME FROM information_schema.VIEWS'
+                'query' => 'SELECT 1 FROM information_schema.VIEWS'
                     . ' WHERE TABLE_SCHEMA = \'ODS_DB\' AND TABLE_NAME = \'Shop\'',
                 'result' => [],
             ],
             [
-                'query' => 'SELECT TABLE_NAME FROM information_schema.VIEWS'
+                'query' => 'SELECT 1 FROM information_schema.VIEWS'
                     . ' WHERE TABLE_SCHEMA = \'ODS_DB\' AND TABLE_NAME = \'pma_bookmark\'',
                 'result' => [],
             ],
             [
-                'query'  => 'SELECT TABLE_NAME FROM information_schema.VIEWS'
+                'query' => 'SELECT 1 FROM information_schema.VIEWS'
                 . ' WHERE TABLE_SCHEMA = \'ODS_DB\' AND TABLE_NAME = \'Feuille 1\'',
                 'result' => [],
             ],
@@ -1114,7 +603,7 @@ class DbiDummy implements DbiExtension
                 'result' => [],
             ],
             [
-                'query' => 'SELECT TABLE_NAME FROM information_schema.VIEWS'
+                'query' => 'SELECT 1 FROM information_schema.VIEWS'
                     . ' WHERE TABLE_SCHEMA = \'my_db\' '
                     . 'AND TABLE_NAME = \'test_tbl\' AND IS_UPDATABLE = \'YES\'',
                 'result' => [],
@@ -1134,8 +623,8 @@ class DbiDummy implements DbiExtension
                     . ' `CHECKSUM` AS `Checksum`, `CREATE_OPTIONS` AS `Create_options`,'
                     . ' `TABLE_COMMENT` AS `Comment`'
                     . ' FROM `information_schema`.`TABLES` t'
-                    . ' WHERE `TABLE_SCHEMA` IN (\'pma_test\')'
-                    . ' AND t.`TABLE_NAME` = \'table1\' ORDER BY Name ASC',
+                    . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin IN (\'pma_test\')'
+                    . ' AND t.`TABLE_NAME` COLLATE utf8_bin = \'table1\' ORDER BY Name ASC',
                 'columns' => [
                     'TABLE_CATALOG',
                     'TABLE_SCHEMA',
@@ -1192,8 +681,8 @@ class DbiDummy implements DbiExtension
                         '123456',
                         '42',
                         '21708991',
-                        '281474976710655',// MyISAM
-                        '2048',// MyISAM
+                        '281474976710655', // MyISAM
+                        '2048', // MyISAM
                         '2547',
                         '5',
                         '2014-06-24 17:30:00',
@@ -1210,8 +699,8 @@ class DbiDummy implements DbiExtension
                         '123456',
                         '42',
                         '21708991',
-                        '281474976710655',// MyISAM
-                        '2048',// MyISAM
+                        '281474976710655', // MyISAM
+                        '2048', // MyISAM
                         '2547',
                         '5',
                         '2014-06-24 17:30:00',
@@ -1239,8 +728,8 @@ class DbiDummy implements DbiExtension
                     . ' `CHECKSUM` AS `Checksum`, `CREATE_OPTIONS` AS `Create_options`,'
                     . ' `TABLE_COMMENT` AS `Comment`'
                     . ' FROM `information_schema`.`TABLES` t'
-                    . ' WHERE `TABLE_SCHEMA` IN (\'my_db\')'
-                    . ' AND t.`TABLE_NAME` = \'test_tbl\' ORDER BY Name ASC',
+                    . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin IN (\'my_db\')'
+                    . ' AND t.`TABLE_NAME` COLLATE utf8_bin = \'test_tbl\' ORDER BY Name ASC',
                 'columns' => [
                     'TABLE_CATALOG',
                     'TABLE_SCHEMA',
@@ -1287,10 +776,7 @@ class DbiDummy implements DbiExtension
                 ],
                 'result' => [],
             ],
-            [
-                'query' => 'SELECT COUNT(*) FROM `pma_test`.`table1`',
-                'result' => [[0]],
-            ],
+            ['query' => 'SELECT COUNT(*) FROM `pma_test`.`table1`', 'result' => []],
             [
                 'query' => 'SELECT `PRIVILEGE_TYPE` FROM `INFORMATION_SCHEMA`.'
                     . '`USER_PRIVILEGES`'
@@ -1337,10 +823,7 @@ class DbiDummy implements DbiExtension
                     . ' AND TABLE_SCHEMA=\'pma\\\\_test\' AND TABLE_NAME=\'table1\'',
                 'result' => [],
             ],
-            [
-                'query' => 'RENAME TABLE `pma_test`.`table1` TO `pma_test`.`table3`;',
-                'result' => [],
-            ],
+            ['query' => 'RENAME TABLE `pma_test`.`table1` TO `pma_test`.`table3`;', 'result' => []],
             [
                 'query' => 'SELECT TRIGGER_SCHEMA, TRIGGER_NAME, EVENT_MANIPULATION,'
                     . ' EVENT_OBJECT_TABLE, ACTION_TIMING, ACTION_STATEMENT, '
@@ -1350,10 +833,7 @@ class DbiDummy implements DbiExtension
                     . ' AND EVENT_OBJECT_TABLE = \'table1\';',
                 'result' => [],
             ],
-            [
-                'query' => 'SHOW TABLES FROM `pma`;',
-                'result' => [],
-            ],
+            ['query' => 'SHOW TABLES FROM `pma`;', 'result' => []],
             [
                 'query' => 'SELECT `PRIVILEGE_TYPE` FROM `INFORMATION_SCHEMA`.'
                     . "`SCHEMA_PRIVILEGES` WHERE GRANTEE='''pma_test''@''localhost'''"
@@ -1376,30 +856,17 @@ class DbiDummy implements DbiExtension
                 'query' => 'SELECT DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA'
                     . ' WHERE SCHEMA_NAME = \'pma_test\' LIMIT 1',
                 'columns' => ['DEFAULT_COLLATION_NAME'],
-                'result' => [
-                    ['utf8_general_ci'],
-                ],
+                'result' => [['utf8_general_ci']],
             ],
-            [
-                'query' => 'SELECT @@collation_database',
-                'columns' => ['@@collation_database'],
-                'result' => [
-                    ['bar'],
-                ],
-            ],
-            [
-                'query' => 'SHOW TABLES FROM `phpmyadmin`',
-                'result' => [],
-            ],
+            ['query' => 'SELECT @@collation_database', 'columns' => ['@@collation_database'], 'result' => [['bar']]],
+            ['query' => 'SHOW TABLES FROM `phpmyadmin`', 'result' => []],
             [
                 'query' => 'SELECT tracking_active FROM `pmadb`.`tracking`' .
                     " WHERE db_name = 'pma_test_db'" .
                     " AND table_name = 'pma_test_table'" .
                     ' ORDER BY version DESC LIMIT 1',
                 'columns' => ['tracking_active'],
-                'result' => [
-                    [1],
-                ],
+                'result' => [[1]],
             ],
             [
                 'query' => 'SELECT tracking_active FROM `pmadb`.`tracking`' .
@@ -1410,59 +877,85 @@ class DbiDummy implements DbiExtension
             ],
             [
                 'query' => 'SHOW SLAVE STATUS',
+                'columns' => [
+                    'Slave_IO_State',
+                    'Master_Host',
+                    'Master_User',
+                    'Master_Port',
+                    'Connect_Retry',
+                    'Master_Log_File',
+                    'Read_Master_Log_Pos',
+                    'Relay_Log_File',
+                    'Relay_Log_Pos',
+                    'Relay_Master_Log_File',
+                    'Slave_IO_Running',
+                    'Slave_SQL_Running',
+                    'Replicate_Do_DB',
+                    'Replicate_Ignore_DB',
+                    'Replicate_Do_Table',
+                    'Replicate_Ignore_Table',
+                    'Replicate_Wild_Do_Table',
+                    'Replicate_Wild_Ignore_Table',
+                    'Last_Errno',
+                    'Last_Error',
+                    'Skip_Counter',
+                    'Exec_Master_Log_Pos',
+                    'Relay_Log_Space',
+                    'Until_Condition',
+                    'Until_Log_File',
+                    'Until_Log_Pos',
+                    'Master_SSL_Allowed',
+                    'Master_SSL_CA_File',
+                    'Master_SSL_CA_Path',
+                    'Master_SSL_Cert',
+                    'Master_SSL_Cipher',
+                    'Master_SSL_Key',
+                    'Seconds_Behind_Master',
+                ],
                 'result' => [
                     [
-                        'Slave_IO_State' => 'running',
-                        'Master_Host' => 'localhost',
-                        'Master_User' => 'Master_User',
-                        'Master_Port' => '1002',
-                        'Connect_Retry' => 'Connect_Retry',
-                        'Master_Log_File' => 'Master_Log_File',
-                        'Read_Master_Log_Pos' => 'Read_Master_Log_Pos',
-                        'Relay_Log_File' => 'Relay_Log_File',
-                        'Relay_Log_Pos' => 'Relay_Log_Pos',
-                        'Relay_Master_Log_File' => 'Relay_Master_Log_File',
-                        'Slave_IO_Running' => 'NO',
-                        'Slave_SQL_Running' => 'NO',
-                        'Replicate_Do_DB' => 'Replicate_Do_DB',
-                        'Replicate_Ignore_DB' => 'Replicate_Ignore_DB',
-                        'Replicate_Do_Table' => 'Replicate_Do_Table',
-                        'Replicate_Ignore_Table' => 'Replicate_Ignore_Table',
-                        'Replicate_Wild_Do_Table' => 'Replicate_Wild_Do_Table',
-                        'Replicate_Wild_Ignore_Table' => 'Replicate_Wild_Ignore_Table',
-                        'Last_Errno' => 'Last_Errno',
-                        'Last_Error' => 'Last_Error',
-                        'Skip_Counter' => 'Skip_Counter',
-                        'Exec_Master_Log_Pos' => 'Exec_Master_Log_Pos',
-                        'Relay_Log_Space' => 'Relay_Log_Space',
-                        'Until_Condition' => 'Until_Condition',
-                        'Until_Log_File' => 'Until_Log_File',
-                        'Until_Log_Pos' => 'Until_Log_Pos',
-                        'Master_SSL_Allowed' => 'Master_SSL_Allowed',
-                        'Master_SSL_CA_File' => 'Master_SSL_CA_File',
-                        'Master_SSL_CA_Path' => 'Master_SSL_CA_Path',
-                        'Master_SSL_Cert' => 'Master_SSL_Cert',
-                        'Master_SSL_Cipher' => 'Master_SSL_Cipher',
-                        'Master_SSL_Key' => 'Master_SSL_Key',
-                        'Seconds_Behind_Master' => 'Seconds_Behind_Master',
+                        'running',
+                        'localhost',
+                        'Master_User',
+                        '1002',
+                        'Connect_Retry',
+                        'Master_Log_File',
+                        'Read_Master_Log_Pos',
+                        'Relay_Log_File',
+                        'Relay_Log_Pos',
+                        'Relay_Master_Log_File',
+                        'NO',
+                        'NO',
+                        'Replicate_Do_DB',
+                        'Replicate_Ignore_DB',
+                        'Replicate_Do_Table',
+                        'Replicate_Ignore_Table',
+                        'Replicate_Wild_Do_Table',
+                        'Replicate_Wild_Ignore_Table',
+                        'Last_Errno',
+                        'Last_Error',
+                        'Skip_Counter',
+                        'Exec_Master_Log_Pos',
+                        'Relay_Log_Space',
+                        'Until_Condition',
+                        'Until_Log_File',
+                        'Until_Log_Pos',
+                        'Master_SSL_Allowed',
+                        'Master_SSL_CA_File',
+                        'Master_SSL_CA_Path',
+                        'Master_SSL_Cert',
+                        'Master_SSL_Cipher',
+                        'Master_SSL_Key',
+                        'Seconds_Behind_Master',
                     ],
                 ],
             ],
             [
                 'query' => 'SHOW MASTER STATUS',
-                'result' => [
-                    [
-                        'File' => 'primary-bin.000030',
-                        'Position' => '107',
-                        'Binlog_Do_DB' => 'Binlog_Do_DB',
-                        'Binlog_Ignore_DB' => 'Binlog_Ignore_DB',
-                    ],
-                ],
+                'columns' => ['File', 'Position', 'Binlog_Do_DB', 'Binlog_Ignore_DB'],
+                'result' => [['primary-bin.000030', '107', 'Binlog_Do_DB', 'Binlog_Ignore_DB']],
             ],
-            [
-                'query' => 'SHOW GRANTS',
-                'result' => [],
-            ],
+            ['query' => 'SHOW GRANTS', 'result' => []],
             [
                 'query' => 'SELECT `SCHEMA_NAME` FROM `INFORMATION_SCHEMA`.`SCHEMATA`, '
                     . '(SELECT DB_first_level FROM ( SELECT DISTINCT '
@@ -1472,17 +965,13 @@ class DbiDummy implements DbiExtension
                     . "CONCAT(DB_first_level, '_'), CONCAT(SCHEMA_NAME, '_')) "
                     . 'ORDER BY SCHEMA_NAME ASC',
                 'columns' => ['SCHEMA_NAME'],
-                'result' => [
-                    ['test'],
-                ],
+                'result' => [['test']],
             ],
             [
                 'query' => 'SELECT COUNT(*) FROM ( SELECT DISTINCT SUBSTRING_INDEX('
                     . "SCHEMA_NAME, '_', 1) DB_first_level "
                     . 'FROM INFORMATION_SCHEMA.SCHEMATA WHERE TRUE ) t',
-                'result' => [
-                    [1],
-                ],
+                'result' => [[1]],
             ],
             [
                 'query' => 'SELECT `PARTITION_METHOD` '
@@ -1521,48 +1010,47 @@ class DbiDummy implements DbiExtension
             ],
             [
                 'query' => 'SHOW PLUGINS',
-                'result' => [
-                    [
-                        'Name' => 'partition',
-                        'Status' => 'ACTIVE',
-                        'Type' => 'STORAGE ENGINE',
-                        'Library' => null,
-                        'License' => 'GPL',
-                    ],
-                ],
+                'columns' => ['Name', 'Status', 'Type', 'Library', 'License'],
+                'result' => [['partition', 'ACTIVE', 'STORAGE ENGINE', null, 'GPL']],
             ],
             [
                 'query' => 'SELECT * FROM information_schema.PLUGINS ORDER BY PLUGIN_TYPE, PLUGIN_NAME',
+                'columns' => [
+                    'PLUGIN_NAME',
+                    'PLUGIN_VERSION',
+                    'PLUGIN_STATUS',
+                    'PLUGIN_TYPE',
+                    'PLUGIN_TYPE_VERSION',
+                    'PLUGIN_LIBRARY',
+                    'PLUGIN_LIBRARY_VERSION',
+                    'PLUGIN_AUTHOR',
+                    'PLUGIN_DESCRIPTION',
+                    'PLUGIN_LICENSE',
+                    'LOAD_OPTION',
+                    'PLUGIN_MATURITY',
+                    'PLUGIN_AUTH_VERSION',
+                ],
                 'result' => [
                     [
-                        'PLUGIN_NAME' => 'BLACKHOLE',
-                        'PLUGIN_VERSION' => '1.0',
-                        'PLUGIN_STATUS' => 'ACTIVE',
-                        'PLUGIN_TYPE' => 'STORAGE ENGINE',
-                        'PLUGIN_TYPE_VERSION' => '100316.0',
-                        'PLUGIN_LIBRARY' => 'ha_blackhole.so',
-                        'PLUGIN_LIBRARY_VERSION' => '1.13',
-                        'PLUGIN_AUTHOR' => 'MySQL AB',
-                        'PLUGIN_DESCRIPTION' => '/dev/null storage engine (anything you write to it disappears)',
-                        'PLUGIN_LICENSE' => 'GPL',
-                        'LOAD_OPTION' => 'ON',
-                        'PLUGIN_MATURITY' => 'Stable',
-                        'PLUGIN_AUTH_VERSION' => '1.0',
+                        'BLACKHOLE',
+                        '1.0',
+                        'ACTIVE',
+                        'STORAGE ENGINE',
+                        '100316.0',
+                        'ha_blackhole.so',
+                        '1.13',
+                        'MySQL AB',
+                        '/dev/null storage engine (anything you write to it disappears)',
+                        'GPL',
+                        'ON',
+                        'Stable',
+                        '1.0',
                     ],
                 ],
             ],
             [
                 'query' => "SHOW FULL TABLES FROM `default` WHERE `Table_type` IN('BASE TABLE', 'SYSTEM VERSIONED')",
-                'result' => [
-                    [
-                        'test1',
-                        'BASE TABLE',
-                    ],
-                    [
-                        'test2',
-                        'BASE TABLE',
-                    ],
-                ],
+                'result' => [['test1', 'BASE TABLE'], ['test2', 'BASE TABLE']],
             ],
             [
                 'query' => 'SHOW FULL TABLES FROM `default` '
@@ -1571,40 +1059,17 @@ class DbiDummy implements DbiExtension
             ],
             [
                 'query' => "SHOW FUNCTION STATUS WHERE `Db`='default'",
-                'result' => [['Name' => 'testFunction']],
+                'columns' => ['Name'],
+                'result' => [['testFunction']],
             ],
-            [
-                'query' => "SHOW PROCEDURE STATUS WHERE `Db`='default'",
-                'result' => [],
-            ],
-            [
-                'query' => 'SHOW EVENTS FROM `default`',
-                'result' => [],
-            ],
-            [
-                'query' => 'FLUSH PRIVILEGES',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT * FROM `mysql`.`db` LIMIT 1',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT * FROM `mysql`.`columns_priv` LIMIT 1',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT * FROM `mysql`.`tables_priv` LIMIT 1',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT * FROM `mysql`.`procs_priv` LIMIT 1',
-                'result' => [],
-            ],
-            [
-                'query' => 'DELETE FROM `mysql`.`db` WHERE `host` = "" AND `Db` = "" AND `User` = ""',
-                'result' => true,
-            ],
+            ['query' => "SHOW PROCEDURE STATUS WHERE `Db`='default'", 'result' => []],
+            ['query' => 'SHOW EVENTS FROM `default`', 'result' => []],
+            ['query' => 'FLUSH PRIVILEGES', 'result' => []],
+            ['query' => 'SELECT * FROM `mysql`.`db` LIMIT 1', 'result' => []],
+            ['query' => 'SELECT * FROM `mysql`.`columns_priv` LIMIT 1', 'result' => []],
+            ['query' => 'SELECT * FROM `mysql`.`tables_priv` LIMIT 1', 'result' => []],
+            ['query' => 'SELECT * FROM `mysql`.`procs_priv` LIMIT 1', 'result' => []],
+            ['query' => 'DELETE FROM `mysql`.`db` WHERE `host` = "" AND `Db` = "" AND `User` = ""', 'result' => true],
             [
                 'query' => 'DELETE FROM `mysql`.`columns_priv` WHERE `host` = "" AND `Db` = "" AND `User` = ""',
                 'result' => true,
@@ -1622,14 +1087,13 @@ class DbiDummy implements DbiExtension
             ],
             [
                 'query' => 'SELECT `plugin` FROM `mysql`.`user` WHERE '
-                    . '`User` = "pma_username" AND `Host` = "pma_hostname" LIMIT 1',
+                    . '`User` = \'pma_username\' AND `Host` = \'pma_hostname\' LIMIT 1',
                 'result' => [],
             ],
             [
                 'query' => 'SELECT @@default_authentication_plugin',
-                'result' => [
-                    ['@@default_authentication_plugin' => 'mysql_native_password'],
-                ],
+                'columns' => ['@@default_authentication_plugin'],
+                'result' => [['mysql_native_password']],
             ],
             [
                 'query' => 'SELECT TABLE_NAME FROM information_schema.VIEWS WHERE '
@@ -1656,10 +1120,7 @@ class DbiDummy implements DbiExtension
                     . "AND t.`TABLE_NAME` = 'table' ORDER BY Name ASC",
                 'result' => [],
             ],
-            [
-                'query' => "SHOW TABLE STATUS FROM `db` WHERE `Name` LIKE 'table%'",
-                'result' => [],
-            ],
+            ['query' => "SHOW TABLE STATUS FROM `db` WHERE `Name` LIKE 'table%'", 'result' => []],
             [
                 'query' => "SHOW TABLE STATUS FROM `my_dataset` WHERE `Name` LIKE 'company\\\\_users%'",
                 'columns' => [
@@ -1693,8 +1154,8 @@ class DbiDummy implements DbiExtension
                         '123456',
                         '42',
                         '18',
-                        '281474976710655',// MyISAM
-                        '2048',// MyISAM
+                        '281474976710655', // MyISAM
+                        '2048', // MyISAM
                         '2547',
                         '5',
                         '2014-06-24 17:30:00',
@@ -1740,8 +1201,8 @@ class DbiDummy implements DbiExtension
                         '123456',
                         '42',
                         '21708991',
-                        '281474976710655',// MyISAM
-                        '2048',// MyISAM
+                        '281474976710655', // MyISAM
+                        '2048', // MyISAM
                         '2547',
                         '5',
                         '2014-06-24 17:30:00',
@@ -1760,36 +1221,16 @@ class DbiDummy implements DbiExtension
                     . " FROM `information_schema`.SCHEMATA s WHERE `SCHEMA_NAME` LIKE 'pma_test'"
                     . ' GROUP BY BINARY s.SCHEMA_NAME, s.DEFAULT_COLLATION_NAME ORDER BY'
                     . ' BINARY `SCHEMA_NAME` ASC) a',
-                'result' => [
-                    [
-                        'BIN_NAME' => 'pma_test',
-                        'DEFAULT_COLLATION_NAME' => 'utf8mb4_general_ci',
-                        'SCHEMA_NAME' => 'pma_test',
-                    ],
-                ],
+                'columns' => ['BIN_NAME', 'DEFAULT_COLLATION_NAME', 'SCHEMA_NAME'],
+                'result' => [['pma_test', 'utf8mb4_general_ci', 'pma_test']],
             ],
             [
                 'query' => 'SELECT *, CAST(BIN_NAME AS CHAR CHARACTER SET utf8) AS SCHEMA_NAME'
                     . ' FROM (SELECT BINARY s.SCHEMA_NAME AS BIN_NAME, s.DEFAULT_COLLATION_NAME'
                     . ' FROM `information_schema`.SCHEMATA s GROUP BY BINARY s.SCHEMA_NAME,'
                     . ' s.DEFAULT_COLLATION_NAME ORDER BY BINARY `SCHEMA_NAME` ASC) a',
-                'columns' => [
-                    'BIN_NAME',
-                    'DEFAULT_COLLATION_NAME',
-                    'SCHEMA_NAME',
-                ],
-                'result' => [
-                    [
-                        'sakila',
-                        'utf8_general_ci',
-                        'sakila',
-                    ],
-                    [
-                        'employees',
-                        'latin1_swedish_ci',
-                        'employees',
-                    ],
-                ],
+                'columns' => ['BIN_NAME', 'DEFAULT_COLLATION_NAME', 'SCHEMA_NAME'],
+                'result' => [['sakila','utf8_general_ci','sakila'], ['employees','latin1_swedish_ci','employees']],
             ],
 
             [
@@ -1816,17 +1257,7 @@ class DbiDummy implements DbiExtension
                     'SCHEMA_NAME',
                 ],
                 'result' => [
-                    [
-                        'sakila',
-                        'utf8_general_ci',
-                        '23',
-                        '47274',
-                        '4358144',
-                        '2392064',
-                        '6750208',
-                        '0',
-                        'sakila',
-                    ],
+                    ['sakila', 'utf8_general_ci', '23', '47274', '4358144', '2392064', '6750208', '0', 'sakila'],
                     [
                         'employees',
                         'latin1_swedish_ci',
@@ -1840,14 +1271,8 @@ class DbiDummy implements DbiExtension
                     ],
                 ],
             ],
-            [
-                'query' => 'SELECT @@have_partitioning;',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT @@lower_case_table_names',
-                'result' => [],
-            ],
+            ['query' => 'SELECT @@have_partitioning;', 'result' => []],
+            ['query' => 'SELECT @@lower_case_table_names', 'result' => [['0']]],
             [
                 'query' => 'SELECT `PLUGIN_NAME`, `PLUGIN_DESCRIPTION` FROM `information_schema`.`PLUGINS`'
                     . ' WHERE `PLUGIN_TYPE` = \'AUTHENTICATION\';',
@@ -1861,10 +1286,7 @@ class DbiDummy implements DbiExtension
                     ['unknown_auth_plugin', 'Unknown authentication'],
                 ],
             ],
-            [
-                'query' => 'SHOW TABLES FROM `db`;',
-                'result' => [],
-            ],
+            ['query' => 'SHOW TABLES FROM `db`;', 'result' => []],
             [
                 'query' => 'SELECT `PRIVILEGE_TYPE` FROM '
                     . '`INFORMATION_SCHEMA`.`SCHEMA_PRIVILEGES` '
@@ -1904,10 +1326,7 @@ class DbiDummy implements DbiExtension
                     . "CONCAT(SCHEMA_NAME, '_')) ORDER BY SCHEMA_NAME ASC",
                 'result' => [],
             ],
-            [
-                'query' => 'SELECT @@ndb_version_string',
-                'result' => [['ndb-7.4.10']],
-            ],
+            ['query' => 'SELECT @@ndb_version_string', 'result' => [['ndb-7.4.10']]],
             [
                 'query' => 'SELECT *, `COLUMN_NAME` AS `Field`, `COLUMN_TYPE` AS'
                     . ' `Type`, `COLLATION_NAME` AS `Collation`, `IS_NULLABLE` AS'
@@ -1923,106 +1342,43 @@ class DbiDummy implements DbiExtension
                     . " WHERE referenced_table_name IS NOT NULL AND TABLE_SCHEMA = 'test'"
                     . " AND TABLE_NAME IN ('table1','table2') AND"
                     . " REFERENCED_TABLE_NAME IN ('table1','table2');",
-                'result' => [
-                    [
-                        'TABLE_NAME' => 'table2',
-                        'COLUMN_NAME' => 'idtable2',
-                        'REFERENCED_TABLE_NAME' => 'table1',
-                        'REFERENCED_COLUMN_NAME' => 'idtable1',
-                    ],
-                ],
+                'columns' => ['TABLE_NAME', 'COLUMN_NAME', 'REFERENCED_TABLE_NAME', 'REFERENCED_COLUMN_NAME'],
+                'result' => [['table2', 'idtable2', 'table1', 'idtable1']],
             ],
             [
                 'query' => 'SELECT `item_name`, `item_type` FROM `pmadb`.`navigationhiding`'
                     . " WHERE `username`='user' AND `db_name`='db' AND `table_name`=''",
-                'result' => [
-                    [
-                        'item_name' => 'tableName',
-                        'item_type' => 'table',
-                    ],
-                    [
-                        'item_name' => 'viewName',
-                        'item_type' => 'view',
-                    ],
-                ],
+                'columns' => ['item_name', 'item_type'],
+                'result' => [['tableName', 'table'], ['viewName', 'view']],
             ],
             [
                 'query' => 'SELECT `Table_priv` FROM `mysql`.`tables_priv` WHERE `User` ='
                     . ' \'PMA_username\' AND `Host` = \'PMA_hostname\' AND `Db` ='
                     . ' \'PMA_db\' AND `Table_name` = \'PMA_table\';',
-                'result' => [
-                    ['Table_priv' => 'Select,Insert,Update,References,Create View,Show view'],
-                ],
+                'columns' => ['Table_priv'],
+                'result' => [['Select,Insert,Update,References,Create View,Show view']],
             ],
-            [
-                'query' => 'SHOW COLUMNS FROM `my_db`.`test_tbl`',
-                'result' => [],
-            ],
+            ['query' => 'SHOW COLUMNS FROM `my_db`.`test_tbl`', 'result' => []],
             [
                 'query' => 'SHOW COLUMNS FROM `mysql`.`tables_priv` LIKE \'Table_priv\';',
-                'result' => [
-                    ['Type' => 'set(\'Select\',\'Insert\',\'Update\',\'References\',\'Create View\',\'Show view\')'],
-                ],
+                'columns' => ['Type'],
+                'result' => [['set(\'Select\',\'Insert\',\'Update\',\'References\',\'Create View\',\'Show view\')']],
             ],
             [
                 'query' => 'SHOW COLUMNS FROM `PMA_db`.`PMA_table`;',
-                'columns' => [
-                    'Field',
-                    'Type',
-                    'Null',
-                    'Key',
-                    'Default',
-                    'Extra',
-                ],
+                'columns' => ['Field', 'Type', 'Null', 'Key', 'Default', 'Extra'],
                 'result' => [
-                    [
-                        'id',
-                        'int(11)',
-                        'NO',
-                        'PRI',
-                        null,
-                        'auto_increment',
-                    ],
-                    [
-                        'name',
-                        'varchar(20)',
-                        'NO',
-                        '',
-                        null,
-                        '',
-                    ],
-                    [
-                        'datetimefield',
-                        'datetime',
-                        'NO',
-                        '',
-                        null,
-                        '',
-                    ],
+                    ['id', 'int(11)', 'NO', 'PRI', null, 'auto_increment'],
+                    ['name', 'varchar(20)', 'NO', '', null, ''],
+                    ['datetimefield', 'datetime', 'NO', '', null, ''],
                 ],
             ],
             [
                 'query' => 'SELECT `Column_name`, `Column_priv` FROM `mysql`.`columns_priv`'
                     . ' WHERE `User` = \'PMA_username\' AND `Host` = \'PMA_hostname\' AND'
                     . ' `Db` = \'PMA_db\' AND `Table_name` = \'PMA_table\';',
-                'columns' => [
-                    'Column_name',
-                    'Column_priv',
-                ],
-                'result' => [
-                    [
-                        'id',
-                        'Select',
-                    ],
-                    [
-                        'name',
-                        'Select',
-                    ],
-                    [
-                        'datetimefield',
-                        'Select',
-                    ],
-                ],
+                'columns' => ['Column_name', 'Column_priv'],
+                'result' => [['id', 'Select'], ['name', 'Select'], ['datetimefield', 'Select']],
             ],
             [
                 'query' => 'SHOW GLOBAL STATUS',
@@ -2054,10 +1410,7 @@ class DbiDummy implements DbiExtension
                     . ' db, sql_text, COUNT(sql_text) AS \'#\' FROM `mysql`.`slow_log` WHERE'
                     . ' start_time > FROM_UNIXTIME(0) AND start_time < FROM_UNIXTIME(10) GROUP BY start_time, user_host, db, sql_text',
                 'columns' => ['sql_text', '#'],
-                'result' => [
-                    ['insert sql_text', 11],
-                    ['update sql_text', 10],
-                ],
+                'result' => [['insert sql_text', 11], ['update sql_text', 10]],
             ],
             [
                 'query' => 'SELECT TIME(event_time) as event_time, user_host, thread_id,'
@@ -2071,20 +1424,12 @@ class DbiDummy implements DbiExtension
                     ['update sql_text', 11, 'argument3 argument4'],
                 ],
             ],
-            [
-                'query' => 'SET PROFILING=1;',
-                'result' => [],
-            ],
-            [
-                'query' => 'query',
-                'result' => [],
-            ],
+            ['query' => 'SET PROFILING=1;', 'result' => []],
+            ['query' => 'query', 'result' => []],
             [
                 'query' => 'EXPLAIN query',
                 'columns' => ['sql_text', '#', 'argument'],
-                'result' => [
-                    ['insert sql_text', 10, 'argument argument2'],
-                ],
+                'result' => [['insert sql_text', 10, 'argument argument2']],
             ],
             [
                 'query' => 'SELECT seq,state,duration FROM INFORMATION_SCHEMA.PROFILING WHERE QUERY_ID=1 ORDER BY seq',
@@ -2110,21 +1455,13 @@ class DbiDummy implements DbiExtension
                 'query' => 'SELECT * FROM `db`.`table` WHERE `username` = \'user\''
                     . ' AND `export_type` = \'type\' ORDER BY `template_name`;',
                 'columns' => ['id', 'username', 'export_type', 'template_name', 'template_data'],
-                'result' => [
-                    ['1', 'user1', 'type1', 'name1', 'data1'],
-                    ['2', 'user2', 'type2', 'name2', 'data2'],
-                ],
+                'result' => [['1', 'user1', 'type1', 'name1', 'data1'], ['2', 'user2', 'type2', 'name2', 'data2']],
             ],
-            [
-                'query' => 'DELETE FROM `db`.`table` WHERE `id` = 1 AND `username` = \'user\';',
-                'result' => [],
-            ],
+            ['query' => 'DELETE FROM `db`.`table` WHERE `id` = 1 AND `username` = \'user\';', 'result' => []],
             [
                 'query' => 'SELECT * FROM `db`.`table` WHERE `id` = 1 AND `username` = \'user\';',
                 'columns' => ['id', 'username', 'export_type', 'template_name', 'template_data'],
-                'result' => [
-                    ['1', 'user1', 'type1', 'name1', 'data1'],
-                ],
+                'result' => [['1', 'user1', 'type1', 'name1', 'data1']],
             ],
             [
                 'query' => 'UPDATE `db`.`table` SET `template_data` = \'data\''
@@ -2134,32 +1471,17 @@ class DbiDummy implements DbiExtension
             [
                 'query' => 'SHOW SLAVE HOSTS',
                 'columns' => ['Server_id', 'Host'],
-                'result' => [
-                    ['Server_id1', 'Host1'],
-                    ['Server_id2', 'Host2'],
-                ],
+                'result' => [['Server_id1', 'Host1'], ['Server_id2', 'Host2']],
             ],
-            [
-                'query' => 'SHOW ALL SLAVES STATUS',
-                'result' => [],
-            ],
+            ['query' => 'SHOW ALL SLAVES STATUS', 'result' => []],
             [
                 'query' => 'SHOW COLUMNS FROM `mysql`.`user`',
                 'columns' => ['Field', 'Type', 'Null'],
                 'result' => [['host', 'char(60)', 'NO']],
             ],
-            [
-                'query' => 'SHOW INDEXES FROM `mysql`.`user`',
-                'result' => [],
-            ],
-            [
-                'query' => 'SHOW INDEXES FROM `my_db`.`test_tbl`',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT USER();',
-                'result' => [],
-            ],
+            ['query' => 'SHOW INDEXES FROM `mysql`.`user`', 'result' => []],
+            ['query' => 'SHOW INDEXES FROM `my_db`.`test_tbl`', 'result' => []],
+            ['query' => 'SELECT USER();', 'result' => []],
             [
                 'query' => 'SHOW PROCESSLIST',
                 'columns' => ['Id', 'User', 'Host', 'db', 'Command', 'Time', 'State', 'Info'],
@@ -2180,33 +1502,24 @@ class DbiDummy implements DbiExtension
                 'columns' => ['Id', 'User', 'Host', 'db', 'Command', 'Time', 'State', 'Info'],
                 'result' => [['Id1', 'User1', 'Host1', 'db1', 'Command1', 'Time1', 'State1', 'Info1']],
             ],
-            [
-                'query' => 'SELECT UNIX_TIMESTAMP() - 36000',
-                'result' => [],
-            ],
+            ['query' => 'SELECT UNIX_TIMESTAMP() - 36000', 'result' => []],
             [
                 'query' => 'SELECT MAX(version) FROM `pmadb`.`tracking` WHERE `db_name` = \'db\''
                     . ' AND `table_name` = \'hello_world\'',
                 'columns' => ['version'],
-                'result' => [['10']],
+                'result' => [],
             ],
             [
                 'query' => 'SELECT MAX(version) FROM `pmadb`.`tracking` WHERE `db_name` = \'db\''
                     . ' AND `table_name` = \'hello_lovely_world\'',
                 'columns' => ['version'],
-                'result' => [['10']],
+                'result' => [],
             ],
             [
                 'query' => 'SELECT MAX(version) FROM `pmadb`.`tracking` WHERE `db_name` = \'db\''
                     . ' AND `table_name` = \'hello_lovely_world2\'',
                 'columns' => ['version'],
                 'result' => [['10']],
-            ],
-            [
-                'query' => 'SELECT DISTINCT db_name, table_name FROM `pmadb`.`tracking`'
-                    . ' WHERE db_name = \'PMA_db\' ORDER BY db_name, table_name',
-                'columns' => ['db_name', 'table_name', 'version'],
-                'result' => [['PMA_db', 'PMA_table', '10']],
             ],
             [
                 'query' => 'SELECT * FROM `pmadb`.`tracking` WHERE db_name = \'PMA_db\''
@@ -2224,6 +1537,22 @@ class DbiDummy implements DbiExtension
                 'result' => [['1']],
             ],
             [
+                'query' => 'SELECT table_name, tracking_active '
+                . 'FROM ( '
+                    . 'SELECT table_name, MAX(version) version '
+                    . "FROM `pmadb`.`tracking` WHERE db_name = 'dummyDb' AND table_name <> '' "
+                    . 'GROUP BY table_name '
+                . ') filtered_tables '
+                . 'JOIN `pmadb`.`tracking` USING(table_name, version)',
+                'columns' => ['table_name', 'tracking_active'],
+                'result' => [['0', '1'], ['actor', '0']],
+            ],
+            [
+                'query' => 'SHOW TABLES FROM `dummyDb`;',
+                'columns' => ['Tables_in_dummyDb'],
+                'result' => [['0'], ['actor'], ['untrackedTable']],
+            ],
+            [
                 'query' => 'SHOW TABLE STATUS FROM `PMA_db` WHERE `Name` LIKE \'PMA\\\\_table%\'',
                 'columns' => ['Name', 'Engine'],
                 'result' => [['PMA_table', 'InnoDB']],
@@ -2238,26 +1567,18 @@ class DbiDummy implements DbiExtension
                 'columns' => ['column'],
                 'result' => [['row1'], ['row2']],
             ],
+            ['query' => 'SELECT * FROM `PMA`.`table_1` LIMIT 1', 'columns' => ['column'], 'result' => [['table']]],
+            ['query' => 'SELECT * FROM `PMA`.`table_2` LIMIT 1', 'columns' => ['column'], 'result' => [['table']]],
             [
-                'query' => 'SELECT * FROM `PMA`.`table_1` LIMIT 1',
-                'columns' => ['column'],
-                'result' => [['table']],
-            ],
-            [
-                'query' => 'SELECT * FROM `PMA`.`table_2` LIMIT 1',
-                'columns' => ['column'],
-                'result' => [['table']],
-            ],
-            [
-                'query' => 'SELECT `ENGINE` FROM `information_schema`.`tables` WHERE `table_name` = "table_1"'
-                    . ' AND `table_schema` = "PMA" AND UPPER(`engine`)'
+                'query' => 'SELECT `ENGINE` FROM `information_schema`.`tables` WHERE `table_name` = \'table_1\''
+                    . ' AND `table_schema` = \'PMA\' AND UPPER(`engine`)'
                     . ' IN ("INNODB", "FALCON", "NDB", "INFINIDB", "TOKUDB", "XTRADB", "SEQUENCE", "BDB")',
                 'columns' => ['ENGINE'],
                 'result' => [['INNODB']],
             ],
             [
-                'query' => 'SELECT `ENGINE` FROM `information_schema`.`tables` WHERE `table_name` = "table_2"'
-                    . ' AND `table_schema` = "PMA" AND UPPER(`engine`)'
+                'query' => 'SELECT `ENGINE` FROM `information_schema`.`tables` WHERE `table_name` = \'table_2\''
+                    . ' AND `table_schema` = \'PMA\' AND UPPER(`engine`)'
                     . ' IN ("INNODB", "FALCON", "NDB", "INFINIDB", "TOKUDB", "XTRADB", "SEQUENCE", "BDB")',
                 'columns' => ['ENGINE'],
                 'result' => [['INNODB']],
@@ -2280,52 +1601,17 @@ class DbiDummy implements DbiExtension
             [
                 'query' => 'SHOW FULL COLUMNS FROM `testdb`.`mytable` LIKE \'\\\\_id\'',
                 'columns' => ['Field', 'Type', 'Collation', 'Null', 'Key', 'Default', 'Extra', 'Privileges', 'Comment'],
-                'result' => [
-                    [
-                        '_id',
-                        'tinyint(4)',
-                        null,
-                        'NO',
-                        '',
-                        null,
-                        '',
-                        'select,insert,update,references',
-                        '',
-                    ],
-                ],
+                'result' => [['_id', 'tinyint(4)', null, 'NO', '', null, '', 'select,insert,update,references', '']],
             ],
             [
                 'query' => 'SHOW FULL COLUMNS FROM `testdb`.`mytable`',
                 'columns' => ['Field', 'Type', 'Collation', 'Null', 'Key', 'Default', 'Extra', 'Privileges', 'Comment'],
                 'result' => [
-                    [
-                        'aid',
-                        'tinyint(4)',
-                        null,
-                        'NO',
-                        'PRI',
-                        null,
-                        '',
-                        'select,insert,update,references',
-                        '',
-                    ],
-                    [
-                        '_id',
-                        'tinyint(4)',
-                        null,
-                        'NO',
-                        '',
-                        null,
-                        '',
-                        'select,insert,update,references',
-                        '',
-                    ],
+                    ['aid', 'tinyint(4)', null, 'NO', 'PRI', null, '', 'select,insert,update,references', ''],
+                    ['_id', 'tinyint(4)', null, 'NO', '', null, '', 'select,insert,update,references', ''],
                 ],
             ],
-            [
-                'query' => 'SHOW INDEXES FROM `testdb`.`mytable`',
-                'result' => [],
-            ],
+            ['query' => 'SHOW INDEXES FROM `testdb`.`mytable`', 'result' => []],
             [
                 'query' => 'SHOW CREATE TABLE `testdb`.`mytable`',
                 'columns' => ['Table', 'Create Table'],
@@ -2340,16 +1626,7 @@ class DbiDummy implements DbiExtension
                     ],
                 ],
             ],
-            [
-                'query' => 'SELECT * FROM `testdb`.`mytable` LIMIT 1',
-                'columns' => ['aid', '_id'],
-                'result' => [
-                    [
-                        1,
-                        1,
-                    ],
-                ],
-            ],
+            ['query' => 'SELECT * FROM `testdb`.`mytable` LIMIT 1', 'columns' => ['aid','_id'], 'result' => [[1,1]]],
             [
                 'query' => 'SHOW CREATE TABLE `test_db`.`test_table`',
                 'columns' => ['Table', 'Create Table'],
@@ -2366,11 +1643,11 @@ class DbiDummy implements DbiExtension
             ],
             [
                 'query' => 'SHOW FULL COLUMNS FROM `test_db`.`test_table`',
-                'columns' => ['Field', 'Type', 'Null', 'Key', 'Default', 'Extra'],
+                'columns' => ['Field', 'Type', 'Collation', 'Null', 'Key', 'Default', 'Extra', 'Privileges', 'Comment'],
                 'result' => [
-                    ['id', 'int(11)', 'NO', 'PRI', 'NULL', 'auto_increment'],
-                    ['name', 'varchar(20)', 'NO', '', 'NULL', ''],
-                    ['datetimefield', 'datetime', 'NO', '', 'NULL', ''],
+                    ['id', 'int(11)', null, 'NO', 'PRI', 'NULL', 'auto_increment', '', ''],
+                    ['name', 'varchar(20)', null, 'NO', '', 'NULL', '', '', ''],
+                    ['datetimefield', 'datetime', null, 'NO', '', 'NULL', '', '', ''],
                 ],
             ],
             [
@@ -2411,10 +1688,10 @@ class DbiDummy implements DbiExtension
                 'query' => 'SELECT * FROM `test_db`.`test_table_yaml`;',
                 'columns' => ['id', 'name', 'datetimefield', 'textfield'],
                 'metadata' => [
-                    new FieldMetadata(MYSQLI_TYPE_DECIMAL, 0, (object) []),
-                    new FieldMetadata(MYSQLI_TYPE_STRING, 0, (object) []),
-                    new FieldMetadata(MYSQLI_TYPE_DATETIME, 0, (object) []),
-                    new FieldMetadata(MYSQLI_TYPE_STRING, 0, (object) []),
+                    FieldHelper::fromArray(['type' => MYSQLI_TYPE_DECIMAL]),
+                    FieldHelper::fromArray(['type' => MYSQLI_TYPE_STRING]),
+                    FieldHelper::fromArray(['type' => MYSQLI_TYPE_DATETIME]),
+                    FieldHelper::fromArray(['type' => MYSQLI_TYPE_STRING]),
                 ],
                 'result' => [
                     ['1', 'abcd', '2011-01-20 02:00:02', null],
@@ -2442,19 +1719,16 @@ class DbiDummy implements DbiExtension
                     ['', '0x1', 'шеллы', '0x2'],
                 ],
                 'metadata' => [
-                    new FieldMetadata(MYSQLI_TYPE_STRING, 0, (object) ['charsetnr' => 33]),
-                    new FieldMetadata(MYSQLI_TYPE_STRING, 0, (object) ['charsetnr' => 63]),
-                    new FieldMetadata(MYSQLI_TYPE_BLOB, 0, (object) ['charsetnr' => 23]),
-                    new FieldMetadata(MYSQLI_TYPE_BLOB, 0, (object) ['charsetnr' => 63]),
+                    FieldHelper::fromArray(['type' => MYSQLI_TYPE_STRING, 'charsetnr' => 33]),
+                    FieldHelper::fromArray(['type' => MYSQLI_TYPE_STRING, 'charsetnr' => 63]),
+                    FieldHelper::fromArray(['type' => MYSQLI_TYPE_BLOB, 'charsetnr' => 23]),
+                    FieldHelper::fromArray(['type' => MYSQLI_TYPE_BLOB, 'charsetnr' => 63]),
                 ],
             ],
             [
                 'query' => 'SHOW PROCEDURE STATUS;',
                 'columns' => ['Db', 'Name', 'Type'],
-                'result' => [
-                    ['test_db', 'test_proc1', 'PROCEDURE'],
-                    ['test_db', 'test_proc2', 'PROCEDURE'],
-                ],
+                'result' => [['test_db', 'test_proc1', 'PROCEDURE'], ['test_db', 'test_proc2', 'PROCEDURE']],
             ],
             [
                 'query' => 'SHOW FUNCTION STATUS;',
@@ -2476,34 +1750,13 @@ class DbiDummy implements DbiExtension
                 'columns' => ['Function', 'Create Function'],
                 'result' => [['test_func', 'CREATE FUNCTION `test_func` (p INT) RETURNS int(11) BEGIN END']],
             ],
-            [
-                'query' => 'USE `test_db`',
-                'result' => [],
-            ],
-            [
-                'query' => 'SET SQL_QUOTE_SHOW_CREATE = 0',
-                'result' => [],
-            ],
-            [
-                'query' => 'SET SQL_QUOTE_SHOW_CREATE = 1',
-                'result' => [],
-            ],
-            [
-                'query' => 'UPDATE `test_tbl` SET `vc` = \'…zff s sf\' WHERE `test`.`ser` = 2',
-                'result' => [],
-            ],
-            [
-                'query' => 'UPDATE `test_tbl` SET `vc` = \'…ss s s\' WHERE `test`.`ser` = 1',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT LAST_INSERT_ID();',
-                'result' => [],
-            ],
-            [
-                'query' => 'SHOW WARNINGS',
-                'result' => [],
-            ],
+            ['query' => 'USE `test_db`', 'result' => []],
+            ['query' => 'SET SQL_QUOTE_SHOW_CREATE = 0', 'result' => []],
+            ['query' => 'SET SQL_QUOTE_SHOW_CREATE = 1', 'result' => []],
+            ['query' => 'UPDATE `test_tbl` SET `vc` = \'…zff s sf\' WHERE `test`.`ser` = 2', 'result' => []],
+            ['query' => 'UPDATE `test_tbl` SET `vc` = \'…ss s s\' WHERE `test`.`ser` = 1', 'result' => []],
+            ['query' => 'SELECT LAST_INSERT_ID();', 'result' => []],
+            ['query' => 'SHOW WARNINGS', 'result' => []],
             [
                 'query' => 'SELECT * FROM `information_schema`.`bookmark` WHERE dbase = \'my_db\''
                 . ' AND (user = \'user\') AND `label` = \'test_tbl\' LIMIT 1',
@@ -2514,61 +1767,29 @@ class DbiDummy implements DbiExtension
                 . ' AND `db_name` = \'my_db\' AND `table_name` = \'test_tbl\'',
                 'result' => [],
             ],
-            [
-                'query' => 'SELECT DATABASE()',
-                'result' => [],
-            ],
+            ['query' => 'SELECT DATABASE()', 'result' => []],
             [
                 'query' => 'SELECT * FROM `test_tbl` LIMIT 0, 25',
                 'columns' => ['vc', 'text', 'ser'],
-                'result' => [
-                    [
-                        'sss s s  ',
-                        '…z',
-                        '1',
-                    ],
-                    [
-                        'zzff s sf',
-                        '…zff',
-                        '2',
-                    ],
-                ],
+                'result' => [['sss s s  ', '…z', '1'], ['zzff s sf', '…zff', '2']],
             ],
+            ['query' => 'SELECT @@have_profiling', 'result' => []],
             [
-                'query' => 'SELECT @@have_profiling',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT TABLE_NAME FROM information_schema.VIEWS'
+                'query' => 'SELECT 1 FROM information_schema.VIEWS'
                     . ' WHERE TABLE_SCHEMA = \'my_db\' AND TABLE_NAME = \'test_tbl\'',
                 'result' => [],
             ],
-            [
-                'query' => 'SHOW FULL COLUMNS FROM `my_db`.`test_tbl`',
-                'result' => [],
-            ],
-            [
-                'query' => 'SHOW TABLE STATUS FROM `my_db` WHERE `Name` LIKE \'test\\\\_tbl%\'',
-                'result' => [],
-            ],
-            [
-                'query' => 'SHOW CREATE TABLE `my_db`.`test_tbl`',
-                'result' => [],
-            ],
-            [
-                'query' => 'SELECT COUNT(*) FROM `my_db`.`test_tbl`',
-                'result' => [],
-            ],
+            ['query' => 'SHOW FULL COLUMNS FROM `my_db`.`test_tbl`', 'result' => []],
+            ['query' => 'SHOW TABLE STATUS FROM `my_db` WHERE `Name` LIKE \'test\\\\_tbl%\'', 'result' => []],
+            ['query' => 'SHOW CREATE TABLE `my_db`.`test_tbl`', 'result' => []],
+            ['query' => 'SELECT COUNT(*) FROM `my_db`.`test_tbl`', 'result' => []],
             [
                 'query' => 'SELECT `master_field`, `foreign_db`, `foreign_table`, `foreign_field`'
                 . ' FROM `information_schema`.`relation`'
                 . ' WHERE `master_db` = \'my_db\' AND `master_table` = \'test_tbl\'',
                 'result' => [],
             ],
-            [
-                'query' => 'SELECT `test_tbl`.`vc` FROM `my_db`.`test_tbl` WHERE `test`.`ser` = 2',
-                'result' => [],
-            ],
+            ['query' => 'SELECT `test_tbl`.`vc` FROM `my_db`.`test_tbl` WHERE `test`.`ser` = 2', 'result' => []],
             [
                 'query' => 'SELECT * FROM `pmadb`.`usergroups` ORDER BY `usergroup` ASC',
                 'columns' => ['usergroup', 'tab', 'allowed'],
@@ -2584,9 +1805,9 @@ class DbiDummy implements DbiExtension
                 ],
             ],
             [
-                'query' => 'SELECT * FROM `test_table` WHERE `id` = 4;',
-                'columns' => ['id', 'name', 'datetimefield'],
-                'result' => [['4', '101', '2013-01-20 02:00:02']],
+                'query' => 'SELECT `name` FROM `test_table` WHERE `id` = 4',
+                'columns' => ['name'],
+                'result' => [['101']],
             ],
             [
                 'query' => 'SELECT * FROM `mysql`.`user` WHERE `User` = \'username\' AND `Host` = \'hostname\';',
@@ -2597,125 +1818,49 @@ class DbiDummy implements DbiExtension
                 'query' => 'SELECT COUNT(*) FROM (SELECT 1 FROM company_users WHERE not_working_count != 0 ) as cnt',
                 'result' => false,
             ],
-            [
-                'query' => 'SELECT COUNT(*) FROM (SELECT 1 FROM company_users ) as cnt',
-                'result' => [
-                    [4],
-                ],
-            ],
+            ['query' => 'SELECT COUNT(*) FROM (SELECT 1 FROM company_users ) as cnt', 'result' => [[4]]],
             [
                 'query' => 'SELECT COUNT(*) FROM (SELECT 1 FROM company_users WHERE working_count = 0 ) as cnt',
-                'result' => [
-                    [15],
-                ],
+                'result' => [[15]],
             ],
-            [
-                'query' => 'SELECT COUNT(*) FROM `my_dataset`.`company_users`',
-                'result' => [
-                    [18],
-                ],
-            ],
+            ['query' => 'SELECT COUNT(*) FROM `my_dataset`.`company_users`', 'result' => [[18]]],
             [
                 'query' => 'SELECT COUNT(*) FROM ('
                 . 'SELECT *, 1, (SELECT COUNT(*) FROM tbl1) AS `c1`, '
                 . '(SELECT 1 FROM tbl2) AS `c2` FROM company_users WHERE subquery_case = 0 ) as cnt',
-                'result' => [
-                    [42],
-                ],
+                'result' => [[42]],
             ],
             [
                 'query' => 'CREATE TABLE `event` SELECT DISTINCT `eventID`, `Start_time`,'
                 . ' `DateOfEvent`, `NumberOfGuests`, `NameOfVenue`, `LocationOfVenue` FROM `test_tbl`;',
                 'result' => [],
             ],
-            [
-                'query' => 'ALTER TABLE `event` ADD PRIMARY KEY(`eventID`);',
-                'result' => [],
-            ],
+            ['query' => 'ALTER TABLE `event` ADD PRIMARY KEY(`eventID`);', 'result' => []],
             [
                 'query' => 'CREATE TABLE `table2` SELECT DISTINCT `Start_time`,'
                             . ' `TypeOfEvent`, `period` FROM `test_tbl`;',
                 'result' => [],
             ],
-            [
-                'query' => 'ALTER TABLE `table2` ADD PRIMARY KEY(`Start_time`);',
-                'result' => [],
-            ],
-            [
-                'query' => 'DROP TABLE `test_tbl`',
-                'result' => [],
-            ],
-            [
-                'query' => 'CREATE TABLE `batch_log2` SELECT DISTINCT `ID`, `task` FROM `test_tbl`;',
-                'result' => [],
-            ],
-            [
-                'query' => 'ALTER TABLE `batch_log2` ADD PRIMARY KEY(`ID`, `task`);',
-                'result' => [],
-            ],
-            [
-                'query' => 'CREATE TABLE `table2` SELECT DISTINCT `task`, `timestamp` FROM `test_tbl`;',
-                'result' => [],
-            ],
-            [
-                'query' => 'ALTER TABLE `table2` ADD PRIMARY KEY(`task`);',
-                'result' => [],
-            ],
-            [
-                'query' => 'CREATE DATABASE `test_db_error`;',
-                'result' => false,
-            ],
-            [
-                'query' => 'CREATE DATABASE `test_db` DEFAULT CHARSET=utf8 COLLATE utf8_general_ci;',
-                'result' => [],
-            ],
+            ['query' => 'ALTER TABLE `table2` ADD PRIMARY KEY(`Start_time`);', 'result' => []],
+            ['query' => 'DROP TABLE `test_tbl`', 'result' => []],
+            ['query' => 'CREATE TABLE `batch_log2` SELECT DISTINCT `ID`, `task` FROM `test_tbl`;', 'result' => []],
+            ['query' => 'ALTER TABLE `batch_log2` ADD PRIMARY KEY(`ID`, `task`);', 'result' => []],
+            ['query' => 'CREATE TABLE `table2` SELECT DISTINCT `task`, `timestamp` FROM `test_tbl`;', 'result' => []],
+            ['query' => 'ALTER TABLE `table2` ADD PRIMARY KEY(`task`);', 'result' => []],
+            ['query' => 'CREATE DATABASE `test_db_error`;', 'result' => false],
+            ['query' => 'CREATE DATABASE `test_db` DEFAULT CHARSET=utf8 COLLATE utf8_general_ci;', 'result' => []],
             [
                 'query' => 'SHOW TABLE STATUS FROM `test_db`',
-                'columns' => [
-                    'Name',
-                    'Engine',
-                    'Version',
-                    'Row_format',
-                    'Rows',
-                    'Avg_row_length',
-                    'Data_length',
-                    'Max_data_length',
-                    'Index_length',
-                    'Data_free',
-                    'Auto_increment',
-                    'Create_time',
-                    'Update_time',
-                    'Check_time',
-                    'Collation',
-                    'Checksum',
-                    'Create_options',
-                    'Comment',
-                    'Max_index_length',
-                    'Temporary',
-                ],
+                'columns' => ['Name', 'Engine', 'Version', 'Row_format', 'Rows', 'Avg_row_length', 'Data_length', 'Max_data_length', 'Index_length', 'Data_free', 'Auto_increment', 'Create_time', 'Update_time', 'Check_time', 'Collation', 'Checksum', 'Create_options', 'Comment', 'Max_index_length', 'Temporary'],
                 'result' => [
-                    [
-                        'test_table',
-                        'InnoDB',
-                        '10',
-                        'Dynamic',
-                        '3',
-                        '5461',
-                        '16384',
-                        '0',
-                        '0',
-                        '0',
-                        '4',
-                        '2011-12-13 14:15:16',
-                        null,
-                        null,
-                        'utf8mb4_general_ci',
-                        null,
-                        '',
-                        '',
-                        '0',
-                        'N',
-                    ],
+                    ['test_table', 'InnoDB', '10', 'Dynamic', '3', '5461', '16384', '0', '0', '0', '4', '2011-12-13 14:15:16', null, null, 'utf8mb4_general_ci', null, '', '', '0', 'N'],
+                ],
+            ],
+            [
+                'query' => 'SHOW TABLE STATUS FROM `test_db` WHERE `Name` IN (\'test_table\')',
+                'columns' => ['Name', 'Engine', 'Version', 'Row_format', 'Rows', 'Avg_row_length', 'Data_length', 'Max_data_length', 'Index_length', 'Data_free', 'Auto_increment', 'Create_time', 'Update_time', 'Check_time', 'Collation', 'Checksum', 'Create_options', 'Comment', 'Max_index_length', 'Temporary'],
+                'result' => [
+                    ['test_table', 'InnoDB', '10', 'Dynamic', '3', '5461', '16384', '0', '0', '0', '4', '2011-12-13 14:15:16', null, null, 'utf8mb4_general_ci', null, '', '', '0', 'N'],
                 ],
             ],
             [
@@ -2729,7 +1874,7 @@ class DbiDummy implements DbiExtension
                     . ' `CHECK_TIME` AS `Check_time`, `TABLE_COLLATION` AS `Collation`,'
                     . ' `CHECKSUM` AS `Checksum`, `CREATE_OPTIONS` AS `Create_options`,'
                     . ' `TABLE_COMMENT` AS `Comment` FROM `information_schema`.`TABLES` t'
-                    . ' WHERE `TABLE_SCHEMA` IN (\'test_db\') ORDER BY Name ASC',
+                    . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin IN (\'test_db\') ORDER BY Name ASC',
                 'columns' => [
                     'TABLE_CATALOG',
                     'TABLE_SCHEMA',
@@ -2836,7 +1981,8 @@ class DbiDummy implements DbiExtension
                     . ' `CHECK_TIME` AS `Check_time`, `TABLE_COLLATION` AS `Collation`,'
                     . ' `CHECKSUM` AS `Checksum`, `CREATE_OPTIONS` AS `Create_options`,'
                     . ' `TABLE_COMMENT` AS `Comment` FROM `information_schema`.`TABLES` t'
-                    . ' WHERE `TABLE_SCHEMA` IN (\'test_db\') AND t.`TABLE_NAME` IN (\'test_table\') ORDER BY Name ASC',
+                    . ' WHERE `TABLE_SCHEMA` COLLATE utf8_bin IN (\'test_db\')'
+                    . ' AND t.`TABLE_NAME` COLLATE utf8_bin IN (\'test_table\') ORDER BY Name ASC',
                 'columns' => [
                     'TABLE_CATALOG',
                     'TABLE_SCHEMA',

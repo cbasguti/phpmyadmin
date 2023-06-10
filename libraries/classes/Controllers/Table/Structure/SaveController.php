@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Controllers\Table\Structure;
 
 use PhpMyAdmin\ConfigStorage\Relation;
-use PhpMyAdmin\Controllers\Table\AbstractController;
+use PhpMyAdmin\Controllers\AbstractController;
 use PhpMyAdmin\Controllers\Table\StructureController;
 use PhpMyAdmin\Core;
 use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Html\Generator;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Index;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\ResponseRenderer;
@@ -30,41 +31,22 @@ use function strlen;
 
 final class SaveController extends AbstractController
 {
-    /** @var Table  The table object */
-    private $tableObj;
-
-    /** @var Relation */
-    private $relation;
-
-    /** @var Transformations */
-    private $transformations;
-
-    /** @var DatabaseInterface */
-    private $dbi;
-
-    /** @var StructureController */
-    private $structureController;
+    private Table $tableObj;
 
     public function __construct(
         ResponseRenderer $response,
         Template $template,
-        string $db,
-        string $table,
-        Relation $relation,
-        Transformations $transformations,
-        DatabaseInterface $dbi,
-        StructureController $structureController
+        private Relation $relation,
+        private Transformations $transformations,
+        private DatabaseInterface $dbi,
+        private StructureController $structureController,
     ) {
-        parent::__construct($response, $template, $db, $table);
-        $this->relation = $relation;
-        $this->transformations = $transformations;
-        $this->dbi = $dbi;
-        $this->structureController = $structureController;
+        parent::__construct($response, $template);
 
-        $this->tableObj = $this->dbi->getTable($this->db, $this->table);
+        $this->tableObj = $this->dbi->getTable($GLOBALS['db'], $GLOBALS['table']);
     }
 
-    public function __invoke(): void
+    public function __invoke(ServerRequest $request): void
     {
         $regenerate = $this->updateColumns();
         if (! $regenerate) {
@@ -72,7 +54,7 @@ final class SaveController extends AbstractController
             unset($_POST['selected']);
         }
 
-        ($this->structureController)();
+        ($this->structureController)($request);
     }
 
     /**
@@ -82,18 +64,15 @@ final class SaveController extends AbstractController
      */
     private function updateColumns(): bool
     {
-        $err_url = Url::getFromRoute('/table/structure', [
-            'db' => $this->db,
-            'table' => $this->table,
-        ]);
+        $errUrl = Url::getFromRoute('/table/structure', ['db' => $GLOBALS['db'], 'table' => $GLOBALS['table']]);
         $regenerate = false;
-        $field_cnt = count($_POST['field_name'] ?? []);
+        $fieldCnt = count($_POST['field_name'] ?? []);
         $changes = [];
-        $adjust_privileges = [];
-        $columns_with_index = $this->dbi
-            ->getTable($this->db, $this->table)
+        $adjustPrivileges = [];
+        $columnsWithIndex = $this->dbi
+            ->getTable($GLOBALS['db'], $GLOBALS['table'])
             ->getColumnsWithIndex(Index::PRIMARY | Index::UNIQUE);
-        for ($i = 0; $i < $field_cnt; $i++) {
+        for ($i = 0; $i < $fieldCnt; $i++) {
             if (! $this->columnNeedsAlterTable($i)) {
                 continue;
             }
@@ -108,36 +87,35 @@ final class SaveController extends AbstractController
                 Util::getValueByKey($_POST, 'field_null.' . $i, 'NO'),
                 $_POST['field_default_type'][$i],
                 $_POST['field_default_value'][$i],
-                Util::getValueByKey($_POST, 'field_extra.' . $i, false),
+                Util::getValueByKey($_POST, 'field_extra.' . $i, ''),
                 Util::getValueByKey($_POST, 'field_comments.' . $i, ''),
                 Util::getValueByKey($_POST, 'field_virtuality.' . $i, ''),
                 Util::getValueByKey($_POST, 'field_expression.' . $i, ''),
                 Util::getValueByKey($_POST, 'field_move_to.' . $i, ''),
-                $columns_with_index
+                $columnsWithIndex,
             );
 
             // find the remembered sort expression
-            $sorted_col = $this->tableObj->getUiProp(Table::PROP_SORTED_COLUMN);
+            $sortedCol = $this->tableObj->getUiProp(Table::PROP_SORTED_COLUMN);
             // if the old column name is part of the remembered sort expression
-            if (mb_strpos((string) $sorted_col, Util::backquote($_POST['field_orig'][$i])) !== false) {
+            if (mb_strpos((string) $sortedCol, Util::backquote($_POST['field_orig'][$i])) !== false) {
                 // delete the whole remembered sort expression
                 $this->tableObj->removeUiProp(Table::PROP_SORTED_COLUMN);
             }
 
             if (
-                ! isset($_POST['field_adjust_privileges'][$i])
-                || empty($_POST['field_adjust_privileges'][$i])
+                empty($_POST['field_adjust_privileges'][$i])
                 || $_POST['field_orig'][$i] == $_POST['field_name'][$i]
             ) {
                 continue;
             }
 
-            $adjust_privileges[$_POST['field_orig'][$i]] = $_POST['field_name'][$i];
+            $adjustPrivileges[$_POST['field_orig'][$i]] = $_POST['field_name'][$i];
         }
 
-        if (count($changes) > 0 || isset($_POST['preview_sql'])) {
+        if ($changes !== [] || isset($_POST['preview_sql'])) {
             // Builds the primary keys statements and updates the table
-            $key_query = '';
+            $keyQuery = '';
             /**
              * this is a little bit more complex
              *
@@ -148,58 +126,58 @@ final class SaveController extends AbstractController
 
             // To allow replication, we first select the db to use
             // and then run queries on this db.
-            if (! $this->dbi->selectDb($this->db)) {
+            if (! $this->dbi->selectDb($GLOBALS['db'])) {
                 Generator::mysqlDie(
                     $this->dbi->getError(),
-                    'USE ' . Util::backquote($this->db) . ';',
+                    'USE ' . Util::backquote($GLOBALS['db']) . ';',
                     false,
-                    $err_url
+                    $errUrl,
                 );
             }
 
-            $sql_query = 'ALTER TABLE ' . Util::backquote($this->table) . ' ';
-            $sql_query .= implode(', ', $changes) . $key_query;
+            $sqlQuery = 'ALTER TABLE ' . Util::backquote($GLOBALS['table']) . ' ';
+            $sqlQuery .= implode(', ', $changes) . $keyQuery;
             if (isset($_POST['online_transaction'])) {
-                $sql_query .= ', ALGORITHM=INPLACE, LOCK=NONE';
+                $sqlQuery .= ', ALGORITHM=INPLACE, LOCK=NONE';
             }
 
-            $sql_query .= ';';
+            $sqlQuery .= ';';
 
             // If there is a request for SQL previewing.
             if (isset($_POST['preview_sql'])) {
-                Core::previewSQL(count($changes) > 0 ? $sql_query : '');
+                Core::previewSQL($changes !== [] ? $sqlQuery : '');
 
-                exit;
+                $this->response->callExit();
             }
 
-            $columns_with_index = $this->dbi
-                ->getTable($this->db, $this->table)
+            $columnsWithIndex = $this->dbi
+                ->getTable($GLOBALS['db'], $GLOBALS['table'])
                 ->getColumnsWithIndex(Index::PRIMARY | Index::UNIQUE | Index::INDEX | Index::SPATIAL | Index::FULLTEXT);
 
             $changedToBlob = [];
             // While changing the Column Collation
             // First change to BLOB
-            for ($i = 0; $i < $field_cnt; $i++) {
+            for ($i = 0; $i < $fieldCnt; $i++) {
                 if (
                     isset($_POST['field_collation'][$i], $_POST['field_collation_orig'][$i])
                     && $_POST['field_collation'][$i] !== $_POST['field_collation_orig'][$i]
-                    && ! in_array($_POST['field_orig'][$i], $columns_with_index)
+                    && ! in_array($_POST['field_orig'][$i], $columnsWithIndex)
                 ) {
-                    $secondary_query = 'ALTER TABLE ' . Util::backquote($this->table)
+                    $secondaryQuery = 'ALTER TABLE ' . Util::backquote($GLOBALS['table'])
                         . ' CHANGE ' . Util::backquote($_POST['field_orig'][$i])
                         . ' ' . Util::backquote($_POST['field_orig'][$i])
                         . ' BLOB';
 
                     if (isset($_POST['field_virtuality'][$i], $_POST['field_expression'][$i])) {
                         if ($_POST['field_virtuality'][$i]) {
-                            $secondary_query .= ' AS (' . $_POST['field_expression'][$i] . ') '
+                            $secondaryQuery .= ' AS (' . $_POST['field_expression'][$i] . ') '
                                 . $_POST['field_virtuality'][$i];
                         }
                     }
 
-                    $secondary_query .= ';';
+                    $secondaryQuery .= ';';
 
-                    $this->dbi->query($secondary_query);
+                    $this->dbi->query($secondaryQuery);
                     $changedToBlob[$i] = true;
                 } else {
                     $changedToBlob[$i] = false;
@@ -207,42 +185,42 @@ final class SaveController extends AbstractController
             }
 
             // Then make the requested changes
-            $result = $this->dbi->tryQuery($sql_query);
+            $result = $this->dbi->tryQuery($sqlQuery);
 
             if ($result !== false) {
-                $changed_privileges = $this->adjustColumnPrivileges($adjust_privileges);
+                $changedPrivileges = $this->adjustColumnPrivileges($adjustPrivileges);
 
-                if ($changed_privileges) {
+                if ($changedPrivileges) {
                     $message = Message::success(
                         __(
-                            'Table %1$s has been altered successfully. Privileges have been adjusted.'
-                        )
+                            'Table %1$s has been altered successfully. Privileges have been adjusted.',
+                        ),
                     );
                 } else {
                     $message = Message::success(
-                        __('Table %1$s has been altered successfully.')
+                        __('Table %1$s has been altered successfully.'),
                     );
                 }
 
-                $message->addParam($this->table);
+                $message->addParam($GLOBALS['table']);
 
                 $this->response->addHTML(
-                    Generator::getMessage($message, $sql_query, 'success')
+                    Generator::getMessage($message, $sqlQuery, 'success'),
                 );
             } else {
                 // An error happened while inserting/updating a table definition
 
                 // Save the Original Error
-                $orig_error = $this->dbi->getError();
-                $changes_revert = [];
+                $origError = $this->dbi->getError();
+                $changesRevert = [];
 
                 // Change back to Original Collation and data type
-                for ($i = 0; $i < $field_cnt; $i++) {
+                for ($i = 0; $i < $fieldCnt; $i++) {
                     if (! $changedToBlob[$i]) {
                         continue;
                     }
 
-                    $changes_revert[] = 'CHANGE ' . Table::generateAlter(
+                    $changesRevert[] = 'CHANGE ' . Table::generateAlter(
                         Util::getValueByKey($_POST, 'field_orig.' . $i, ''),
                         $_POST['field_name'][$i],
                         $_POST['field_type_orig'][$i],
@@ -252,28 +230,28 @@ final class SaveController extends AbstractController
                         Util::getValueByKey($_POST, 'field_null_orig.' . $i, 'NO'),
                         $_POST['field_default_type_orig'][$i],
                         $_POST['field_default_value_orig'][$i],
-                        Util::getValueByKey($_POST, 'field_extra_orig.' . $i, false),
+                        Util::getValueByKey($_POST, 'field_extra_orig.' . $i, ''),
                         Util::getValueByKey($_POST, 'field_comments_orig.' . $i, ''),
                         Util::getValueByKey($_POST, 'field_virtuality_orig.' . $i, ''),
                         Util::getValueByKey($_POST, 'field_expression_orig.' . $i, ''),
-                        Util::getValueByKey($_POST, 'field_move_to_orig.' . $i, '')
+                        Util::getValueByKey($_POST, 'field_move_to_orig.' . $i, ''),
                     );
                 }
 
-                $revert_query = 'ALTER TABLE ' . Util::backquote($this->table)
+                $revertQuery = 'ALTER TABLE ' . Util::backquote($GLOBALS['table'])
                     . ' ';
-                $revert_query .= implode(', ', $changes_revert) . '';
-                $revert_query .= ';';
+                $revertQuery .= implode(', ', $changesRevert);
+                $revertQuery .= ';';
 
                 // Column reverted back to original
-                $this->dbi->query($revert_query);
+                $this->dbi->query($revertQuery);
 
                 $this->response->setRequestStatus(false);
                 $message = Message::rawError(
-                    __('Query error') . ':<br>' . $orig_error
+                    __('Query error') . ':<br>' . $origError,
                 );
                 $this->response->addHTML(
-                    Generator::getMessage($message, $sql_query, 'error')
+                    Generator::getMessage($message, $sqlQuery, 'error'),
                 );
                 $regenerate = true;
             }
@@ -286,7 +264,12 @@ final class SaveController extends AbstractController
                     continue;
                 }
 
-                $this->relation->renameField($this->db, $this->table, $fieldcontent, $_POST['field_name'][$fieldindex]);
+                $this->relation->renameField(
+                    $GLOBALS['db'],
+                    $GLOBALS['table'],
+                    $fieldcontent,
+                    $_POST['field_name'][$fieldindex],
+                );
             }
         }
 
@@ -298,14 +281,14 @@ final class SaveController extends AbstractController
                 }
 
                 $this->transformations->setMime(
-                    $this->db,
-                    $this->table,
+                    $GLOBALS['db'],
+                    $GLOBALS['table'],
                     $_POST['field_name'][$fieldindex],
                     $mimetype,
                     $_POST['field_transformation'][$fieldindex],
                     $_POST['field_transformation_options'][$fieldindex],
                     $_POST['field_input_transformation'][$fieldindex],
-                    $_POST['field_input_transformation_options'][$fieldindex]
+                    $_POST['field_input_transformation_options'][$fieldindex],
                 );
             }
         }
@@ -318,7 +301,7 @@ final class SaveController extends AbstractController
      *
      * @param int $i column index in the request
      */
-    private function columnNeedsAlterTable($i): bool
+    private function columnNeedsAlterTable(int $i): bool
     {
         // these two fields are checkboxes so might not be part of the
         // request; therefore we define them to avoid notices below
@@ -358,21 +341,18 @@ final class SaveController extends AbstractController
     /**
      * Adjusts the Privileges for all the columns whose names have changed
      *
-     * @param array $adjust_privileges assoc array of old col names mapped to new
+     * @param mixed[] $adjustPrivileges assoc array of old col names mapped to new
      *                                 cols
      */
-    private function adjustColumnPrivileges(array $adjust_privileges): bool
+    private function adjustColumnPrivileges(array $adjustPrivileges): bool
     {
         $changed = false;
 
-        if (
-            Util::getValueByKey($GLOBALS, 'col_priv', false)
-            && Util::getValueByKey($GLOBALS, 'is_reload_priv', false)
-        ) {
+        if (($GLOBALS['col_priv'] ?? false) && ($GLOBALS['is_reload_priv'] ?? false)) {
             $this->dbi->selectDb('mysql');
 
             // For Column specific privileges
-            foreach ($adjust_privileges as $oldCol => $newCol) {
+            foreach ($adjustPrivileges as $oldCol => $newCol) {
                 $this->dbi->query(
                     sprintf(
                         'UPDATE %s SET Column_name = "%s"
@@ -381,10 +361,10 @@ final class SaveController extends AbstractController
                         AND Column_name = "%s";',
                         Util::backquote('columns_priv'),
                         $newCol,
-                        $this->db,
-                        $this->table,
-                        $oldCol
-                    )
+                        $GLOBALS['db'],
+                        $GLOBALS['table'],
+                        $oldCol,
+                    ),
                 );
 
                 // i.e. if atleast one column privileges adjusted

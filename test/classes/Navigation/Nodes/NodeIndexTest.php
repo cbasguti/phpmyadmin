@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Navigation\Nodes;
 
-use PhpMyAdmin\Navigation\NodeFactory;
+use PhpMyAdmin\Navigation\Nodes\NodeIndex;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Navigation\Nodes\NodeIndex
- */
+#[CoversClass(NodeIndex::class)]
 class NodeIndexTest extends AbstractTestCase
 {
     /**
@@ -18,6 +17,8 @@ class NodeIndexTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 0;
     }
 
@@ -26,14 +27,13 @@ class NodeIndexTest extends AbstractTestCase
      */
     public function testConstructor(): void
     {
-        $parent = NodeFactory::getInstance('NodeIndex');
-        $this->assertIsArray($parent->links);
+        $parent = new NodeIndex('default');
         $this->assertEquals(
             [
                 'text' => ['route' => '/table/indexes', 'params' => ['db' => null, 'table' => null, 'index' => null]],
                 'icon' => ['route' => '/table/indexes', 'params' => ['db' => null, 'table' => null, 'index' => null]],
             ],
-            $parent->links
+            $parent->links,
         );
     }
 }

@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Plugins\Schema\Svg;
 
 use PhpMyAdmin\Plugins\Schema\RelationStats;
+use PhpMyAdmin\Plugins\Schema\TableStats;
 
 use function shuffle;
 use function sqrt;
@@ -25,21 +26,22 @@ use function sqrt;
 class RelationStatsSvg extends RelationStats
 {
     /**
-     * @param Svg    $diagram       The SVG diagram
-     * @param string $master_table  The master table name
-     * @param string $master_field  The relation field in the master table
-     * @param string $foreign_table The foreign table name
-     * @param string $foreign_field The relation field in the foreign table
+     * @param Svg        $diagram      The SVG diagram
+     * @param TableStats $masterTable  The master table name
+     * @param string     $masterField  The relation field in the master table
+     * @param TableStats $foreignTable The foreign table name
+     * @param string     $foreignField The relation field in the foreign table
      */
     public function __construct(
-        $diagram,
-        $master_table,
-        $master_field,
-        $foreign_table,
-        $foreign_field
+        Svg $diagram,
+        TableStats $masterTable,
+        string $masterField,
+        TableStats $foreignTable,
+        string $foreignField,
     ) {
         $this->wTick = 10;
-        parent::__construct($diagram, $master_table, $master_field, $foreign_table, $foreign_field);
+
+        parent::__construct($diagram, $masterTable, $masterField, $foreignTable, $foreignField);
     }
 
     /**
@@ -49,18 +51,10 @@ class RelationStatsSvg extends RelationStats
      *
      * @param bool $showColor Whether to use one color per relation or not
      */
-    public function relationDraw($showColor): void
+    public function relationDraw(bool $showColor): void
     {
         if ($showColor) {
-            $listOfColors = [
-                '#c00',
-                '#bbb',
-                '#333',
-                '#cb0',
-                '#0b0',
-                '#0bf',
-                '#b0b',
-            ];
+            $listOfColors = ['#c00', '#bbb', '#333', '#cb0', '#0b0', '#0bf', '#b0b'];
             shuffle($listOfColors);
             $color = $listOfColors[0];
         } else {
@@ -73,7 +67,7 @@ class RelationStatsSvg extends RelationStats
             $this->ySrc,
             $this->xSrc + $this->srcDir * $this->wTick,
             $this->ySrc,
-            'stroke:' . $color . ';stroke-width:1;'
+            'stroke:' . $color . ';stroke-width:1;',
         );
         $this->diagram->printElementLine(
             'line',
@@ -81,7 +75,7 @@ class RelationStatsSvg extends RelationStats
             $this->yDest,
             $this->xDest,
             $this->yDest,
-            'stroke:' . $color . ';stroke-width:1;'
+            'stroke:' . $color . ';stroke-width:1;',
         );
         $this->diagram->printElementLine(
             'line',
@@ -89,7 +83,7 @@ class RelationStatsSvg extends RelationStats
             $this->ySrc,
             $this->xDest + $this->destDir * $this->wTick,
             $this->yDest,
-            'stroke:' . $color . ';stroke-width:1;'
+            'stroke:' . $color . ';stroke-width:1;',
         );
         $root2 = 2 * sqrt(2);
         $this->diagram->printElementLine(
@@ -98,7 +92,7 @@ class RelationStatsSvg extends RelationStats
             $this->ySrc,
             $this->xSrc + $this->srcDir * (0.75 - 1 / $root2) * $this->wTick,
             $this->ySrc + $this->wTick / $root2,
-            'stroke:' . $color . ';stroke-width:2;'
+            'stroke:' . $color . ';stroke-width:2;',
         );
         $this->diagram->printElementLine(
             'line',
@@ -106,7 +100,7 @@ class RelationStatsSvg extends RelationStats
             $this->ySrc,
             $this->xSrc + $this->srcDir * (0.75 - 1 / $root2) * $this->wTick,
             $this->ySrc - $this->wTick / $root2,
-            'stroke:' . $color . ';stroke-width:2;'
+            'stroke:' . $color . ';stroke-width:2;',
         );
         $this->diagram->printElementLine(
             'line',
@@ -114,7 +108,7 @@ class RelationStatsSvg extends RelationStats
             $this->yDest,
             $this->xDest + $this->destDir * (0.5 + 1 / $root2) * $this->wTick,
             $this->yDest + $this->wTick / $root2,
-            'stroke:' . $color . ';stroke-width:2;'
+            'stroke:' . $color . ';stroke-width:2;',
         );
         $this->diagram->printElementLine(
             'line',
@@ -122,7 +116,7 @@ class RelationStatsSvg extends RelationStats
             $this->yDest,
             $this->xDest + $this->destDir * (0.5 + 1 / $root2) * $this->wTick,
             $this->yDest - $this->wTick / $root2,
-            'stroke:' . $color . ';stroke-width:2;'
+            'stroke:' . $color . ';stroke-width:2;',
         );
     }
 }

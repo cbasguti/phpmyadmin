@@ -5,6 +5,8 @@
     reportMixedIssues="true"
     sealAllMethods="true"
     resolveFromConfigFile="true"
+    findUnusedBaselineEntry="true"
+    findUnusedCode="true"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns="https://getpsalm.org/schema/config"
     xsi:schemaLocation="https://getpsalm.org/schema/config vendor/vimeo/psalm/config.xsd"
@@ -12,13 +14,11 @@
 >
     <projectFiles>
         <directory name="libraries"/>
-        <directory name="setup"/>
+        <directory name="public/setup"/>
         <directory name="test/classes"/>
         <directory name="test/selenium"/>
-        <file name="js/messages.php"/>
-        <file name="index.php"/>
-        <file name="show_config_errors.php"/>
-        <file name="url.php"/>
+        <file name="public/index.php"/>
+        <file name="public/show_config_errors.php"/>
         <ignoreFiles>
             <directory name="vendor"/>
             <directory name="libraries/cache"/>
@@ -29,6 +29,7 @@
     </projectFiles>
 
     <stubs>
+        <file name="test/stubs/Query.stub"/>
         <file name="test/stubs/uploadprogress.stub"/>
     </stubs>
 
@@ -37,105 +38,17 @@
     </plugins>
 
     <globals>
-        <var name="cfg" type="array{
-            AllowUserDropDatabase: bool,
-            blowfish_secret: string,
-            BrowseMIME: bool,
-            BZipDump: bool,
-            CaptchaCsp: string,
-            CookieSameSite: 'Lax'|'Strict'|'None',
-            CSPAllow: string,
-            DBG: array{sql: bool, sqllog: bool, demo: bool, simple2fa: bool},
-            DefaultTabDatabase: 'structure'|'sql'|'search'|'operations',
-            DefaultTabServer: 'welcome'|'databases'|'status'|'variables'|'privileges',
-            DefaultTabTable: 'structure'|'sql'|'search'|'insert'|'browse',
-            DisableMultiTableMaintenance: bool,
-            enable_drag_drop_import: bool,
-            EnableAutocompleteForTablesAndColumns: bool,
-            environment: 'production'|'development',
-            ExecTimeLimit: 0|positive-int,
-            Export: array,
-            FirstLevelNavigationItems: positive-int,
-            GridEditing: 'double-click'|'click'|'disabled',
-            GZipDump: bool,
-            IgnoreMultiSubmitErrors: bool,
-            InitialSlidersState: 'open'|'closed'|'disabled',
-            LimitChars: positive-int,
-            LoginCookieStore: 0|positive-int,
-            LoginCookieValidity: positive-int,
-            LoginCookieValidityDisableWarning: bool,
-            MaxDbList: positive-int,
-            MaxCharactersInDisplayedSQL: positive-int,
-            MaxRows: positive-int,
-            MaxTableList: positive-int,
-            NaturalOrder: bool,
-            NavigationDisplayLogo: bool,
-            NavigationDisplayServers: bool,
-            NavigationLinkWithMainPanel: bool,
-            NavigationLogoLink: string,
-            NavigationLogoLinkWindow: 'main'|'new',
-            NavigationTreeAutoexpandSingleDb: bool,
-            NavigationTreeDbSeparator: string,
-            NavigationTreeEnableGrouping: bool,
-            NavigationTreePointerEnable: bool,
-            NavigationTreeTableSeparator: string|string[]|false,
-            NavigationWidth: 0|positive-int,
-            NumFavoriteTables: 0|positive-int,
-            PmaNoRelation_DisableWarning: bool,
-            ProtectBinary: 'blob'|'noblob'|'all'|false,
-            ProxyPass: string,
-            ProxyUrl: string,
-            ProxyUser: string,
-            RepeatCells: 0|positive-int,
-            SendErrorReports: 'ask'|'always'|'never',
-            Server: array{
-                AllowDeny: array{order: ''|'deny,allow'|'allow,deny'|'explicit', rules: string[]},
-                AllowNoPassword: bool,
-                AllowRoot: bool,
-                auth_type: 'config'|'http'|'signon'|'cookie',
-                controlpass: string,
-                controluser: string,
-                DisableIS: bool,
-                host: string,
-                password: string,
-                pmadb: string|false,
-                port: string,
-                tracking_default_statements: string,
-                user: string,
-                verbose: string
-            },
-            ServerDefault: 0|positive-int,
-            Servers: array[],
-            ShowAll: bool,
-            ShowChgPassword: bool,
-            ShowCreateDb: bool,
-            ShowDatabasesNavigationAsTree: bool,
-            ShowFieldTypesInDataEditView: bool,
-            ShowFunctionFields: bool,
-            ShowPhpInfo: bool,
-            ShowServerInfo: bool,
-            ShowSQL: bool,
-            ShowStats: bool,
-            SkipLockedTables: bool,
-            SuhosinDisableWarning: bool,
-            ThemeManager: bool,
-            TranslationWarningThreshold: int,
-            UseDbSearch: bool,
-            VersionCheck: bool,
-            ZeroConf: bool,
-            ZipDump: bool
-        }"/>
-        <var name="containerBuilder" type="Symfony\Component\DependencyInjection\ContainerBuilder"/>
-        <var name="dbi" type="PhpMyAdmin\DatabaseInterface"/>
         <var name="GLOBALS" type="array{
             asfile: bool,
             buffer_needed: bool,
             cached_affected_rows: int|numeric-string,
             cfg: array{
                 AllowArbitraryServer: bool,
+                AllowSharedBookmarks: bool,
                 AllowThirdPartyFraming: bool|'sameorigin',
                 ArbitraryServerRegexp: string,
                 AvailableCharsets: string[],
+                blowfish_secret: string,
                 BrowseMarkerEnable: bool,
                 BrowsePointerEnable: bool,
                 BrowseMIME: bool,
@@ -201,7 +114,6 @@
                 MaxRows: positive-int,
                 MaxSizeForInputField: positive-int,
                 MinSizeForInputField: 0|positive-int,
-                MysqlMinVersion: array{internal: int, human: string},
                 MysqlSslWarningSafeHosts: string[],
                 NaturalOrder: bool,
                 NavigationLinkWithMainPanel: bool,
@@ -295,6 +207,7 @@
                 ShowFunctionFields: bool,
                 ShowHint: bool,
                 ShowPropertyComments: bool,
+                ShowServerInfo: bool|string,
                 ShowSQL: bool,
                 ShowStats: bool,
                 TextareaAutoSelect: bool,
@@ -322,7 +235,7 @@
             conn_error: string,
             config: PhpMyAdmin\Config,
             ConfigFile: PhpMyAdmin\Config\ConfigFile,
-            crlf: string,
+            containerBuilder: Symfony\Component\DependencyInjection\ContainerBuilder,
             csv_columns: bool,
             csv_enclosed: string,
             csv_escaped: string,
@@ -332,7 +245,6 @@
             db_priv: bool,
             dbi: PhpMyAdmin\DatabaseInterface,
             dbs_to_test: string[]|false,
-            dblist: PhpMyAdmin\Database\DatabaseList,
             display_query: string,
             errno: int,
             error: bool,
@@ -346,7 +258,6 @@
             hostname: string,
             import_file: string,
             import_file_name: string,
-            import_run_buffer: array,
             import_text: string,
             is_create_db_priv: bool,
             is_reload_priv: bool,
@@ -359,6 +270,7 @@
             latex_structure_caption: string,
             latex_structure_continued_caption: string,
             latex_structure_label: string,
+            maximum_time: 0|positive-int,
             maxsize: string,
             memory_limit: int,
             message: PhpMyAdmin\Message,
@@ -376,7 +288,6 @@
             proc_priv: bool,
             querytime: float|int,
             read_limit: int,
-            request: PhpMyAdmin\Http\ServerRequest,
             save_on_server: bool,
             server: int,
             SESSION_KEY: string,
@@ -398,12 +309,11 @@
             text_dir: string,
             token_mismatch: bool,
             token_provided: bool,
+            unparsed_sql?: string,
             urlParams: array,
             username: string,
             xml_export_triggers: bool,
             xml_export_views: bool
         }"/>
-        <var name="maximum_time" type="0|positive-int"/>
-        <var name="PMA_PHP_SELF" type="string"/>
     </globals>
 </psalm>

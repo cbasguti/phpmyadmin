@@ -15,45 +15,33 @@ abstract class IOTransformationsPlugin extends TransformationsPlugin
 {
     /**
      * Specifies whether transformation was successful or not.
-     *
-     * @var bool
      */
-    protected $success = true;
+    protected bool $success = true;
 
     /**
      * To store the error message in case of failed transformations.
-     *
-     * @var string
      */
-    protected $error = '';
+    protected string $error = '';
 
     /**
      * Returns the html for input field to override default textarea.
      * Note: Return empty string if default textarea is required.
      *
-     * @param array  $column               column details
-     * @param int    $row_id               row number
-     * @param string $column_name_appendix the name attribute
-     * @param array  $options              transformation options
-     * @param string $value                Current field value
-     * @param string $text_dir             text direction
-     * @param int    $tabindex             tab index
-     * @param int    $tabindex_for_value   offset for the values tabindex
-     * @param int    $idindex              id index
+     * @param string  $columnNameAppendix the name attribute
+     * @param mixed[] $options            transformation options
+     * @param string  $value              Current field value
+     * @param string  $textDir            text direction
+     * @param int     $fieldIndex         field index
      *
      * @return string the html for input field
      */
     public function getInputHtml(
-        array $column,
-        $row_id,
-        $column_name_appendix,
+        string $columnNameAppendix,
         array $options,
-        $value,
-        $text_dir,
-        $tabindex,
-        $tabindex_for_value,
-        $idindex
-    ) {
+        string $value,
+        string $textDir,
+        int $fieldIndex,
+    ): string {
         return '';
     }
 
@@ -61,9 +49,9 @@ abstract class IOTransformationsPlugin extends TransformationsPlugin
      * Returns the array of scripts (filename) required for plugin
      * initialization and handling
      *
-     * @return array javascripts to be included
+     * @return string[] javascripts to be included
      */
-    public function getScripts()
+    public function getScripts(): array
     {
         return [];
     }
@@ -73,7 +61,7 @@ abstract class IOTransformationsPlugin extends TransformationsPlugin
      *
      * @return string error
      */
-    public function getError()
+    public function getError(): string
     {
         return $this->error;
     }

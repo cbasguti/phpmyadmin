@@ -35,16 +35,14 @@ class IpAllowDeny
      * @param string $testRange string of IP range to match
      * @param string $ipToTest  string of IP to test against range
      */
-    public function ipMaskTest($testRange, $ipToTest): bool
+    public function ipMaskTest(string $testRange, string $ipToTest): bool
     {
         if (mb_strpos($testRange, ':') > -1 || mb_strpos($ipToTest, ':') > -1) {
             // assume IPv6
-            $result = $this->ipv6MaskTest($testRange, $ipToTest);
-        } else {
-            $result = $this->ipv4MaskTest($testRange, $ipToTest);
+            return $this->ipv6MaskTest($testRange, $ipToTest);
         }
 
-        return $result;
+        return $this->ipv4MaskTest($testRange, $ipToTest);
     }
 
     /**
@@ -64,7 +62,7 @@ class IpAllowDeny
      * @param string $testRange string of IP range to match
      * @param string $ipToTest  string of IP to test against range
      */
-    public function ipv4MaskTest($testRange, $ipToTest): bool
+    public function ipv4MaskTest(string $testRange, string $ipToTest): bool
     {
         $result = true;
         $match = preg_match('|([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)/([0-9]+)|', $testRange, $regs);
@@ -83,7 +81,7 @@ class IpAllowDeny
                 $maskl += 2 ** (30 - $i);
             }
 
-            return ($maskl & $rangel) == ($maskl & $ipl);
+            return ($maskl & $rangel) === ($maskl & $ipl);
         }
 
         // range based
@@ -96,10 +94,8 @@ class IpAllowDeny
                 if (($ipocts[$i] > $regs[2]) || ($ipocts[$i] < $regs[1])) {
                     $result = false;
                 }
-            } else {
-                if ($maskocts[$i] <> $ipocts[$i]) {
-                    $result = false;
-                }
+            } elseif ($maskocts[$i] !== $ipocts[$i]) {
+                $result = false;
             }
         }
 
@@ -123,67 +119,67 @@ class IpAllowDeny
      * xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xx[yyy-zzz]
      * (range, partial octets not supported)
      *
-     * @param string $test_range string of IP range to match
-     * @param string $ip_to_test string of IP to test against range
+     * @param string $testRange string of IP range to match
+     * @param string $ipToTest  string of IP to test against range
      */
-    public function ipv6MaskTest($test_range, $ip_to_test): bool
+    public function ipv6MaskTest(string $testRange, string $ipToTest): bool
     {
         $result = true;
 
         // convert to lowercase for easier comparison
-        $test_range = mb_strtolower($test_range);
-        $ip_to_test = mb_strtolower($ip_to_test);
+        $testRange = mb_strtolower($testRange);
+        $ipToTest = mb_strtolower($ipToTest);
 
-        $is_cidr = mb_strpos($test_range, '/') > -1;
-        $is_range = mb_strpos($test_range, '[') > -1;
-        $is_single = ! $is_cidr && ! $is_range;
+        $isCidr = mb_strpos($testRange, '/') > -1;
+        $isRange = mb_strpos($testRange, '[') > -1;
+        $isSingle = ! $isCidr && ! $isRange;
 
-        $ip_hex = bin2hex((string) inet_pton($ip_to_test));
+        $ipHex = bin2hex((string) inet_pton($ipToTest));
 
-        if ($is_single) {
-            $range_hex = bin2hex((string) inet_pton($test_range));
+        if ($isSingle) {
+            $rangeHex = bin2hex((string) inet_pton($testRange));
 
-            return hash_equals($ip_hex, $range_hex);
+            return hash_equals($ipHex, $rangeHex);
         }
 
-        if ($is_range) {
+        if ($isRange) {
             // what range do we operate on?
-            $range_match = [];
-            $match = preg_match('/\[([0-9a-f]+)\-([0-9a-f]+)\]/', $test_range, $range_match);
+            $rangeMatch = [];
+            $match = preg_match('/\[([0-9a-f]+)\-([0-9a-f]+)\]/', $testRange, $rangeMatch);
             if ($match) {
-                $range_start = $range_match[1];
-                $range_end = $range_match[2];
+                $rangeStart = $rangeMatch[1];
+                $rangeEnd = $rangeMatch[2];
 
                 // get the first and last allowed IPs
-                $first_ip = str_replace($range_match[0], $range_start, $test_range);
-                $first_hex = bin2hex((string) inet_pton($first_ip));
-                $last_ip = str_replace($range_match[0], $range_end, $test_range);
-                $last_hex = bin2hex((string) inet_pton($last_ip));
+                $firstIp = str_replace($rangeMatch[0], $rangeStart, $testRange);
+                $firstHex = bin2hex((string) inet_pton($firstIp));
+                $lastIp = str_replace($rangeMatch[0], $rangeEnd, $testRange);
+                $lastHex = bin2hex((string) inet_pton($lastIp));
 
                 // check if the IP to test is within the range
-                $result = ($ip_hex >= $first_hex && $ip_hex <= $last_hex);
+                $result = ($ipHex >= $firstHex && $ipHex <= $lastHex);
             }
 
             return $result;
         }
 
-        if ($is_cidr) {
+        if ($isCidr) {
             // Split in address and prefix length
-            [$first_ip, $subnet] = explode('/', $test_range);
+            [$firstIp, $subnet] = explode('/', $testRange);
 
             // Parse the address into a binary string
-            $first_bin = inet_pton($first_ip);
-            $first_hex = bin2hex((string) $first_bin);
+            $firstBin = inet_pton($firstIp);
+            $firstHex = bin2hex((string) $firstBin);
 
             $flexbits = 128 - (int) $subnet;
 
             // Build the hexadecimal string of the last address
-            $last_hex = $first_hex;
+            $lastHex = $firstHex;
 
             $pos = 31;
             while ($flexbits > 0) {
                 // Get the character at this position
-                $orig = mb_substr($last_hex, $pos, 1);
+                $orig = mb_substr($lastHex, $pos, 1);
 
                 // Convert it to an integer
                 $origval = hexdec($orig);
@@ -195,7 +191,7 @@ class IpAllowDeny
                 $new = dechex($newval);
 
                 // And put that character back in the string
-                $last_hex = substr_replace($last_hex, $new, $pos, 1);
+                $lastHex = substr_replace($lastHex, $new, $pos, 1);
 
                 // We processed one nibble, move to previous position
                 $flexbits -= 4;
@@ -203,7 +199,7 @@ class IpAllowDeny
             }
 
             // check if the IP to test is within the range
-            $result = ($ip_hex >= $first_hex && $ip_hex <= $last_hex);
+            $result = ($ipHex >= $firstHex && $ipHex <= $lastHex);
         }
 
         return $result;
@@ -236,22 +232,20 @@ class IpAllowDeny
      *
      * @param string $type 'allow' | 'deny' type of rule to match
      */
-    private function allowDeny($type): bool
+    private function allowDeny(string $type): bool
     {
-        global $cfg;
-
         // Grabs true IP of the user and returns if it can't be found
-        $remote_ip = Core::getIp();
-        if (empty($remote_ip)) {
+        $remoteIp = Core::getIp();
+        if (empty($remoteIp)) {
             return false;
         }
 
         // copy username
-        $username = $cfg['Server']['user'];
+        $username = $GLOBALS['cfg']['Server']['user'];
 
         // copy rule database
-        if (isset($cfg['Server']['AllowDeny']['rules'])) {
-            $rules = $cfg['Server']['AllowDeny']['rules'];
+        if (isset($GLOBALS['cfg']['Server']['AllowDeny']['rules'])) {
+            $rules = $GLOBALS['cfg']['Server']['AllowDeny']['rules'];
             if (! is_array($rules)) {
                 $rules = [];
             }
@@ -260,10 +254,7 @@ class IpAllowDeny
         }
 
         // lookup table for some name shortcuts
-        $shortcuts = [
-            'all' => '0.0.0.0/0',
-            'localhost' => '127.0.0.1/8',
-        ];
+        $shortcuts = ['all' => '0.0.0.0/0', 'localhost' => '127.0.0.1/8'];
 
         // Provide some useful shortcuts if server gives us address:
         if (Core::getenv('SERVER_ADDR')) {
@@ -274,37 +265,37 @@ class IpAllowDeny
 
         foreach ($rules as $rule) {
             // extract rule data
-            $rule_data = explode(' ', $rule);
+            $ruleData = explode(' ', $rule);
 
             // check for rule type
-            if ($rule_data[0] != $type) {
+            if ($ruleData[0] !== $type) {
                 continue;
             }
 
             // check for username
             if (
-                ($rule_data[1] !== '%') //wildcarded first
-                && (! hash_equals($rule_data[1], $username))
+                ($ruleData[1] !== '%') //wildcarded first
+                && (! hash_equals($ruleData[1], $username))
             ) {
                 continue;
             }
 
             // check if the config file has the full string with an extra
             // 'from' in it and if it does, just discard it
-            if ($rule_data[2] === 'from') {
-                $rule_data[2] = $rule_data[3];
+            if ($ruleData[2] === 'from') {
+                $ruleData[2] = $ruleData[3];
             }
 
             // Handle shortcuts with above array
-            if (isset($shortcuts[$rule_data[2]])) {
-                $rule_data[2] = $shortcuts[$rule_data[2]];
+            if (isset($shortcuts[$ruleData[2]])) {
+                $ruleData[2] = $shortcuts[$ruleData[2]];
             }
 
             // Add code for host lookups here
             // Excluded for the moment
 
             // Do the actual matching now
-            if ($this->ipMaskTest($rule_data[2], $remote_ip)) {
+            if ($this->ipMaskTest($ruleData[2], $remoteIp)) {
                 return true;
             }
         }

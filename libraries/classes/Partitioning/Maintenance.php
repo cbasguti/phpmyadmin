@@ -5,28 +5,25 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Partitioning;
 
 use PhpMyAdmin\DatabaseInterface;
-use PhpMyAdmin\Dbal\DatabaseName;
-use PhpMyAdmin\Dbal\TableName;
+use PhpMyAdmin\Identifiers\DatabaseName;
+use PhpMyAdmin\Identifiers\TableName;
 use PhpMyAdmin\Util;
 
 use function sprintf;
 
 final class Maintenance
 {
-    /** @var DatabaseInterface */
-    private $dbi;
-
-    public function __construct(DatabaseInterface $dbi)
+    public function __construct(private DatabaseInterface $dbi)
     {
-        $this->dbi = $dbi;
     }
 
+    /** @return mixed[] */
     public function analyze(DatabaseName $db, TableName $table, string $partition): array
     {
         $query = sprintf(
             'ALTER TABLE %s ANALYZE PARTITION %s;',
             Util::backquote($table->getName()),
-            Util::backquote($partition)
+            Util::backquote($partition),
         );
 
         $this->dbi->selectDb($db);
@@ -40,12 +37,13 @@ final class Maintenance
         return [$rows, $query];
     }
 
+    /** @return mixed[] */
     public function check(DatabaseName $db, TableName $table, string $partition): array
     {
         $query = sprintf(
             'ALTER TABLE %s CHECK PARTITION %s;',
             Util::backquote($table->getName()),
-            Util::backquote($partition)
+            Util::backquote($partition),
         );
 
         $this->dbi->selectDb($db);
@@ -59,12 +57,13 @@ final class Maintenance
         return [$rows, $query];
     }
 
+    /** @return mixed[] */
     public function drop(DatabaseName $db, TableName $table, string $partition): array
     {
         $query = sprintf(
             'ALTER TABLE %s DROP PARTITION %s;',
             Util::backquote($table->getName()),
-            Util::backquote($partition)
+            Util::backquote($partition),
         );
 
         $this->dbi->selectDb($db);
@@ -73,12 +72,13 @@ final class Maintenance
         return [(bool) $result, $query];
     }
 
+    /** @return mixed[] */
     public function optimize(DatabaseName $db, TableName $table, string $partition): array
     {
         $query = sprintf(
             'ALTER TABLE %s OPTIMIZE PARTITION %s;',
             Util::backquote($table->getName()),
-            Util::backquote($partition)
+            Util::backquote($partition),
         );
 
         $this->dbi->selectDb($db);
@@ -101,7 +101,7 @@ final class Maintenance
         $query = sprintf(
             'ALTER TABLE %s REBUILD PARTITION %s;',
             Util::backquote($table->getName()),
-            Util::backquote($partition)
+            Util::backquote($partition),
         );
 
         $this->dbi->selectDb($db);
@@ -110,12 +110,13 @@ final class Maintenance
         return [(bool) $result, $query];
     }
 
+    /** @return mixed[] */
     public function repair(DatabaseName $db, TableName $table, string $partition): array
     {
         $query = sprintf(
             'ALTER TABLE %s REPAIR PARTITION %s;',
             Util::backquote($table->getName()),
-            Util::backquote($partition)
+            Util::backquote($partition),
         );
 
         $this->dbi->selectDb($db);
@@ -138,7 +139,7 @@ final class Maintenance
         $query = sprintf(
             'ALTER TABLE %s TRUNCATE PARTITION %s;',
             Util::backquote($table->getName()),
-            Util::backquote($partition)
+            Util::backquote($partition),
         );
 
         $this->dbi->selectDb($db);

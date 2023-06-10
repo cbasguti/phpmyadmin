@@ -7,6 +7,7 @@ namespace PhpMyAdmin\Tests\Config;
 use PhpMyAdmin\Config\ConfigFile;
 use PhpMyAdmin\Config\ServerConfigChecks;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 use ReflectionException;
 use ReflectionProperty;
 
@@ -16,21 +17,18 @@ use function str_repeat;
 
 use const SODIUM_CRYPTO_SECRETBOX_KEYBYTES;
 
-/**
- * @covers \PhpMyAdmin\Config\ServerConfigChecks
- */
+#[CoversClass(ServerConfigChecks::class)]
 class ServerConfigChecksTest extends AbstractTestCase
 {
-    /** @var string */
-    private $sessionID;
+    private string $sessionID;
 
-    /**
-     * @throws ReflectionException
-     */
+    /** @throws ReflectionException */
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setGlobalConfig();
+
         $GLOBALS['cfg']['AvailableCharsets'] = [];
         $GLOBALS['cfg']['ServerDefault'] = 0;
         $GLOBALS['server'] = 0;
@@ -39,7 +37,6 @@ class ServerConfigChecksTest extends AbstractTestCase
         $GLOBALS['ConfigFile'] = $cf;
 
         $reflection = new ReflectionProperty(ConfigFile::class, 'id');
-        $reflection->setAccessible(true);
         $this->sessionID = $reflection->getValue($cf);
 
         unset($_SESSION['messages']);
@@ -89,18 +86,12 @@ class ServerConfigChecksTest extends AbstractTestCase
                 'SaveDir',
                 'TempDir',
             ],
-            array_keys($_SESSION['messages']['notice'])
+            array_keys($_SESSION['messages']['notice']),
         );
 
         $this->assertEquals(
-            [
-                'LoginCookieValidity',
-                'GZipDump',
-                'BZipDump',
-                'ZipDump_import',
-                'ZipDump_export',
-            ],
-            array_keys($_SESSION['messages']['error'])
+            ['LoginCookieValidity', 'GZipDump', 'BZipDump', 'ZipDump_import', 'ZipDump_export'],
+            array_keys($_SESSION['messages']['error']),
         );
     }
 
@@ -109,12 +100,7 @@ class ServerConfigChecksTest extends AbstractTestCase
         $_SESSION[$this->sessionID] = [];
         $_SESSION[$this->sessionID]['blowfish_secret'] = null;
         $_SESSION[$this->sessionID]['Servers'] = [
-            '1' => [
-                'host' => 'localhost',
-                'ssl' => true,
-                'auth_type' => 'cookie',
-                'AllowRoot' => false,
-            ],
+            '1' => ['host' => 'localhost', 'ssl' => true, 'auth_type' => 'cookie', 'AllowRoot' => false],
         ];
         $_SESSION[$this->sessionID]['AllowArbitraryServer'] = false;
         $_SESSION[$this->sessionID]['LoginCookieValidity'] = -1;
@@ -148,12 +134,7 @@ class ServerConfigChecksTest extends AbstractTestCase
         $_SESSION[$this->sessionID] = [];
         $_SESSION[$this->sessionID]['blowfish_secret'] = str_repeat('a', SODIUM_CRYPTO_SECRETBOX_KEYBYTES + 1);
         $_SESSION[$this->sessionID]['Servers'] = [
-            '1' => [
-                'host' => 'localhost',
-                'ssl' => true,
-                'auth_type' => 'cookie',
-                'AllowRoot' => false,
-            ],
+            '1' => ['host' => 'localhost', 'ssl' => true, 'auth_type' => 'cookie', 'AllowRoot' => false],
         ];
 
         $configChecker = new ServerConfigChecks($GLOBALS['ConfigFile']);

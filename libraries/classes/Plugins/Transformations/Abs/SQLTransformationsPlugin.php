@@ -20,10 +20,8 @@ abstract class SQLTransformationsPlugin extends TransformationsPlugin
 {
     /**
      * Gets the transformation description of the specific plugin
-     *
-     * @return string
      */
-    public static function getInfo()
+    public static function getInfo(): string
     {
         return __('Formats text as SQL query with syntax highlighting.');
     }
@@ -32,12 +30,10 @@ abstract class SQLTransformationsPlugin extends TransformationsPlugin
      * Does the actual work of each specific transformations plugin.
      *
      * @param string             $buffer  text to be transformed
-     * @param array              $options transformation options
+     * @param mixed[]            $options transformation options
      * @param FieldMetadata|null $meta    meta information
-     *
-     * @return string
      */
-    public function applyTransformation($buffer, array $options = [], ?FieldMetadata $meta = null)
+    public function applyTransformation(string $buffer, array $options = [], FieldMetadata|null $meta = null): string
     {
         return Generator::formatSql($buffer);
     }
@@ -46,10 +42,8 @@ abstract class SQLTransformationsPlugin extends TransformationsPlugin
 
     /**
      * Gets the transformation name of the specific plugin
-     *
-     * @return string
      */
-    public static function getName()
+    public static function getName(): string
     {
         return 'SQL';
     }

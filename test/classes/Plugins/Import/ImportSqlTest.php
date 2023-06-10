@@ -8,14 +8,13 @@ use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\File;
 use PhpMyAdmin\Plugins\Import\ImportSql;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @covers \PhpMyAdmin\Plugins\Import\ImportSql
- */
+#[CoversClass(ImportSql::class)]
 class ImportSqlTest extends AbstractTestCase
 {
-    /** @var ImportSql */
-    protected $object;
+    protected ImportSql $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -24,7 +23,19 @@ class ImportSqlTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 0;
+        $GLOBALS['error'] = null;
+        $GLOBALS['timeout_passed'] = null;
+        $GLOBALS['maximum_time'] = null;
+        $GLOBALS['charset_conversion'] = null;
+        $GLOBALS['skip_queries'] = null;
+        $GLOBALS['max_sql_len'] = null;
+        $GLOBALS['sql_query'] = '';
+        $GLOBALS['executed_queries'] = null;
+        $GLOBALS['run_query'] = null;
+        $GLOBALS['go_sql'] = null;
 
         $this->object = new ImportSql();
 
@@ -48,19 +59,19 @@ class ImportSqlTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
     /**
      * Test for doImport
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testDoImport(): void
     {
         //$sql_query_disabled will show the import SQL detail
-        global $sql_query, $sql_query_disabled;
-        $sql_query_disabled = false;
+
+        $GLOBALS['sql_query_disabled'] = false;
 
         //Mock DBI
         $dbi = $this->getMockBuilder(DatabaseInterface::class)
@@ -75,11 +86,11 @@ class ImportSqlTest extends AbstractTestCase
         $this->object->doImport($importHandle);
 
         //asset that all sql are executed
-        $this->assertStringContainsString('SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO"', $sql_query);
-        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS `pma_bookmark`', $sql_query);
+        $this->assertStringContainsString('SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO"', $GLOBALS['sql_query']);
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS `pma_bookmark`', $GLOBALS['sql_query']);
         $this->assertStringContainsString(
             'INSERT INTO `pma_bookmark` (`id`, `dbase`, `user`, `label`, `query`) VALUES',
-            $sql_query
+            $GLOBALS['sql_query'],
         );
 
         $this->assertTrue($GLOBALS['finished']);

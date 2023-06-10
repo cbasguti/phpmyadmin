@@ -8,14 +8,14 @@ use PhpMyAdmin\Controllers\GisDataEditorController;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @covers \PhpMyAdmin\Controllers\GisDataEditorController
- */
+#[CoversClass(GisDataEditorController::class)]
 class GisDataEditorControllerTest extends AbstractTestCase
 {
-    /** @var GisDataEditorController|null */
-    private $controller = null;
+    private GisDataEditorController|null $controller = null;
 
     protected function setUp(): void
     {
@@ -27,17 +27,18 @@ class GisDataEditorControllerTest extends AbstractTestCase
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
 
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
+
         $this->controller = new GisDataEditorController(new ResponseRenderer(), new Template());
     }
 
     /**
-     * @param mixed[] $gis_data
+     * @param mixed[] $gisData
      * @param mixed[] $expected
-     *
-     * @group gis
-     * @dataProvider providerForTestValidateGisData
      */
-    public function testValidateGisData(array $gis_data, string $type, ?string $value, array $expected): void
+    #[DataProvider('providerForTestValidateGisData')]
+    #[Group('gis')]
+    public function testValidateGisData(array $gisData, string $type, string|null $value, array $expected): void
     {
         /** @var mixed[] $gisData */
         $gisData = $this->callFunction(
@@ -45,10 +46,10 @@ class GisDataEditorControllerTest extends AbstractTestCase
             GisDataEditorController::class,
             'validateGisData',
             [
-                $gis_data,
+                $gisData,
                 $type,
                 $value,
-            ]
+            ],
         );
         $this->assertEquals($expected, $gisData);
     }

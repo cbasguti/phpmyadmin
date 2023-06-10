@@ -6,26 +6,24 @@ namespace PhpMyAdmin\Tests\Query;
 
 use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Query\Compatibility;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-/**
- * @covers \PhpMyAdmin\Query\Compatibility
- */
+#[CoversClass(Compatibility::class)]
 class CompatibilityTest extends TestCase
 {
-    /**
-     * @dataProvider providerForTestHasAccountLocking
-     */
+    #[DataProvider('providerForTestHasAccountLocking')]
     public function testHasAccountLocking(bool $expected, bool $isMariaDb, int $version): void
     {
         $this->assertSame($expected, Compatibility::hasAccountLocking($isMariaDb, $version));
     }
 
     /**
-     * @return array[]
+     * @return mixed[][]
      * @psalm-return array<string, array{bool, bool, int}>
      */
-    public function providerForTestHasAccountLocking(): array
+    public static function providerForTestHasAccountLocking(): array
     {
         return [
             'MySQL 5.7.5' => [false, false, 50705],
@@ -37,9 +35,7 @@ class CompatibilityTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider providerForTestIsUUIDSupported
-     */
+    #[DataProvider('providerForTestIsUUIDSupported')]
     public function testIsUUIDSupported(bool $expected, bool $isMariaDb, int $version): void
     {
         $dbiStub = $this->createStub(DatabaseInterface::class);
@@ -51,10 +47,10 @@ class CompatibilityTest extends TestCase
     }
 
     /**
-     * @return array[]
+     * @return mixed[][]
      * @psalm-return array<string, array{bool, bool, int}>
      */
-    public function providerForTestIsUUIDSupported(): array
+    public static function providerForTestIsUUIDSupported(): array
     {
         return [
             'MySQL 5.7.5' => [false, false, 50705],

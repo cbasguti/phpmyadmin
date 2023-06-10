@@ -27,40 +27,36 @@ use function sprintf;
  */
 class TableStatsEps extends TableStats
 {
-    /** @var int */
-    public $height;
+    public int $height;
 
-    /** @var int */
-    public $currentCell = 0;
+    public int $currentCell = 0;
 
     /**
      * @see Eps
      * @see TableStatsEps::setWidthTable
      * @see TableStatsEps::setHeightTable
      *
-     * @param Eps    $diagram         The EPS diagram
-     * @param string $db              The database name
-     * @param string $tableName       The table name
-     * @param string $font            The font  name
-     * @param int    $fontSize        The font size
-     * @param int    $pageNumber      Page number
-     * @param int    $same_wide_width The max width among tables
-     * @param bool   $showKeys        Whether to display keys or not
-     * @param bool   $tableDimension  Whether to display table position or not
-     * @param bool   $offline         Whether the coordinates are sent
-     *                                from the browser
+     * @param Eps    $diagram        The EPS diagram
+     * @param string $db             The database name
+     * @param string $tableName      The table name
+     * @param string $font           The font  name
+     * @param int    $fontSize       The font size
+     * @param int    $pageNumber     Page number
+     * @param bool   $showKeys       Whether to display keys or not
+     * @param bool   $tableDimension Whether to display table position or not
+     * @param bool   $offline        Whether the coordinates are sent
+     *                               from the browser
      */
     public function __construct(
-        $diagram,
-        $db,
-        $tableName,
-        $font,
-        $fontSize,
-        $pageNumber,
-        &$same_wide_width,
-        $showKeys = false,
-        $tableDimension = false,
-        $offline = false
+        Eps $diagram,
+        string $db,
+        string $tableName,
+        string $font,
+        int $fontSize,
+        int $pageNumber,
+        bool $showKeys = false,
+        bool $tableDimension = false,
+        bool $offline = false,
     ) {
         parent::__construct($diagram, $db, $pageNumber, $tableName, $showKeys, $tableDimension, $offline);
 
@@ -69,11 +65,6 @@ class TableStatsEps extends TableStats
         // setWidth must me after setHeight, because title
         // can include table height which changes table width
         $this->setWidthTable($font, $fontSize);
-        if ($same_wide_width >= $this->width) {
-            return;
-        }
-
-        $same_wide_width = $this->width;
     }
 
     /**
@@ -84,7 +75,7 @@ class TableStatsEps extends TableStats
         ExportRelationSchema::dieSchema(
             $this->pageNumber,
             'EPS',
-            sprintf(__('The %s table doesn\'t exist!'), $this->tableName)
+            sprintf(__('The %s table doesn\'t exist!'), $this->tableName),
         );
     }
 
@@ -96,21 +87,18 @@ class TableStatsEps extends TableStats
      * @param string $font     The font name
      * @param int    $fontSize The font size
      */
-    private function setWidthTable($font, $fontSize): void
+    private function setWidthTable(string $font, int $fontSize): void
     {
         foreach ($this->fields as $field) {
             $this->width = max(
                 $this->width,
-                $this->font->getStringWidth($field, $font, (int) $fontSize)
+                $this->font->getStringWidth($field, $font, $fontSize),
             );
         }
 
-        $this->width += $this->font->getStringWidth('      ', $font, (int) $fontSize);
-        /*
-         * it is unknown what value must be added, because
-        * table title is affected by the table width value
-        */
-        while ($this->width < $this->font->getStringWidth($this->getTitle(), $font, (int) $fontSize)) {
+        $this->width += $this->font->getStringWidth('      ', $font, $fontSize);
+        // it is unknown what value must be added, because table title is affected by the table width value
+        while ($this->width < $this->font->getStringWidth($this->getTitle(), $font, $fontSize)) {
             $this->width += 7;
         }
     }
@@ -120,7 +108,7 @@ class TableStatsEps extends TableStats
      *
      * @param int $fontSize The font size
      */
-    private function setHeightTable($fontSize): void
+    private function setHeightTable(int $fontSize): void
     {
         $this->heightCell = $fontSize + 4;
         $this->height = (count($this->fields) + 1) * $this->heightCell;
@@ -132,10 +120,8 @@ class TableStatsEps extends TableStats
      * @see Eps
      * @see Eps::line
      * @see Eps::rect
-     *
-     * @param bool $showColor Whether to display color
      */
-    public function tableDraw($showColor): void
+    public function tableDraw(): void
     {
         $this->diagram->rect($this->x, $this->y + 12, $this->width, $this->heightCell, 1);
         $this->diagram->showXY($this->getTitle(), $this->x + 5, $this->y + 14);

@@ -19,16 +19,17 @@ class NodeColumn extends Node
     /**
      * Initialises the class
      *
-     * @param array $item    array to identify the column node
-     * @param int   $type    Type of node, may be one of CONTAINER or OBJECT
-     * @param bool  $isGroup Whether this object has been created
-     *                       while grouping nodes
+     * @param mixed[] $item    array to identify the column node
+     * @param int     $type    Type of node, may be one of CONTAINER or OBJECT
+     * @param bool    $isGroup Whether this object has been created
+     *                         while grouping nodes
      */
-    public function __construct($item, $type = Node::OBJECT, $isGroup = false)
+    public function __construct(array $item, int $type = Node::OBJECT, bool $isGroup = false)
     {
         $this->displayName = $this->getDisplayName($item);
 
         parent::__construct($item['name'], $type, $isGroup);
+
         $this->icon = ['image' => $this->getColumnIcon($item['key']), 'title' => __('Column')];
         $this->links = [
             'text' => [
@@ -51,21 +52,13 @@ class NodeColumn extends Node
      *
      * @return string Icon name for required key.
      */
-    private function getColumnIcon($key)
+    private function getColumnIcon(string $key): string
     {
-        switch ($key) {
-            case 'PRI':
-                $retval = 'b_primary';
-                break;
-            case 'UNI':
-                $retval = 'bd_primary';
-                break;
-            default:
-                $retval = 'pause';
-                break;
-        }
-
-        return $retval;
+        return match ($key) {
+            'PRI' => 'b_primary',
+            'UNI' => 'bd_primary',
+            default => 'pause',
+        };
     }
 
     /**
@@ -75,7 +68,7 @@ class NodeColumn extends Node
      *
      * @return string Display name for navigation tree
      */
-    private function getDisplayName($item)
+    private function getDisplayName(array $item): string
     {
         $retval = $item['name'];
         $flag = 0;
@@ -100,21 +93,12 @@ class NodeColumn extends Node
      *
      * @return string truncated value
      */
-    public function getTruncateValue($key, $value)
+    private function getTruncateValue(string $key, string $value): string
     {
-        $retval = '';
-
-        switch ($key) {
-            case 'default':
-                strlen($value) > 6 ?
-                    $retval .= substr($value, 0, 6) . '...' :
-                    $retval = $value;
-                break;
-            default:
-                $retval = $value;
-                break;
+        if ($key === 'default' && strlen($value) > 6) {
+            return substr($value, 0, 6) . '...';
         }
 
-        return $retval;
+        return $value;
     }
 }

@@ -13,29 +13,16 @@ use function in_array;
 
 abstract class AbstractController
 {
-    /** @var ConfigFile */
-    protected $config;
-
-    /** @var Template */
-    protected $template;
-
-    public function __construct(ConfigFile $config, Template $template)
+    public function __construct(protected ConfigFile $config, protected Template $template)
     {
-        $this->config = $config;
-        $this->template = $template;
     }
 
-    /**
-     * @return array
-     */
+    /** @return mixed[] */
     protected function getPages(): array
     {
-        $ignored = [
-            'Config',
-            'Servers',
-        ];
+        $ignored = ['Config', 'Servers'];
         $pages = [];
-        foreach (SetupFormList::getAll() as $formset) {
+        foreach (SetupFormList::getAllFormNames() as $formset) {
             if (in_array($formset, $ignored)) {
                 continue;
             }
@@ -43,10 +30,7 @@ abstract class AbstractController
             /** @var BaseForm $formClass */
             $formClass = SetupFormList::get($formset);
 
-            $pages[$formset] = [
-                'name' => $formClass::getName(),
-                'formset' => $formset,
-            ];
+            $pages[$formset] = ['name' => $formClass::getName(), 'formset' => $formset];
         }
 
         return $pages;

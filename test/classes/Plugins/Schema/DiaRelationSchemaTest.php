@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Plugins\Schema;
 
+use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Plugins\Schema\Dia\DiaRelationSchema;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 
-/**
- * @covers \PhpMyAdmin\Plugins\Schema\Dia\DiaRelationSchema
- * @requires extension xmlwriter
- */
+#[CoversClass(DiaRelationSchema::class)]
+#[RequiresPhpExtension('xmlwriter')]
 class DiaRelationSchemaTest extends AbstractTestCase
 {
-    /** @var DiaRelationSchema */
-    protected $object;
+    protected DiaRelationSchema $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -23,6 +24,8 @@ class DiaRelationSchemaTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $_REQUEST['page_number'] = 33;
         $_REQUEST['dia_show_color'] = true;
         $_REQUEST['dia_show_keys'] = true;
@@ -39,7 +42,7 @@ class DiaRelationSchemaTest extends AbstractTestCase
         $GLOBALS['db'] = 'test_db';
         $GLOBALS['cfg']['Server']['DisableIS'] = true;
 
-        $this->object = new DiaRelationSchema('test_db');
+        $this->object = new DiaRelationSchema(DatabaseName::from('test_db'));
     }
 
     /**
@@ -49,14 +52,14 @@ class DiaRelationSchemaTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
     /**
      * Test for construct, the Property is set correctly
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testSetProperty(): void
     {
         $this->assertEquals(33, $this->object->getPageNumber());

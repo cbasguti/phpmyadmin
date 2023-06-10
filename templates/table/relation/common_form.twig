@@ -4,7 +4,7 @@
 <form method="post" action="{{ url('/table/relation') }}">
     {{ get_hidden_inputs(db, table) }}
     {# InnoDB #}
-    {% if is_foreign_key_supported(tbl_storage_engine) %}
+    {% if is_foreign_key_supported %}
         <fieldset class="pma-fieldset mb-3">
             <legend>{% trans 'Foreign key constraints' %}</legend>
             <div class="table-responsive-md jsresponsive">
@@ -37,56 +37,7 @@
                     <th>{% trans 'Table' %}</th>
                     <th>{% trans 'Column' %}</th>
                 </tr></thead>
-                {% set i = 0 %}
-                {% if existrel_foreign is not empty %}
-                    {% for key, one_key in existrel_foreign %}
-                        {# Foreign database dropdown #}
-                        {% set foreign_db = one_key['ref_db_name'] is defined
-                            and one_key['ref_db_name'] is not null
-                            ? one_key['ref_db_name'] : db %}
-                        {% set foreign_table = false %}
-                        {% if foreign_db %}
-                            {% set foreign_table = one_key['ref_table_name'] is defined
-                                and one_key['ref_table_name'] is not null
-                                ? one_key['ref_table_name'] : false %}
-                        {% endif %}
-                        {% set unique_columns = [] %}
-                        {% if foreign_db and foreign_table %}
-                            {% set table_obj = table_get(foreign_table, foreign_db) %}
-                            {% set unique_columns = table_obj.getUniqueColumns(false, false) %}
-                        {% endif %}
-                        {% include 'table/relation/foreign_key_row.twig' with {
-                            'i': i,
-                            'one_key': one_key,
-                            'column_array': column_array,
-                            'options_array': options_array,
-                            'tbl_storage_engine': tbl_storage_engine,
-                            'db': db,
-                            'table': table,
-                            'url_params': url_params,
-                            'databases': databases,
-                            'foreign_db': foreign_db,
-                            'foreign_table': foreign_table,
-                            'unique_columns': unique_columns
-                        } only %}
-                        {% set i = i + 1 %}
-                    {% endfor %}
-                {% endif %}
-                {% include 'table/relation/foreign_key_row.twig' with {
-                    'i': i,
-                    'one_key': [],
-                    'column_array': column_array,
-                    'options_array': options_array,
-                    'tbl_storage_engine': tbl_storage_engine,
-                    'db': db,
-                    'table': table,
-                    'url_params': url_params,
-                    'databases': databases,
-                    'foreign_db': foreign_db,
-                    'foreign_table': foreign_table,
-                    'unique_columns': unique_columns
-                } only %}
-                {% set i = i + 1 %}
+                {{ foreign_key_row|raw }}
                 <tr>
                     <th colspan="6">
                         <a class="formelement clearfloat add_foreign_key" href="">
@@ -100,7 +51,7 @@
     {% endif %}
 
     {% if relation_parameters.relationFeature is not null %}
-        {% if default_sliders_state != 'disabled' and is_foreign_key_supported(tbl_storage_engine) %}
+        {% if default_sliders_state != 'disabled' and is_foreign_key_supported %}
         <div class="mb-3">
           <button class="btn btn-sm btn-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#internalRelationships" aria-expanded="{{ default_sliders_state == 'open' ? 'true' : 'false' }}" aria-controls="internalRelationships">
             {% trans 'Internal relationships' %}
@@ -120,7 +71,7 @@
                     <th>{% trans 'Column' %}</th>
                     <th>
                       {% trans 'Internal relation' %}
-                      {% if is_foreign_key_supported(tbl_storage_engine) %}
+                      {% if is_foreign_key_supported %}
                         {{ show_hint('An internal relation is not necessary when a corresponding FOREIGN KEY relation exists.'|trans) }}
                       {% endif %}
                     </th>
@@ -159,7 +110,7 @@
                             {% if existrel[myfield] is defined %}
                                 {% set foreign_column = existrel[myfield]['foreign_field'] %}
                             {% endif %}
-                            {% set table_obj = table_get(foreign_table, foreign_db) %}
+                            {% set table_obj = table_get(foreign_table, foreign_db, dbi) %}
                             {% set unique_columns = table_obj.getUniqueColumns(false, false) %}
                         {% endif %}
 
@@ -197,20 +148,19 @@
                 </tbody>
             </table>
         </fieldset>
-        {% if default_sliders_state != 'disabled' and is_foreign_key_supported(tbl_storage_engine) %}
+        {% if default_sliders_state != 'disabled' and is_foreign_key_supported %}
         </div>
         {% endif %}
     {% endif %}
 
     {% if relation_parameters.displayFeature is not null %}
-        {% set disp = get_display_field(db, table) %}
         <fieldset class="pma-fieldset">
             <label>{% trans 'Choose column to display:' %}</label>
             <select name="display_field">
                 <option value="">---</option>
                 {% for row in save_row %}
                     <option value="{{ row['Field'] }}"
-                        {%- if disp is defined and row['Field'] == disp %}
+                        {%- if display_field is defined and row['Field'] == display_field %}
                             selected="selected"
                         {%- endif %}>
                         {{ row['Field'] }}

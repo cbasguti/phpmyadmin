@@ -12,29 +12,25 @@ use function __;
 class IndexColumn
 {
     /** @var string The column name */
-    private $name = '';
+    private string $name = '';
 
     /** @var int The column sequence number in the index, starting with 1. */
-    private $seqInIndex = 1;
+    private int $seqInIndex = 1;
 
     /** @var string|null How the column is sorted in the index. "A" (Ascending) or NULL (Not sorted) */
-    private $collation = null;
+    private string|null $collation = null;
 
     /**
      * The number of indexed characters if the column is only partly indexed,
      * NULL if the entire column is indexed.
-     *
-     * @var int|null
      */
-    private $subPart = null;
+    private int|null $subPart = null;
 
     /**
      * Contains YES if the column may contain NULL.
      * If not, the column contains NO.
-     *
-     * @var string
      */
-    private $null = '';
+    private string $null = '';
 
     /**
      * An estimate of the number of unique values in the index. This is updated
@@ -42,21 +38,15 @@ class IndexColumn
      * statistics stored as integers, so the value is not necessarily exact even
      * for small tables. The higher the cardinality, the greater the chance that
      * MySQL uses the index when doing joins.
-     *
-     * @var int|null
      */
-    private $cardinality = null;
+    private int|null $cardinality = null;
 
     /**
      * If the Index uses an expression and not a name
-     *
-     * @var string|null
      */
-    private $expression = null;
+    private string|null $expression = null;
 
-    /**
-     * @param array $params an array containing the parameters of the index column
-     */
+    /** @param mixed[] $params an array containing the parameters of the index column */
     public function __construct(array $params = [])
     {
         $this->set($params);
@@ -73,7 +63,7 @@ class IndexColumn
     /**
      * The Index expression if it has one
      */
-    public function getExpression(): ?string
+    public function getExpression(): string|null
     {
         return $this->expression;
     }
@@ -81,7 +71,7 @@ class IndexColumn
     /**
      * Sets parameters of the index column
      *
-     * @param array $params an array containing the parameters of the index column
+     * @param mixed[] $params an array containing the parameters of the index column
      */
     public function set(array $params): void
     {
@@ -90,7 +80,7 @@ class IndexColumn
         }
 
         if (isset($params['Seq_in_index'])) {
-            $this->seqInIndex = $params['Seq_in_index'];
+            $this->seqInIndex = (int) $params['Seq_in_index'];
         }
 
         if (isset($params['Collation'])) {
@@ -98,11 +88,11 @@ class IndexColumn
         }
 
         if (isset($params['Cardinality'])) {
-            $this->cardinality = $params['Cardinality'];
+            $this->cardinality = (int) $params['Cardinality'];
         }
 
         if (isset($params['Sub_part'])) {
-            $this->subPart = $params['Sub_part'];
+            $this->subPart = (int) $params['Sub_part'];
         }
 
         if (isset($params['Expression'])) {
@@ -121,7 +111,7 @@ class IndexColumn
      *
      * @return string column name
      */
-    public function getName()
+    public function getName(): string
     {
         return $this->name;
     }
@@ -131,7 +121,7 @@ class IndexColumn
      *
      * @return string|null column collation
      */
-    public function getCollation()
+    public function getCollation(): string|null
     {
         return $this->collation;
     }
@@ -141,7 +131,7 @@ class IndexColumn
      *
      * @return int|null cardinality of the column
      */
-    public function getCardinality()
+    public function getCardinality(): int|null
     {
         return $this->cardinality;
     }
@@ -149,14 +139,14 @@ class IndexColumn
     /**
      * Returns whether the column is nullable
      *
-     * @param bool $as_text whether to returned the string representation
+     * @param bool $asText whether to returned the string representation
      *
      * @return string nullability of the column. True/false or Yes/No depending
      *                on the value of the $as_text parameter
      */
-    public function getNull($as_text = false): string
+    public function getNull(bool $asText = false): string
     {
-        if ($as_text) {
+        if ($asText) {
             if (! $this->null || $this->null === 'NO') {
                 return __('No');
             }
@@ -172,7 +162,7 @@ class IndexColumn
      *
      * @return int sequence number of the column in the index
      */
-    public function getSeqInIndex()
+    public function getSeqInIndex(): int
     {
         return $this->seqInIndex;
     }
@@ -183,7 +173,7 @@ class IndexColumn
      *
      * @return int|null the number of indexed characters
      */
-    public function getSubPart()
+    public function getSubPart(): int|null
     {
         return $this->subPart;
     }
@@ -191,9 +181,16 @@ class IndexColumn
     /**
      * Gets the properties in an array for comparison purposes
      *
-     * @return array an array containing the properties of the index column
+     * @return array<string, int|string|null>
+     * @psalm-return array{
+     *   Column_name: string,
+     *   Seq_in_index: int,
+     *   Collation: string|null,
+     *   Sub_part: int|null,
+     *   Null: string
+     * }
      */
-    public function getCompareData()
+    public function getCompareData(): array
     {
         return [
             'Column_name' => $this->name,

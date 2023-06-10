@@ -30,40 +30,31 @@ use function ucfirst;
  */
 class TwoFactor
 {
-    /** @var string */
-    public $user;
-
     /**
-     * @var array
+     * @var mixed[]
      * @psalm-var array{backend: string, settings: mixed[], type?: 'session'|'db'}
      */
-    public $config;
+    public array $config;
 
-    /** @var bool */
-    protected $writable;
+    protected bool $writable;
 
-    /** @var TwoFactorPlugin */
-    protected $backend;
+    protected TwoFactorPlugin $backend;
 
-    /** @var array */
-    protected $available;
+    /** @var mixed[] */
+    protected array $available;
 
-    /** @var UserPreferences */
-    private $userPreferences;
+    private UserPreferences $userPreferences;
 
     /**
      * Creates new TwoFactor object
      *
      * @param string $user User name
      */
-    public function __construct($user)
+    public function __construct(public string $user)
     {
-        global $dbi;
+        (new Relation($GLOBALS['dbi']))->initRelationParamsCache();
 
-        (new Relation($dbi))->initRelationParamsCache();
-
-        $this->userPreferences = new UserPreferences();
-        $this->user = $user;
+        $this->userPreferences = new UserPreferences($GLOBALS['dbi']);
         $this->available = $this->getAvailableBackends();
         $this->config = $this->readConfig();
         $this->writable = ($this->config['type'] === 'db');
@@ -106,9 +97,7 @@ class TwoFactor
         return $this->backend;
     }
 
-    /**
-     * @return array
-     */
+    /** @return mixed[] */
     public function getAvailable(): array
     {
         return $this->available;
@@ -116,17 +105,15 @@ class TwoFactor
 
     public function showSubmit(): bool
     {
-        $backend = $this->backend;
-
-        return $backend::$showSubmit;
+        return $this->backend::$showSubmit;
     }
 
     /**
      * Returns list of available backends
      *
-     * @return array
+     * @return string[]
      */
-    public function getAvailableBackends()
+    public function getAvailableBackends(): array
     {
         $result = [];
         if ($GLOBALS['cfg']['DBG']['simple2fa']) {
@@ -153,30 +140,21 @@ class TwoFactor
     /**
      * Returns list of missing dependencies
      *
-     * @return array
+     * @return array<int, array{class: string, dep: string}>
      */
-    public function getMissingDeps()
+    public function getMissingDeps(): array
     {
         $result = [];
         if (! class_exists(Google2FA::class)) {
-            $result[] = [
-                'class' => Application::getName(),
-                'dep' => 'pragmarx/google2fa-qrcode',
-            ];
+            $result[] = ['class' => Application::getName(), 'dep' => 'pragmarx/google2fa-qrcode'];
         }
 
         if (! class_exists(ImageRenderer::class)) {
-            $result[] = [
-                'class' => Application::getName(),
-                'dep' => 'bacon/bacon-qr-code',
-            ];
+            $result[] = ['class' => Application::getName(), 'dep' => 'bacon/bacon-qr-code'];
         }
 
         if (! class_exists(U2FServer::class)) {
-            $result[] = [
-                'class' => Key::getName(),
-                'dep' => 'code-lts/u2f-php-server',
-            ];
+            $result[] = ['class' => Key::getName(), 'dep' => 'code-lts/u2f-php-server'];
         }
 
         return $result;
@@ -187,16 +165,15 @@ class TwoFactor
      *
      * @param string $name Backend name
      *
-     * @return string
      * @psalm-return class-string
      */
-    public function getBackendClass($name)
+    public function getBackendClass(string $name): string
     {
         $result = TwoFactorPlugin::class;
         if (in_array($name, $this->available)) {
             /** @psalm-var class-string $result */
             $result = 'PhpMyAdmin\\Plugins\\TwoFactor\\' . ucfirst($name);
-        } elseif (! empty($name)) {
+        } elseif ($name !== '') {
             $result = Invalid::class;
         }
 
@@ -205,10 +182,8 @@ class TwoFactor
 
     /**
      * Returns backend for current user
-     *
-     * @return TwoFactorPlugin
      */
-    public function getBackendForCurrentUser()
+    public function getBackendForCurrentUser(): TwoFactorPlugin
     {
         $name = $this->getBackendClass($this->config['backend']);
 
@@ -220,7 +195,7 @@ class TwoFactor
      *
      * @param bool $skipSession Skip session cache
      */
-    public function check($skipSession = false): bool
+    public function check(bool $skipSession = false): bool
     {
         if ($skipSession) {
             return $this->backend->check();
@@ -238,7 +213,7 @@ class TwoFactor
      *
      * @return string HTML code
      */
-    public function render()
+    public function render(): string
     {
         return $this->backend->getError() . $this->backend->render();
     }
@@ -248,7 +223,7 @@ class TwoFactor
      *
      * @return string HTML code
      */
-    public function setup()
+    public function setup(): string
     {
         return $this->backend->getError() . $this->backend->setup();
     }
@@ -258,7 +233,7 @@ class TwoFactor
      *
      * @return true|Message
      */
-    public function save()
+    public function save(): bool|Message
     {
         return $this->userPreferences->persistOption('2fa', $this->config, null);
     }
@@ -271,7 +246,7 @@ class TwoFactor
      *
      * @param string $name Backend name
      */
-    public function configure($name): bool
+    public function configure(string $name): bool
     {
         $this->config = ['backend' => $name, 'settings' => []];
         if ($name === '') {
@@ -300,19 +275,15 @@ class TwoFactor
     /**
      * Returns array with all available backends
      *
-     * @return array
+     * @return array<int, array{id: mixed, name: mixed, description: mixed}>
      */
-    public function getAllBackends()
+    public function getAllBackends(): array
     {
         $all = array_merge([''], $this->available);
         $backends = [];
         foreach ($all as $name) {
             $cls = $this->getBackendClass($name);
-            $backends[] = [
-                'id' => $cls::$id,
-                'name' => $cls::getName(),
-                'description' => $cls::getDescription(),
-            ];
+            $backends[] = ['id' => $cls::$id, 'name' => $cls::getName(), 'description' => $cls::getDescription()];
         }
 
         return $backends;

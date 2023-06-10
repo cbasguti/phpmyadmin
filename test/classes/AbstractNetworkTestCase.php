@@ -14,7 +14,6 @@ use PHPUnit\Framework\MockObject\MockObject;
 use ReflectionProperty;
 
 use function array_slice;
-use function call_user_func_array;
 use function count;
 use function end;
 use function is_array;
@@ -30,10 +29,8 @@ abstract class AbstractNetworkTestCase extends AbstractTestCase
      */
     public static function setUpBeforeClass(): void
     {
-        global $cfg;
-
         $settings = new Settings([]);
-        $cfg = $settings->toArray();
+        $GLOBALS['cfg'] = $settings->asArray();
     }
 
     /**
@@ -41,7 +38,7 @@ abstract class AbstractNetworkTestCase extends AbstractTestCase
      *
      * @param mixed[]|string|StringContains ...$param parameter for header method
      */
-    public function mockResponse(...$param): MockObject
+    public function mockResponse(array|string|StringContains ...$param): MockObject
     {
         $mockResponse = $this->getMockBuilder(ResponseRenderer::class)
             ->disableOriginalConstructor()
@@ -53,7 +50,7 @@ abstract class AbstractNetworkTestCase extends AbstractTestCase
                 'setRequestStatus',
                 'addJSON',
                 'addHTML',
-                'getFooter',
+                'setMinimalFooter',
                 'getHeader',
                 'httpResponseCode',
             ])
@@ -64,23 +61,18 @@ abstract class AbstractNetworkTestCase extends AbstractTestCase
             ->with()
             ->will($this->returnValue(false));
 
-        if (count($param) > 0) {
+        if ($param !== []) {
             if (is_array($param[0])) {
                 if (is_array($param[0][0]) && count($param) === 1) {
                     $param = $param[0];
                     if (is_int(end($param))) {
-                        $http_response_code_param = end($param);
+                        $httpResponseCodeParam = end($param);
                         $param = array_slice($param, 0, -1);
 
                         $mockResponse->expects($this->once())
-                        ->method('httpResponseCode')->with($http_response_code_param);
+                        ->method('httpResponseCode')->with($httpResponseCodeParam);
                     }
                 }
-
-                $header_method = $mockResponse->expects($this->exactly(count($param)))
-                    ->method('header');
-
-                call_user_func_array([$header_method, 'withConsecutive'], $param);
             } else {
                 $mockResponse->expects($this->once())
                     ->method('header')
@@ -89,7 +81,6 @@ abstract class AbstractNetworkTestCase extends AbstractTestCase
         }
 
         $attrInstance = new ReflectionProperty(ResponseRenderer::class, 'instance');
-        $attrInstance->setAccessible(true);
         $attrInstance->setValue($mockResponse);
 
         return $mockResponse;
@@ -101,9 +92,8 @@ abstract class AbstractNetworkTestCase extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         $response = new ReflectionProperty(ResponseRenderer::class, 'instance');
-        $response->setAccessible(true);
         $response->setValue(null);
-        $response->setAccessible(false);
     }
 }

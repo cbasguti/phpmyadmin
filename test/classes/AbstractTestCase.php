@@ -6,14 +6,16 @@ namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\Cache;
 use PhpMyAdmin\Config;
+use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\Core;
 use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Dbal\DbiExtension;
 use PhpMyAdmin\LanguageManager;
 use PhpMyAdmin\SqlParser\Translator;
 use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer;
-use PhpMyAdmin\Theme;
-use PhpMyAdmin\ThemeManager;
+use PhpMyAdmin\Theme\Theme;
+use PhpMyAdmin\Theme\ThemeManager;
 use PhpMyAdmin\Utils\HttpRequest;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
@@ -34,7 +36,7 @@ abstract class AbstractTestCase extends TestCase
      *
      * @var string[]
      */
-    private $globalsAllowList = [
+    private array $globalsAllowList = [
         '__composer_autoload_files',
         'GLOBALS',
         '_SERVER',
@@ -42,20 +44,6 @@ abstract class AbstractTestCase extends TestCase
         '__PHPUNIT_CONFIGURATION_FILE',
         '__PHPUNIT_BOOTSTRAP',
     ];
-
-    /**
-     * The DatabaseInterface loaded by setGlobalDbi
-     *
-     * @var DatabaseInterface
-     */
-    protected $dbi;
-
-    /**
-     * The DbiDummy loaded by setGlobalDbi
-     *
-     * @var DbiDummy
-     */
-    protected $dummyDbi;
 
     /**
      * Prepares environment for the test.
@@ -85,145 +73,116 @@ abstract class AbstractTestCase extends TestCase
         $_COOKIE = [];
         $_FILES = [];
         $_REQUEST = [];
+
+        $GLOBALS['server'] = 1;
+        $GLOBALS['db'] = '';
+        $GLOBALS['table'] = '';
+        $GLOBALS['sql_query'] = '';
+        $GLOBALS['text_dir'] = 'ltr';
+
         // Config before DBI
         $this->setGlobalConfig();
-        $this->loadContainerBuilder();
-        $this->setGlobalDbi();
-        $this->loadDbiIntoContainerBuilder();
         Cache::purge();
-    }
 
-    protected function assertAllQueriesConsumed(): void
-    {
-        $unUsedQueries = $this->dummyDbi->getUnUsedQueries();
-        $this->assertSame([], $unUsedQueries, 'Some queries where not used !');
-    }
-
-    protected function assertAllSelectsConsumed(): void
-    {
-        $unUsedSelects = $this->dummyDbi->getUnUsedDatabaseSelects();
-        $this->assertSame(
-            [],
-            $unUsedSelects,
-            'Some database selects where not used !'
-        );
-    }
-
-    protected function assertAllErrorCodesConsumed(): void
-    {
-        if ($this->dummyDbi->hasUnUsedErrors() === false) {
-            $this->assertTrue(true);// increment the assertion count
-
-            return;
-        }
-
-        $this->fail('Some error codes where not used !');
+        (new ReflectionClass(Relation::class))->getProperty('cache')->setValue([]);
     }
 
     protected function loadContainerBuilder(): void
     {
-        global $containerBuilder;
-
-        $containerBuilder = Core::getContainerBuilder();
+        $GLOBALS['containerBuilder'] = Core::getContainerBuilder();
     }
 
     protected function loadDbiIntoContainerBuilder(): void
     {
-        global $containerBuilder, $dbi;
-
-        $containerBuilder->set(DatabaseInterface::class, $dbi);
-        $containerBuilder->setAlias('dbi', DatabaseInterface::class);
+        $GLOBALS['containerBuilder']->set(DatabaseInterface::class, $GLOBALS['dbi']);
+        $GLOBALS['containerBuilder']->setAlias('dbi', DatabaseInterface::class);
     }
 
     protected function loadResponseIntoContainerBuilder(): void
     {
-        global $containerBuilder;
-
         $response = new ResponseRenderer();
-        $containerBuilder->set(ResponseRenderer::class, $response);
-        $containerBuilder->setAlias('response', ResponseRenderer::class);
+        $GLOBALS['containerBuilder']->set(ResponseRenderer::class, $response);
+        $GLOBALS['containerBuilder']->setAlias('response', ResponseRenderer::class);
     }
 
     protected function setResponseIsAjax(): void
     {
-        global $containerBuilder;
-
         /** @var ResponseRenderer $response */
-        $response = $containerBuilder->get(ResponseRenderer::class);
+        $response = $GLOBALS['containerBuilder']->get(ResponseRenderer::class);
 
         $response->setAjax(true);
     }
 
     protected function getResponseHtmlResult(): string
     {
-        global $containerBuilder;
-
         /** @var ResponseRenderer $response */
-        $response = $containerBuilder->get(ResponseRenderer::class);
+        $response = $GLOBALS['containerBuilder']->get(ResponseRenderer::class);
 
         return $response->getHTMLResult();
     }
 
+    /** @return mixed[] */
     protected function getResponseJsonResult(): array
     {
-        global $containerBuilder;
-
         /** @var ResponseRenderer $response */
-        $response = $containerBuilder->get(ResponseRenderer::class);
+        $response = $GLOBALS['containerBuilder']->get(ResponseRenderer::class);
 
         return $response->getJSONResult();
     }
 
     protected function assertResponseWasNotSuccessfull(): void
     {
-        global $containerBuilder;
         /** @var ResponseRenderer $response */
-        $response = $containerBuilder->get(ResponseRenderer::class);
+        $response = $GLOBALS['containerBuilder']->get(ResponseRenderer::class);
 
         $this->assertFalse($response->hasSuccessState(), 'expected the request to fail');
     }
 
     protected function assertResponseWasSuccessfull(): void
     {
-        global $containerBuilder;
         /** @var ResponseRenderer $response */
-        $response = $containerBuilder->get(ResponseRenderer::class);
+        $response = $GLOBALS['containerBuilder']->get(ResponseRenderer::class);
 
         $this->assertTrue($response->hasSuccessState(), 'expected the request not to fail');
     }
 
-    protected function setGlobalDbi(): void
+    protected function createDatabaseInterface(DbiExtension|null $extension = null): DatabaseInterface
     {
-        global $dbi;
-        $this->dummyDbi = new DbiDummy();
-        $this->dbi = DatabaseInterface::load($this->dummyDbi);
-        $dbi = $this->dbi;
+        return new DatabaseInterface($extension ?? $this->createDbiDummy());
+    }
+
+    protected function createDbiDummy(): DbiDummy
+    {
+        return new DbiDummy();
+    }
+
+    protected function createConfig(): Config
+    {
+        $config = new Config();
+        $config->loadAndCheck();
+
+        return $config;
     }
 
     protected function setGlobalConfig(): void
     {
-        global $config, $cfg;
-        $config = new Config();
-        $config->checkServers();
-        $config->set('environment', 'development');
-        $cfg = $config->settings;
+        $GLOBALS['config'] = $this->createConfig();
+        $GLOBALS['config']->set('environment', 'development');
+        $GLOBALS['cfg'] = $GLOBALS['config']->settings;
     }
 
     protected function setTheme(): void
     {
-        global $theme;
-        $theme = Theme::load(
+        $GLOBALS['theme'] = Theme::load(
             ThemeManager::getThemesDir() . 'pmahomme',
             ThemeManager::getThemesFsDir() . 'pmahomme' . DIRECTORY_SEPARATOR,
-            'pmahomme'
+            'pmahomme',
         );
     }
 
     protected function setLanguage(string $code = 'en'): void
     {
-        global $lang;
-
-        $lang = $code;
+        $GLOBALS['lang'] = $code;
         /* Ensure default language is active */
         $languageEn = LanguageManager::getInstance()->getLanguage($code);
         if ($languageEn === false) {
@@ -260,17 +219,33 @@ abstract class AbstractTestCase extends TestCase
      * @param object|null $object     The object to inspect, pass null for static objects()
      * @param string      $className  The class name
      * @param string      $methodName The method name
-     * @param array       $params     The parameters for the invocation
+     * @param mixed[]     $params     The parameters for the invocation
      * @phpstan-param class-string $className
      *
      * @return mixed the output from the protected method.
      */
-    protected function callFunction($object, string $className, string $methodName, array $params)
+    protected function callFunction(object|null $object, string $className, string $methodName, array $params): mixed
     {
         $class = new ReflectionClass($className);
         $method = $class->getMethod($methodName);
-        $method->setAccessible(true);
 
         return $method->invokeArgs($object, $params);
+    }
+
+    /**
+     * Set a private or protected property via reflection.
+     *
+     * @param object|null $object       The object to inspect, pass null for static objects()
+     * @param string      $className    The class name
+     * @param string      $propertyName The method name
+     * @param mixed       $value        The parameters for the invocation
+     * @phpstan-param class-string $className
+     */
+    protected function setProperty(object|null $object, string $className, string $propertyName, mixed $value): void
+    {
+        $class = new ReflectionClass($className);
+        $property = $class->getProperty($propertyName);
+
+        $property->setValue($object, $value);
     }
 }

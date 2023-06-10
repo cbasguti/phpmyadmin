@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Selenium;
 
-/**
- * @coversNothing
- */
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
+
+#[CoversNothing]
 class TrackingTest extends TestBase
 {
     /**
@@ -15,6 +16,7 @@ class TrackingTest extends TestBase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->dbQuery(
             'USE `' . $this->databaseName . '`;'
             . 'CREATE TABLE `test_table` ('
@@ -27,7 +29,7 @@ class TrackingTest extends TestBase
             . ' `val` int(11) NOT NULL,'
             . ' PRIMARY KEY (`id`)'
             . ');'
-            . 'INSERT INTO `test_table` (val) VALUES (2), (3);'
+            . 'INSERT INTO `test_table` (val) VALUES (2), (3);',
         );
 
         $this->login();
@@ -50,9 +52,8 @@ class TrackingTest extends TestBase
 
     /**
      * Tests basic tracking functionality
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testTrackingData(): void
     {
         $this->executeSqlAndReturnToTableTracking();
@@ -62,93 +63,85 @@ class TrackingTest extends TestBase
 
         $this->assertStringContainsString(
             'DROP TABLE IF EXISTS `test_table`',
-            $this->getCellByTableId('ddl_versions', 1, 4)
+            $this->getCellByTableId('ddl_versions', 1, 4),
         );
 
         $this->assertStringContainsString(
             'CREATE TABLE `test_table` (',
-            $this->getCellByTableId('ddl_versions', 2, 4)
+            $this->getCellByTableId('ddl_versions', 2, 4),
         );
 
         $this->assertStringContainsString(
             'UPDATE test_table SET val = val + 1',
-            $this->getCellByTableId('dml_versions', 1, 4)
+            $this->getCellByTableId('dml_versions', 1, 4),
         );
 
         $this->assertStringNotContainsString(
             'DELETE FROM test_table WHERE val = 3',
-            $this->byId('dml_versions')->getText()
+            $this->byId('dml_versions')->getText(),
         );
 
         // only structure
-        $this->selectByLabel(
-            $this->byName('logtype'),
-            'Structure only'
-        );
+        $this->selectByLabel($this->byName('log_type'), 'Structure only');
 
         $this->byCssSelector("input[value='Go']")->click();
 
         $this->waitAjax();
 
         $this->assertFalse(
-            $this->isElementPresent('id', 'dml_versions')
+            $this->isElementPresent('id', 'dml_versions'),
         );
 
         $this->assertStringContainsString(
             'DROP TABLE IF EXISTS `test_table`',
-            $this->getCellByTableId('ddl_versions', 1, 4)
+            $this->getCellByTableId('ddl_versions', 1, 4),
         );
 
         $this->assertStringContainsString(
             'CREATE TABLE `test_table` (',
-            $this->getCellByTableId('ddl_versions', 2, 4)
+            $this->getCellByTableId('ddl_versions', 2, 4),
         );
 
         // only data
-        $this->selectByLabel(
-            $this->waitForElement('name', 'logtype'),
-            'Data only'
-        );
+        $this->selectByLabel($this->waitForElement('name', 'log_type'), 'Data only');
 
         $this->byCssSelector("input[value='Go']")->click();
 
         $this->waitAjax();
 
         $this->assertFalse(
-            $this->isElementPresent('id', 'ddl_versions')
+            $this->isElementPresent('id', 'ddl_versions'),
         );
 
         $this->assertStringContainsString(
             'UPDATE test_table SET val = val + 1',
-            $this->getCellByTableId('dml_versions', 1, 4)
+            $this->getCellByTableId('dml_versions', 1, 4),
         );
 
         $this->assertStringNotContainsString(
             'DELETE FROM test_table WHERE val = 3',
-            $this->byId('dml_versions')->getText()
+            $this->byId('dml_versions')->getText(),
         );
     }
 
     /**
      * Tests deactivation of tracking
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testDeactivateTracking(): void
     {
         $this->byCssSelector("input[value='Deactivate now']")->click();
         $this->waitForElement('cssSelector', "input[value='Activate now']");
         $this->executeSqlAndReturnToTableTracking();
         $this->assertFalse(
-            $this->isElementPresent('id', 'dml_versions')
+            $this->isElementPresent('id', 'dml_versions'),
         );
     }
 
     /**
      * Tests dropping a tracking
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testDropTracking(): void
     {
         $this->navigateDatabase($this->databaseName, true);
@@ -163,13 +156,11 @@ class TrackingTest extends TestBase
         $this->moveto($ele);
         $this->click();
 
-        $this->waitForElement('cssSelector', 'button.submitOK')->click();
+        $this->waitForElement('id', 'functionConfirmOkButton')->click();
 
         $this->waitAjax();
-        $this->waitForElement(
-            'xpath',
-            '//div[@class=\'alert alert-success\' and contains(., \'Tracking data deleted successfully.\')]'
-        );
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString('Tracking data deleted successfully.', $success->getText());
 
         // Can not use getCellByTableId,
         // since this is under 'th' and not 'td'
@@ -177,23 +168,22 @@ class TrackingTest extends TestBase
             'test_table',
             $this->waitForElement(
                 'cssSelector',
-                'table#noversions tbody tr:nth-child(1) th:nth-child(2)'
-            )->getText()
+                'table#noversions tbody tr:nth-child(1) th:nth-child(2)',
+            )->getText(),
         );
         $this->assertStringContainsString(
             'test_table_2',
             $this->waitForElement(
                 'cssSelector',
-                'table#noversions tbody tr:nth-child(2) th:nth-child(2)'
-            )->getText()
+                'table#noversions tbody tr:nth-child(2) th:nth-child(2)',
+            )->getText(),
         );
     }
 
     /**
      * Tests structure snapshot of a tracking
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testStructureSnapshot(): void
     {
         $this->byPartialLinkText('Structure snapshot')->click();
@@ -201,22 +191,22 @@ class TrackingTest extends TestBase
 
         $this->assertStringContainsString(
             'id',
-            $this->getCellByTableId('tablestructure', 1, 2)
+            $this->getCellByTableId('tablestructure', 1, 2),
         );
 
         $this->assertStringContainsString(
             'val',
-            $this->getCellByTableId('tablestructure', 2, 2)
+            $this->getCellByTableId('tablestructure', 2, 2),
         );
 
         $this->assertStringContainsString(
             'PRIMARY',
-            $this->getCellByTableId('tablestructure_indexes', 1, 1)
+            $this->getCellByTableId('tablestructure_indexes', 1, 1),
         );
 
         $this->assertStringContainsString(
             'id',
-            $this->getCellByTableId('tablestructure_indexes', 1, 5)
+            $this->getCellByTableId('tablestructure_indexes', 1, 5),
         );
     }
 

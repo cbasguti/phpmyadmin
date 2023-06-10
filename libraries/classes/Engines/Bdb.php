@@ -19,14 +19,12 @@ class Bdb extends StorageEngine
     /**
      * Returns array with variable names related to this storage engine
      *
-     * @return array   variable names
+     * @return mixed[]   variable names
      */
-    public function getVariables()
+    public function getVariables(): array
     {
         return [
-            'version_bdb' => [
-                'title' => __('Version information'),
-            ],
+            'version_bdb' => ['title' => __('Version information')],
             'bdb_cache_size' => ['type' => StorageEngine::DETAILS_TYPE_SIZE],
             'bdb_home' => [],
             'bdb_log_buffer_size' => ['type' => StorageEngine::DETAILS_TYPE_SIZE],
@@ -50,7 +48,7 @@ class Bdb extends StorageEngine
      *
      * @return string LIKE pattern
      */
-    public function getVariablesLikePattern()
+    public function getVariablesLikePattern(): string
     {
         return '%bdb%';
     }
@@ -61,7 +59,7 @@ class Bdb extends StorageEngine
      *
      * @return string  mysql helppage filename
      */
-    public function getMysqlHelpPage()
+    public function getMysqlHelpPage(): string
     {
         return 'bdb';
     }

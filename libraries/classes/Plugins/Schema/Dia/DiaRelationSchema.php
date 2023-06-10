@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Plugins\Schema\Dia;
 
+use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Plugins\Schema\ExportRelationSchema;
 
 use function in_array;
@@ -23,30 +24,25 @@ use function in_array;
  * inherits ExportRelationSchema class has common functionality added
  * to this class
  *
- * @property Dia $diagram
+ * @extends ExportRelationSchema<Dia>
  */
 class DiaRelationSchema extends ExportRelationSchema
 {
     /** @var TableStatsDia[] */
-    private $tables = [];
+    private array $tables = [];
 
     /** @var RelationStatsDia[] Relations */
-    private $relations = [];
+    private array $relations = [];
 
-    /** @var float */
-    private $topMargin = 2.8222000598907471;
+    private float $topMargin = 2.8222000598907471;
 
-    /** @var float */
-    private $bottomMargin = 2.8222000598907471;
+    private float $bottomMargin = 2.8222000598907471;
 
-    /** @var float */
-    private $leftMargin = 2.8222000598907471;
+    private float $leftMargin = 2.8222000598907471;
 
-    /** @var float */
-    private $rightMargin = 2.8222000598907471;
+    private float $rightMargin = 2.8222000598907471;
 
-    /** @var int */
-    public static $objectId = 0;
+    public static int $objectId = 0;
 
     /**
      * Upon instantiation This outputs the Dia XML document
@@ -55,10 +51,8 @@ class DiaRelationSchema extends ExportRelationSchema
      * @see Dia
      * @see TableStatsDia
      * @see RelationStatsDia
-     *
-     * @param string $db database name
      */
-    public function __construct($db)
+    public function __construct(DatabaseName $db)
     {
         parent::__construct($db, new Dia());
 
@@ -73,7 +67,7 @@ class DiaRelationSchema extends ExportRelationSchema
             $this->bottomMargin,
             $this->leftMargin,
             $this->rightMargin,
-            $this->orientation
+            $this->orientation,
         );
 
         $alltables = $this->getTablesFromRequest();
@@ -85,54 +79,51 @@ class DiaRelationSchema extends ExportRelationSchema
 
             $this->tables[$table] = new TableStatsDia(
                 $this->diagram,
-                $this->db,
+                $this->db->getName(),
                 $table,
                 $this->pageNumber,
                 $this->showKeys,
-                $this->offline
+                $this->offline,
             );
         }
 
-        $seen_a_relation = false;
-        foreach ($alltables as $one_table) {
-            $exist_rel = $this->relation->getForeigners($this->db, $one_table, '', 'both');
-            if (! $exist_rel) {
+        $seenARelation = false;
+        foreach ($alltables as $oneTable) {
+            $existRel = $this->relation->getForeigners($this->db->getName(), $oneTable, '', 'both');
+            if (! $existRel) {
                 continue;
             }
 
-            $seen_a_relation = true;
-            foreach ($exist_rel as $master_field => $rel) {
-                /* put the foreign table on the schema only if selected
-                 * by the user
-                 * (do not use array_search() because we would have to
-                 * to do a === false and this is not PHP3 compatible)
-                 */
-                if ($master_field !== 'foreign_keys_data') {
+            $seenARelation = true;
+            foreach ($existRel as $masterField => $rel) {
+                // put the foreign table on the schema only if selected by the user
+                // (do not use array_search() because we would have to do a === false and this is not PHP3 compatible)
+                if ($masterField !== 'foreign_keys_data') {
                     if (in_array($rel['foreign_table'], $alltables)) {
                         $this->addRelation(
-                            $one_table,
-                            $master_field,
+                            $oneTable,
+                            $masterField,
                             $rel['foreign_table'],
                             $rel['foreign_field'],
-                            $this->showKeys
+                            $this->showKeys,
                         );
                     }
 
                     continue;
                 }
 
-                foreach ($rel as $one_key) {
-                    if (! in_array($one_key['ref_table_name'], $alltables)) {
+                foreach ($rel as $oneKey) {
+                    if (! in_array($oneKey['ref_table_name'], $alltables)) {
                         continue;
                     }
 
-                    foreach ($one_key['index_list'] as $index => $one_field) {
+                    foreach ($oneKey['index_list'] as $index => $oneField) {
                         $this->addRelation(
-                            $one_table,
-                            $one_field,
-                            $one_key['ref_table_name'],
-                            $one_key['ref_index_list'][$index],
-                            $this->showKeys
+                            $oneTable,
+                            $oneField,
+                            $oneKey['ref_table_name'],
+                            $oneKey['ref_index_list'][$index],
+                            $this->showKeys,
                         );
                     }
                 }
@@ -141,19 +132,17 @@ class DiaRelationSchema extends ExportRelationSchema
 
         $this->drawTables();
 
-        if ($seen_a_relation) {
+        if ($seenARelation) {
             $this->drawRelations();
         }
 
         $this->diagram->endDiaDoc();
     }
 
-    /**
-     * Output Dia Document for download
-     */
-    public function showOutput(): void
+    /** @return array{fileName: non-empty-string, fileData: string} */
+    public function getExportInfo(): array
     {
-        $this->diagram->showOutput($this->getFileName('.dia'));
+        return ['fileName' => $this->getFileName('.dia'), 'fileData' => $this->diagram->getOutputData()];
     }
 
     /**
@@ -168,29 +157,29 @@ class DiaRelationSchema extends ExportRelationSchema
      * @param bool   $showKeys     Whether to display ONLY keys or not
      */
     private function addRelation(
-        $masterTable,
-        $masterField,
-        $foreignTable,
-        $foreignField,
-        $showKeys
+        string $masterTable,
+        string $masterField,
+        string $foreignTable,
+        string $foreignField,
+        bool $showKeys,
     ): void {
         if (! isset($this->tables[$masterTable])) {
             $this->tables[$masterTable] = new TableStatsDia(
                 $this->diagram,
-                $this->db,
+                $this->db->getName(),
                 $masterTable,
                 $this->pageNumber,
-                $showKeys
+                $showKeys,
             );
         }
 
         if (! isset($this->tables[$foreignTable])) {
             $this->tables[$foreignTable] = new TableStatsDia(
                 $this->diagram,
-                $this->db,
+                $this->db->getName(),
                 $foreignTable,
                 $this->pageNumber,
-                $showKeys
+                $showKeys,
             );
         }
 
@@ -199,7 +188,7 @@ class DiaRelationSchema extends ExportRelationSchema
             $this->tables[$masterTable],
             $masterField,
             $this->tables[$foreignTable],
-            $foreignField
+            $foreignField,
         );
     }
 

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin;
 
+use PhpMyAdmin\Query\Utilities;
+
 use function array_merge;
 use function is_array;
 use function is_string;
 use function preg_match;
 use function sort;
 use function strlen;
+use function strtr;
 use function usort;
 
 /**
@@ -25,14 +28,29 @@ class ListDatabase extends ListAbstract
 {
     public function __construct()
     {
-        global $dbi;
-
         parent::__construct();
 
-        $checkUserPrivileges = new CheckUserPrivileges($dbi);
+        $checkUserPrivileges = new CheckUserPrivileges($GLOBALS['dbi']);
         $checkUserPrivileges->getPrivileges();
 
         $this->build();
+    }
+
+    /** @return array<int, array<string, bool|string>> */
+    public function getList(): array
+    {
+        $selected = $this->getDefault();
+
+        $list = [];
+        foreach ($this as $eachItem) {
+            if (Utilities::isSystemSchema($eachItem)) {
+                continue;
+            }
+
+            $list[] = ['name' => $eachItem, 'is_selected' => $selected === $eachItem];
+        }
+
+        return $list;
     }
 
     /**
@@ -56,50 +74,46 @@ class ListDatabase extends ListAbstract
     /**
      * retrieves database list from server
      *
-     * @param string $like_db_name usually a db_name containing wildcards
+     * @param string|null $likeDbName usually a db_name containing wildcards
      *
-     * @return array
+     * @return mixed[]
      */
-    protected function retrieve($like_db_name = null)
+    protected function retrieve(string|null $likeDbName = null): array
     {
-        global $dbi;
-
-        $database_list = [];
+        $databaseList = [];
         $command = '';
         if (! $GLOBALS['cfg']['Server']['DisableIS']) {
             $command .= 'SELECT `SCHEMA_NAME` FROM `INFORMATION_SCHEMA`.`SCHEMATA`';
-            if ($like_db_name !== null) {
-                $command .= " WHERE `SCHEMA_NAME` LIKE '" . $like_db_name . "'";
+            if ($likeDbName !== null) {
+                $command .= " WHERE `SCHEMA_NAME` LIKE '" . $likeDbName . "'";
+            }
+        } elseif ($GLOBALS['dbs_to_test'] === false || $likeDbName !== null) {
+            $command .= 'SHOW DATABASES';
+            if ($likeDbName !== null) {
+                $command .= " LIKE '" . $likeDbName . "'";
             }
         } else {
-            if ($GLOBALS['dbs_to_test'] === false || $like_db_name !== null) {
-                $command .= 'SHOW DATABASES';
-                if ($like_db_name !== null) {
-                    $command .= " LIKE '" . $like_db_name . "'";
-                }
-            } else {
-                foreach ($GLOBALS['dbs_to_test'] as $db) {
-                    $database_list = array_merge(
-                        $database_list,
-                        $this->retrieve($db)
-                    );
-                }
+            foreach ($GLOBALS['dbs_to_test'] as $db) {
+                $databaseList = array_merge(
+                    $databaseList,
+                    $this->retrieve($db),
+                );
             }
         }
 
         if ($command) {
-            $database_list = $dbi->fetchResult($command, null, null);
+            $databaseList = $GLOBALS['dbi']->fetchResult($command, null, null);
         }
 
         if ($GLOBALS['cfg']['NaturalOrder']) {
-            usort($database_list, 'strnatcasecmp');
+            usort($databaseList, 'strnatcasecmp');
         } else {
             // need to sort anyway, otherwise information_schema
             // goes at the top
-            sort($database_list);
+            sort($databaseList);
         }
 
-        return $database_list;
+        return $databaseList;
     }
 
     /**
@@ -121,9 +135,7 @@ class ListDatabase extends ListAbstract
     protected function checkOnlyDatabase(): bool
     {
         if (is_string($GLOBALS['cfg']['Server']['only_db']) && strlen($GLOBALS['cfg']['Server']['only_db']) > 0) {
-            $GLOBALS['cfg']['Server']['only_db'] = [
-                $GLOBALS['cfg']['Server']['only_db'],
-            ];
+            $GLOBALS['cfg']['Server']['only_db'] = [$GLOBALS['cfg']['Server']['only_db']];
         }
 
         if (! is_array($GLOBALS['cfg']['Server']['only_db'])) {
@@ -132,16 +144,16 @@ class ListDatabase extends ListAbstract
 
         $items = [];
 
-        foreach ($GLOBALS['cfg']['Server']['only_db'] as $each_only_db) {
+        foreach ($GLOBALS['cfg']['Server']['only_db'] as $eachOnlyDb) {
             // check if the db name contains wildcard,
             // thus containing not escaped _ or %
-            if (! preg_match('/(^|[^\\\\])(_|%)/', $each_only_db)) {
+            if (! preg_match('/(^|[^\\\\])(_|%)/', $eachOnlyDb)) {
                 // ... not contains wildcard
-                $items[] = Util::unescapeMysqlWildcards($each_only_db);
+                $items[] = strtr($eachOnlyDb, ['\\\\' => '\\', '\\_' => '_', '\\%' => '%']);
                 continue;
             }
 
-            $items = array_merge($items, $this->retrieve($each_only_db));
+            $items = array_merge($items, $this->retrieve($eachOnlyDb));
         }
 
         $this->exchangeArray($items);
@@ -154,12 +166,12 @@ class ListDatabase extends ListAbstract
      *
      * @return string default item
      */
-    public function getDefault()
+    public function getDefault(): string
     {
         if (strlen($GLOBALS['db']) > 0) {
             return $GLOBALS['db'];
         }
 
-        return $this->getEmpty();
+        return parent::getDefault();
     }
 }

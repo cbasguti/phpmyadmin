@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Plugins\Schema;
 
+use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Plugins\Schema\Pdf\PdfRelationSchema;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @covers \PhpMyAdmin\Plugins\Schema\Pdf\PdfRelationSchema
- */
+#[CoversClass(PdfRelationSchema::class)]
 class PdfRelationSchemaTest extends AbstractTestCase
 {
-    /** @var PdfRelationSchema */
-    protected $object;
+    protected PdfRelationSchema $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -22,6 +22,8 @@ class PdfRelationSchemaTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $_REQUEST['page_number'] = 33;
         $_REQUEST['pdf_show_grid'] = true;
         $_REQUEST['pdf_show_color'] = true;
@@ -42,7 +44,7 @@ class PdfRelationSchemaTest extends AbstractTestCase
         $GLOBALS['db'] = 'test_db';
         $GLOBALS['cfg']['Server']['DisableIS'] = true;
 
-        $this->object = new PdfRelationSchema('test_db');
+        $this->object = new PdfRelationSchema(DatabaseName::from('test_db'));
     }
 
     /**
@@ -52,14 +54,14 @@ class PdfRelationSchemaTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
     /**
      * Test for construct
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testConstructor(): void
     {
         $this->assertEquals(33, $this->object->getPageNumber());

@@ -5,16 +5,15 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\CreateAddField;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 use function json_encode;
 
-/**
- * @covers \PhpMyAdmin\CreateAddField
- */
+#[CoversClass(CreateAddField::class)]
 class CreateAddFieldTest extends AbstractTestCase
 {
-    /** @var CreateAddField */
-    private $createAddField;
+    private CreateAddField $createAddField;
 
     /**
      * Set up for test cases
@@ -22,17 +21,18 @@ class CreateAddFieldTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $this->createAddField = new CreateAddField($GLOBALS['dbi']);
     }
 
     /**
      * Test for getPartitionsDefinition
      *
-     * @param string $expected Expected result
-     * @param array  $request  $_REQUEST array
-     *
-     * @dataProvider providerGetPartitionsDefinition
+     * @param string       $expected Expected result
+     * @param array<mixed> $request  $_REQUEST array
      */
+    #[DataProvider('providerGetPartitionsDefinition')]
     public function testGetPartitionsDefinition(string $expected, array $request): void
     {
         $_POST = $request;
@@ -43,22 +43,15 @@ class CreateAddFieldTest extends AbstractTestCase
     /**
      * Data provider for testGetPartitionsDefinition
      *
-     * @return array
+     * @return array<array{string, array<mixed>}>
      */
-    public function providerGetPartitionsDefinition(): array
+    public static function providerGetPartitionsDefinition(): array
     {
         return [
-            [
-                '',
-                [],
-            ],
+            ['', []],
             [
                 ' PARTITION BY HASH (EXPR()) PARTITIONS 2',
-                [
-                    'partition_by' => 'HASH',
-                    'partition_expr' => 'EXPR()',
-                    'partition_count' => '2',
-                ],
+                ['partition_by' => 'HASH', 'partition_expr' => 'EXPR()', 'partition_count' => '2'],
             ],
             [
                 ' PARTITION BY LIST (EXPR2()) PARTITIONS 2 ( PARTITION p0,  PARTITION p1)',
@@ -227,13 +220,12 @@ class CreateAddFieldTest extends AbstractTestCase
     /**
      * Test for getTableCreationQuery
      *
-     * @param string $expected Expected result
-     * @param string $db       Database name
-     * @param string $table    Table name
-     * @param array  $request  $_REQUEST array
-     *
-     * @dataProvider providerGetTableCreationQuery
+     * @param string                        $expected Expected result
+     * @param string                        $db       Database name
+     * @param string                        $table    Table name
+     * @param array<string, string|mixed[]> $request  $_REQUEST array
      */
+    #[DataProvider('providerGetTableCreationQuery')]
     public function testGetTableCreationQuery(string $expected, string $db, string $table, array $request): void
     {
         $_POST = $request;
@@ -244,9 +236,9 @@ class CreateAddFieldTest extends AbstractTestCase
     /**
      * Data provider for testGetTableCreationQuery
      *
-     * @return array
+     * @return array<array{string, string, string, array<string, string|mixed[]>}>
      */
-    public function providerGetTableCreationQuery(): array
+    public static function providerGetTableCreationQuery(): array
     {
         return [
             [
@@ -302,11 +294,10 @@ class CreateAddFieldTest extends AbstractTestCase
     /**
      * Test for getNumberOfFieldsFromRequest
      *
-     * @param int   $expected Expected result
-     * @param array $request  $_REQUEST array
-     *
-     * @dataProvider providerGetNumberOfFieldsFromRequest
+     * @param int     $expected Expected result
+     * @param mixed[] $request  $_REQUEST array
      */
+    #[DataProvider('providerGetNumberOfFieldsFromRequest')]
     public function testGetNumberOfFieldsFromRequest(int $expected, array $request): void
     {
         $_POST = $request;
@@ -317,24 +308,19 @@ class CreateAddFieldTest extends AbstractTestCase
     /**
      * Data provider for testGetNumberOfFieldsFromRequest
      *
-     * @return array
+     * @return array<array{int, mixed[]}>
      */
-    public function providerGetNumberOfFieldsFromRequest(): array
+    public static function providerGetNumberOfFieldsFromRequest(): array
     {
-        return [
-            [
-                4,
-                [],
-            ],
-        ];
+        return [[4, []]];
     }
 
     /**
      * Data provider for testGetColumnCreationQuery
      *
-     * @return array[]
+     * @return list<array{string, array<string, string|string[]|false>}>
      */
-    public function providerGetColumnCreationQueryRequest(): array
+    public static function providerGetColumnCreationQueryRequest(): array
     {
         return [
             [
@@ -435,16 +421,7 @@ class CreateAddFieldTest extends AbstractTestCase
                             'Key_block_size' => '',
                             'Parser' => '',
                             'Index_type' => '',
-                            'columns' => [
-                                [
-                                    'col_index' => '0',
-                                    'size' => '12',
-                                ],
-                                [
-                                    'col_index' => '0',
-                                    'size' => '',
-                                ],
-                            ],
+                            'columns' => [['col_index' => '0','size' => '12'], ['col_index' => '0','size' => '']],
                         ],
                         [
                             'Key_name' => 'un3',
@@ -453,12 +430,7 @@ class CreateAddFieldTest extends AbstractTestCase
                             'Key_block_size' => '',
                             'Parser' => 'Parser 1',
                             'Index_type' => 'BTREE',
-                            'columns' => [
-                                [
-                                    'col_index' => '0',
-                                    'size' => '12',
-                                ],
-                            ],
+                            'columns' => [['col_index' => '0', 'size' => '12']],
                         ],
                         [
                             'Key_name' => 'un3.1',
@@ -467,12 +439,7 @@ class CreateAddFieldTest extends AbstractTestCase
                             'Key_block_size' => '',
                             'Parser' => 'Parser 1',
                             'Index_type' => 'BTREE',
-                            'columns' => [
-                                [
-                                    'col_index' => '0',
-                                    'size' => '12',
-                                ],
-                            ],
+                            'columns' => [['col_index' => '0', 'size' => '12']],
                         ],
                         [
                             'Key_name' => 'un2',
@@ -481,12 +448,7 @@ class CreateAddFieldTest extends AbstractTestCase
                             'Key_block_size' => '32',
                             'Parser' => '',
                             'Index_type' => 'BTREE',
-                            'columns' => [
-                                [
-                                    'col_index' => '0',
-                                    'size' => '12',
-                                ],
-                            ],
+                            'columns' => [['col_index' => '0', 'size' => '12']],
                         ],
                     ]),
                     'indexes' => json_encode([]),
@@ -518,9 +480,8 @@ class CreateAddFieldTest extends AbstractTestCase
         ];
     }
 
-    /**
-     * @dataProvider providerGetColumnCreationQueryRequest
-     */
+    /** @param array<string, string|string[]|false> $request */
+    #[DataProvider('providerGetColumnCreationQueryRequest')]
     public function testGetColumnCreationQuery(string $expected, array $request): void
     {
         $_POST = $request;

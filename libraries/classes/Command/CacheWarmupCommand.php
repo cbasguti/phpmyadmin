@@ -11,6 +11,8 @@ use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use SplFileInfo;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -25,15 +27,13 @@ use function str_contains;
 use function str_replace;
 
 use const CACHE_DIR;
+use const CONFIG_FILE;
 
+#[AsCommand(name: 'cache:warmup', description: 'Warms up the Twig templates cache.')]
 final class CacheWarmupCommand extends Command
 {
-    /** @var string|null */
-    protected static $defaultName = 'cache:warmup';
-
     protected function configure(): void
     {
-        $this->setDescription('Warms up the Twig templates cache');
         $this->addOption('twig', null, null, 'Warm up twig templates cache.');
         $this->addOption('routing', null, null, 'Warm up routing cache.');
         $this->addOption('twig-po', null, null, 'Warm up twig templates and write file mappings.');
@@ -42,7 +42,7 @@ final class CacheWarmupCommand extends Command
             null,
             InputArgument::OPTIONAL,
             'Defines the environment (production or development) for twig warmup',
-            'production'
+            'production',
         );
         $this->setHelp('The <info>%command.name%</info> command warms up the cache of the Twig templates.');
     }
@@ -104,9 +104,9 @@ final class CacheWarmupCommand extends Command
         $output->writeln(
             sprintf(
                 'Warm up did not work, the folder "%s" is probably not writable.',
-                CACHE_DIR
+                CACHE_DIR,
             ),
-            OutputInterface::VERBOSITY_NORMAL
+            OutputInterface::VERBOSITY_NORMAL,
         );
 
         return Command::FAILURE;
@@ -115,15 +115,16 @@ final class CacheWarmupCommand extends Command
     private function warmUpTwigCache(
         OutputInterface $output,
         string $environment,
-        bool $writeReplacements
+        bool $writeReplacements,
     ): int {
-        global $cfg, $config, $dbi;
+        $GLOBALS['config'] ??= null;
 
         $output->writeln('Warming up the twig cache', OutputInterface::VERBOSITY_VERBOSE);
-        $config = new Config(CONFIG_FILE);
-        $cfg['environment'] = $environment;
-        $config->set('environment', $cfg['environment']);
-        $dbi = new DatabaseInterface(new DbiDummy());
+        $GLOBALS['config'] = new Config();
+        $GLOBALS['config']->loadAndCheck(CONFIG_FILE);
+        $GLOBALS['cfg']['environment'] = $environment;
+        $GLOBALS['config']->set('environment', $GLOBALS['cfg']['environment']);
+        $GLOBALS['dbi'] = new DatabaseInterface(new DbiDummy());
         $tmpDir = ROOT_PATH . 'twig-templates';
         $twig = Template::getTwigEnvironment($tmpDir);
 
@@ -131,7 +132,7 @@ final class CacheWarmupCommand extends Command
 
         $templates = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator(Template::TEMPLATES_FOLDER),
-            RecursiveIteratorIterator::LEAVES_ONLY
+            RecursiveIteratorIterator::LEAVES_ONLY,
         );
 
         /** @var CacheInterface $twigCache */
@@ -139,10 +140,11 @@ final class CacheWarmupCommand extends Command
         $replacements = [];
         $output->writeln(
             'Twig debug is: ' . ($twig->isDebug() ? 'enabled' : 'disabled'),
-            OutputInterface::VERBOSITY_DEBUG
+            OutputInterface::VERBOSITY_DEBUG,
         );
 
         $output->writeln('Warming templates', OutputInterface::VERBOSITY_VERY_VERBOSE);
+        /** @var SplFileInfo $file */
         foreach ($templates as $file) {
             // Skip test files
             if (str_contains($file->getPathname(), '/test/')) {
@@ -166,10 +168,10 @@ final class CacheWarmupCommand extends Command
             // Generate line map
             /** @psalm-suppress InternalMethod */
             $cacheFilename = $twigCache->generateKey($name, $twig->getTemplateClass($name));
-            $template_file = 'templates/' . $name;
-            $cache_file = str_replace($tmpDir, 'twig-templates', $cacheFilename);
+            $templateFile = 'templates/' . $name;
+            $cacheFile = str_replace($tmpDir, 'twig-templates', $cacheFilename);
             /** @psalm-suppress InternalMethod */
-            $replacements[$cache_file] = [$template_file, $template->getDebugInfo()];
+            $replacements[$cacheFile] = [$templateFile, $template->getDebugInfo()];
         }
 
         if (! $writeReplacements) {

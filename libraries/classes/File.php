@@ -51,43 +51,37 @@ use const UPLOAD_ERR_PARTIAL;
  */
 class File
 {
-    /** @var string the temporary file name */
-    protected $name = null;
+    /** @var string|null the temporary file name */
+    protected string|null $name = null;
 
-    /** @var string the content */
-    protected $content = null;
+    protected string|null $content = null;
 
     /** @var Message|null the error message */
-    protected $errorMessage = null;
+    protected Message|null $errorMessage = null;
 
     /** @var bool whether the file is temporary or not */
-    protected $isTemp = false;
+    protected bool $isTemp = false;
 
-    /** @var string type of compression */
-    protected $compression = null;
+    protected string|null $compression = null;
 
-    /** @var int */
-    protected $offset = 0;
+    protected int $offset = 0;
 
     /** @var int size of chunk to read with every step */
-    protected $chunkSize = 32768;
+    protected int $chunkSize = 32768;
 
     /** @var resource|null file handle */
     protected $handle = null;
 
     /** @var bool whether to decompress content before returning */
-    protected $decompress = false;
+    protected bool $decompress = false;
 
     /** @var string charset of file */
-    protected $charset = null;
+    protected string $charset = '';
 
-    /** @var ZipExtension */
-    private $zipExtension;
+    private ZipExtension $zipExtension;
 
-    /**
-     * @param bool|string $name file name or false
-     */
-    public function __construct($name = false)
+    /** @param bool|string $name file name or false */
+    public function __construct(bool|string $name = false)
     {
         if ($name && is_string($name)) {
             $this->setName($name);
@@ -134,12 +128,12 @@ class File
      * checks or sets the temp flag for this file
      * file objects with temp flags are deleted with object destruction
      *
-     * @param bool $is_temp sets the temp flag
+     * @param bool $isTemp sets the temp flag
      */
-    public function isTemp(?bool $is_temp = null): bool
+    public function isTemp(bool|null $isTemp = null): bool
     {
-        if ($is_temp !== null) {
-            $this->isTemp = $is_temp;
+        if ($isTemp !== null) {
+            $this->isTemp = $isTemp;
         }
 
         return $this->isTemp;
@@ -150,7 +144,7 @@ class File
      *
      * @param string|null $name file name
      */
-    public function setName(?string $name): void
+    public function setName(string|null $name): void
     {
         $this->name = trim((string) $name);
     }
@@ -160,7 +154,7 @@ class File
      *
      * @return string|false the binary file content, or false if no content
      */
-    public function getRawContent()
+    public function getRawContent(): string|false
     {
         if ($this->content !== null) {
             return $this->content;
@@ -185,7 +179,7 @@ class File
      * @return string|false the binary file content as a string,
      *                      or false if no content
      */
-    public function getContent()
+    public function getContent(): string|false
     {
         $result = $this->getRawContent();
         if ($result === false) {
@@ -212,7 +206,7 @@ class File
      *
      * @return string|null File::$_name
      */
-    public function getName(): ?string
+    public function getName(): string|null
     {
         return $this->name;
     }
@@ -244,7 +238,7 @@ class File
      */
     public function setUploadedFromTblChangeRequest(
         string $key,
-        string $rownumber
+        string $rownumber,
     ): bool {
         if (
             ! isset($_FILES['fields_upload'])
@@ -263,17 +257,17 @@ class File
                 break;
             case UPLOAD_ERR_INI_SIZE:
                 $this->errorMessage = Message::error(__(
-                    'The uploaded file exceeds the upload_max_filesize directive in php.ini.'
+                    'The uploaded file exceeds the upload_max_filesize directive in php.ini.',
                 ));
                 break;
             case UPLOAD_ERR_FORM_SIZE:
                 $this->errorMessage = Message::error(__(
-                    'The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form.'
+                    'The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form.',
                 ));
                 break;
             case UPLOAD_ERR_PARTIAL:
                 $this->errorMessage = Message::error(__(
-                    'The uploaded file was only partially uploaded.'
+                    'The uploaded file was only partially uploaded.',
                 ));
                 break;
             case UPLOAD_ERR_NO_TMP_DIR:
@@ -311,18 +305,16 @@ class File
      * $file['error'] = [value]
      * </code>
      *
-     * @param array  $file      the array
-     * @param string $rownumber number of row to process
-     * @param string $key       key to process
+     * @param mixed[] $file      the array
+     * @param string  $rownumber number of row to process
+     * @param string  $key       key to process
      *
-     * @return array
-     *
-     * @static
+     * @return mixed[]
      */
     public function fetchUploadedFromTblChangeRequestMultiple(
         array $file,
         string $rownumber,
-        string $key
+        string $key,
     ): array {
         return [
             'name' => $file['name']['multi_edit'][$rownumber][$key],
@@ -341,7 +333,7 @@ class File
      */
     public function setSelectedFromTblChangeRequest(
         string $key,
-        ?string $rownumber = null
+        string|null $rownumber = null,
     ): bool {
         if (
             ! empty($_REQUEST['fields_uploadlocal']['multi_edit'][$rownumber][$key])
@@ -359,7 +351,7 @@ class File
      *
      * @return Message|null error message
      */
-    public function getError(): ?Message
+    public function getError(): Message|null
     {
         return $this->errorMessage;
     }
@@ -416,7 +408,7 @@ class File
         }
 
         $this->setName(
-            Util::userDir($GLOBALS['cfg']['UploadDir']) . Core::securePath($name)
+            Util::userDir($GLOBALS['cfg']['UploadDir']) . Core::securePath($name),
         );
         if (@is_link((string) $this->getName())) {
             $this->errorMessage = Message::error(__('File is a symbolic link'));
@@ -458,36 +450,36 @@ class File
             return true;
         }
 
-        $tmp_subdir = $GLOBALS['config']->getUploadTempDir();
-        if ($tmp_subdir === null) {
+        $tmpSubdir = $GLOBALS['config']->getUploadTempDir();
+        if ($tmpSubdir === null) {
             // cannot create directory or access, point user to FAQ 1.11
             $this->errorMessage = Message::error(__(
-                'Error moving the uploaded file, see [doc@faq1-11]FAQ 1.11[/doc].'
+                'Error moving the uploaded file, see [doc@faq1-11]FAQ 1.11[/doc].',
             ));
 
             return false;
         }
 
-        $new_file_to_upload = (string) tempnam(
-            $tmp_subdir,
-            basename((string) $this->getName())
+        $newFileToUpload = (string) tempnam(
+            $tmpSubdir,
+            basename((string) $this->getName()),
         );
 
         // suppress warnings from being displayed, but not from being logged
         // any file access outside of open_basedir will issue a warning
         ob_start();
-        $move_uploaded_file_result = move_uploaded_file(
+        $moveUploadedFileResult = move_uploaded_file(
             (string) $this->getName(),
-            $new_file_to_upload
+            $newFileToUpload,
         );
         ob_end_clean();
-        if (! $move_uploaded_file_result) {
+        if (! $moveUploadedFileResult) {
             $this->errorMessage = Message::error(__('Error while moving uploaded file.'));
 
             return false;
         }
 
-        $this->setName($new_file_to_upload);
+        $this->setName($newFileToUpload);
         $this->isTemp(true);
 
         if (! $this->isReadable()) {
@@ -508,7 +500,7 @@ class File
      * @todo   move file read part into readChunk() or getChunk()
      * @todo   add support for compression plugins
      */
-    protected function detectCompression()
+    protected function detectCompression(): string|false
     {
         // suppress warnings from being displayed, but not from being logged
         // f.e. any file access outside of open_basedir will issue a warning
@@ -570,9 +562,9 @@ class File
             __(
                 'You attempted to load file with unsupported compression (%s). '
                 . 'Either support for it is not implemented or disabled by your '
-                . 'configuration.'
+                . 'configuration.',
             ),
-            $this->getCompression()
+            $this->getCompression(),
         ));
     }
 
@@ -631,11 +623,11 @@ class File
     /**
      * Opens file from zip
      *
-     * @param string|null $specific_entry Entry to open
+     * @param string|null $specificEntry Entry to open
      */
-    public function openZip(?string $specific_entry = null): bool
+    public function openZip(string|null $specificEntry = null): bool
     {
-        $result = $this->zipExtension->getContents($this->getName(), $specific_entry);
+        $result = $this->zipExtension->getContents($this->getName(), $specificEntry);
         if (! empty($result['error'])) {
             $this->errorMessage = Message::rawError($result['error']);
 
@@ -657,7 +649,7 @@ class File
             return feof($this->handle);
         }
 
-        return $this->offset == strlen($this->content);
+        return $this->offset == strlen($this->content ?? '');
     }
 
     /**
@@ -684,7 +676,7 @@ class File
     public function read(int $size): string
     {
         if ($this->compression === 'application/zip') {
-            $result = mb_strcut($this->content, $this->offset, $size);
+            $result = mb_strcut($this->content ?? '', $this->offset, $size);
             $this->offset += strlen($result);
 
             return $result;
@@ -776,6 +768,6 @@ class File
      */
     public function getContentLength(): int
     {
-        return strlen($this->content);
+        return strlen($this->content ?? '');
     }
 }

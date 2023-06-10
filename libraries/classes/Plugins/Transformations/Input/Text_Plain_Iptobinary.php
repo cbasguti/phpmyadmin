@@ -24,10 +24,8 @@ class Text_Plain_Iptobinary extends IOTransformationsPlugin
 {
     /**
      * Gets the transformation description of the plugin
-     *
-     * @return string
      */
-    public static function getInfo()
+    public static function getInfo(): string
     {
         return __('Converts an Internet network address in (IPv4/IPv6) format to binary');
     }
@@ -38,12 +36,12 @@ class Text_Plain_Iptobinary extends IOTransformationsPlugin
      * @param string             $buffer  text to be transformed. a binary string containing
      *                                    an IP address, as returned from MySQL's INET6_ATON
      *                                    function
-     * @param array              $options transformation options
+     * @param mixed[]            $options transformation options
      * @param FieldMetadata|null $meta    meta information
      *
      * @return string IP address
      */
-    public function applyTransformation($buffer, array $options = [], ?FieldMetadata $meta = null)
+    public function applyTransformation(string $buffer, array $options = [], FieldMetadata|null $meta = null): string
     {
         return FormatConverter::ipToBinary($buffer);
     }
@@ -52,29 +50,21 @@ class Text_Plain_Iptobinary extends IOTransformationsPlugin
      * Returns the html for input field to override default textarea.
      * Note: Return empty string if default textarea is required.
      *
-     * @param array  $column               column details
-     * @param int    $row_id               row number
-     * @param string $column_name_appendix the name attribute
-     * @param array  $options              transformation options
-     * @param string $value                Current field value
-     * @param string $text_dir             text direction
-     * @param int    $tabindex             tab index
-     * @param int    $tabindex_for_value   offset for the values tabindex
-     * @param int    $idindex              id index
+     * @param string  $columnNameAppendix the name attribute
+     * @param mixed[] $options            transformation options
+     * @param string  $value              Current field value
+     * @param string  $textDir            text direction
+     * @param int     $fieldIndex         field index
      *
      * @return string the html for input field
      */
     public function getInputHtml(
-        array $column,
-        $row_id,
-        $column_name_appendix,
+        string $columnNameAppendix,
         array $options,
-        $value,
-        $text_dir,
-        $tabindex,
-        $tabindex_for_value,
-        $idindex
-    ) {
+        string $value,
+        string $textDir,
+        int $fieldIndex,
+    ): string {
         $html = '';
         $val = '';
         if (! empty($value)) {
@@ -86,49 +76,43 @@ class Text_Plain_Iptobinary extends IOTransformationsPlugin
                 }
             }
 
-            $html = '<input type="hidden" name="fields_prev' . $column_name_appendix
+            $html = '<input type="hidden" name="fields_prev' . $columnNameAppendix
                 . '" value="' . htmlspecialchars($val) . '">';
         }
 
         $class = 'transform_IPToBin';
 
-        return $html . '<input type="text" name="fields' . $column_name_appendix . '"'
+        return $html . '<input type="text" name="fields' . $columnNameAppendix . '"'
             . ' value="' . htmlspecialchars($val) . '"'
             . ' size="40"'
-            . ' dir="' . $text_dir . '"'
+            . ' dir="' . $textDir . '"'
             . ' class="' . $class . '"'
-            . ' id="field_' . $idindex . '_3"'
-            . ' tabindex="' . ($tabindex + $tabindex_for_value) . '">';
+            . ' id="field_' . $fieldIndex . '_3"'
+            . ' tabindex="' . $fieldIndex . '">';
     }
 
     /* ~~~~~~~~~~~~~~~~~~~~ Getters and Setters ~~~~~~~~~~~~~~~~~~~~ */
 
     /**
      * Gets the transformation name of the plugin
-     *
-     * @return string
      */
-    public static function getName()
+    public static function getName(): string
     {
         return 'IPv4/IPv6 To Binary';
     }
 
     /**
      * Gets the plugin`s MIME type
-     *
-     * @return string
      */
-    public static function getMIMEType()
+    public static function getMIMEType(): string
     {
         return 'Text';
     }
 
     /**
      * Gets the plugin`s MIME subtype
-     *
-     * @return string
      */
-    public static function getMIMESubtype()
+    public static function getMIMESubtype(): string
     {
         return 'Plain';
     }

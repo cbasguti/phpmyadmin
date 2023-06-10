@@ -22,9 +22,10 @@ class NodeProcedure extends NodeDatabaseChild
      * @param bool   $isGroup Whether this object has been created
      *                        while grouping nodes
      */
-    public function __construct($name, $type = Node::OBJECT, $isGroup = false)
+    public function __construct(string $name, int $type = Node::OBJECT, bool $isGroup = false)
     {
         parent::__construct($name, $type, $isGroup);
+
         $this->icon = ['image' => 'b_routines', 'title' => __('Procedure')];
         $this->links = [
             'text' => [
@@ -45,7 +46,7 @@ class NodeProcedure extends NodeDatabaseChild
      *
      * @return string type of the item
      */
-    protected function getItemType()
+    protected function getItemType(): string
     {
         return 'procedure';
     }

@@ -7,34 +7,48 @@ namespace PhpMyAdmin\Tests\Controllers\Export\Template;
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\ConfigStorage\RelationParameters;
 use PhpMyAdmin\Controllers\Export\Template\CreateController;
+use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Export\Template as ExportTemplate;
 use PhpMyAdmin\Export\TemplateModel;
 use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer;
+use PHPUnit\Framework\Attributes\CoversClass;
+use ReflectionClass;
 
-/**
- * @covers \PhpMyAdmin\Controllers\Export\Template\CreateController
- */
+#[CoversClass(CreateController::class)]
 class CreateControllerTest extends AbstractTestCase
 {
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
+    }
+
     public function testCreate(): void
     {
-        global $cfg;
-
         $GLOBALS['server'] = 1;
         $GLOBALS['text_dir'] = 'ltr';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
 
-        $_SESSION['relation'] = [];
-        $_SESSION['relation'][$GLOBALS['server']] = RelationParameters::fromArray([
+        $relationParameters = RelationParameters::fromArray([
             'exporttemplateswork' => true,
             'db' => 'db',
             'export_templates' => 'table',
-        ])->toArray();
+        ]);
+        (new ReflectionClass(Relation::class))->getProperty('cache')->setValue(
+            [$GLOBALS['server'] => $relationParameters],
+        );
 
-        $cfg['Server']['user'] = 'user';
+        $GLOBALS['cfg']['Server']['user'] = 'user';
 
         $response = new ResponseRenderer();
         $template = new Template();
@@ -50,7 +64,7 @@ class CreateControllerTest extends AbstractTestCase
             $response,
             $template,
             new TemplateModel($this->dbi),
-            new Relation($this->dbi)
+            new Relation($this->dbi),
         ))($request);
 
         $templates = [

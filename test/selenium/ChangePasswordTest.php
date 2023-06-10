@@ -4,35 +4,23 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Selenium;
 
-use PHPUnit\Framework\AssertionFailedError;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
 
-use function array_push;
 use function trim;
 
-/**
- * @coversNothing
- */
+#[CoversNothing]
 class ChangePasswordTest extends TestBase
 {
     /**
      * Create a test database for this test class
-     *
-     * @var bool
      */
-    protected static $createDatabase = false;
-
-    /**
-     * Array of AssertionFailedError->toString
-     *
-     * @var string[]
-     */
-    private $verificationErrors;
+    protected static bool $createDatabase = false;
 
     /**
      * Tests the changing of the password
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testChangePassword(): void
     {
         $this->login();
@@ -43,26 +31,15 @@ class ChangePasswordTest extends TestBase
         $this->waitAjax();
 
         $this->waitForElement('xpath', "//span[contains(., 'Change password')]");
-        try {
-            $ele = $this->waitForElement('name', 'pma_pw');
-            $this->assertEquals('', $ele->getAttribute('value'));
-        } catch (AssertionFailedError $e) {
-            array_push($this->verificationErrors, $e->getMessage());
-        }
 
-        try {
-            $ele = $this->waitForElement('name', 'pma_pw2');
-            $this->assertEquals('', $ele->getAttribute('value'));
-        } catch (AssertionFailedError $e) {
-            array_push($this->verificationErrors, $e->getMessage());
-        }
+        $ele = $this->waitForElement('name', 'pma_pw');
+        $this->assertEquals('', $ele->getAttribute('value'));
 
-        try {
-            $ele = $this->waitForElement('name', 'generated_pw');
-            $this->assertEquals('', $ele->getAttribute('value'));
-        } catch (AssertionFailedError $e) {
-            array_push($this->verificationErrors, $e->getMessage());
-        }
+        $ele = $this->waitForElement('name', 'pma_pw2');
+        $this->assertEquals('', $ele->getAttribute('value'));
+
+        $ele = $this->waitForElement('name', 'generated_pw');
+        $this->assertEquals('', $ele->getAttribute('value'));
 
         $this->byId('button_generate_password')->click();
         $this->assertNotEquals('', $this->byName('pma_pw')->getAttribute('value'));
@@ -80,11 +57,11 @@ class ChangePasswordTest extends TestBase
             $this->byId('nopass_1')->click();
         }
 
-        $this->byCssSelector('#change_password_dialog + div button')->click();
+        $this->byId('changePasswordGoButton')->click();
         $ele = $this->waitForElement('cssSelector', '.alert-success');
         $this->assertEquals(
             'The profile has been updated.',
-            trim($ele->getText())
+            trim($ele->getText()),
         );
     }
 }

@@ -6,9 +6,11 @@ namespace PhpMyAdmin\Controllers\Table;
 
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\ConfigStorage\RelationCleanup;
+use PhpMyAdmin\Controllers\AbstractController;
 use PhpMyAdmin\Core;
 use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\DbTableExists;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Operations;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Sql;
@@ -21,6 +23,7 @@ use PhpMyAdmin\Utils\Gis;
 
 use function in_array;
 use function intval;
+use function is_array;
 use function mb_strtolower;
 use function md5;
 use function preg_match;
@@ -41,76 +44,53 @@ class SearchController extends AbstractController
     /**
      * Names of columns
      *
-     * @var array
+     * @var mixed[]
      */
-    private $columnNames;
+    private array $columnNames = [];
     /**
      * Types of columns
      *
-     * @var array
+     * @var mixed[]
      */
-    private $columnTypes;
+    private array $columnTypes = [];
     /**
      * Types of columns without any replacement
      *
-     * @var array
+     * @var mixed[]
      */
-    private $originalColumnTypes;
+    private array $originalColumnTypes = [];
     /**
      * Collations of columns
      *
-     * @var array
+     * @var mixed[]
      */
-    private $columnCollations;
+    private array $columnCollations = [];
     /**
      * Null Flags of columns
      *
-     * @var array
+     * @var mixed[]
      */
-    private $columnNullFlags;
+    private array $columnNullFlags = [];
     /**
      * Whether a geometry column is present
-     *
-     * @var bool
      */
-    private $geomColumnFlag;
+    private bool $geomColumnFlag = false;
     /**
      * Foreign Keys
      *
-     * @var array
+     * @var mixed[]
      */
-    private $foreigners;
-
-    /** @var Search */
-    private $search;
-
-    /** @var Relation */
-    private $relation;
-
-    /** @var DatabaseInterface */
-    private $dbi;
+    private array $foreigners = [];
 
     public function __construct(
         ResponseRenderer $response,
         Template $template,
-        string $db,
-        string $table,
-        Search $search,
-        Relation $relation,
-        DatabaseInterface $dbi
+        private Search $search,
+        private Relation $relation,
+        private DatabaseInterface $dbi,
     ) {
-        parent::__construct($response, $template, $db, $table);
-        $this->search = $search;
-        $this->relation = $relation;
-        $this->dbi = $dbi;
+        parent::__construct($response, $template);
 
-        $this->columnNames = [];
-        $this->columnTypes = [];
-        $this->originalColumnTypes = [];
-        $this->columnCollations = [];
-        $this->columnNullFlags = [];
-        $this->geomColumnFlag = false;
-        $this->foreigners = [];
         $this->loadTableInfo();
     }
 
@@ -121,19 +101,19 @@ class SearchController extends AbstractController
     private function loadTableInfo(): void
     {
         // Gets the list and number of columns
-        $columns = $this->dbi->getColumns($this->db, $this->table, true);
+        $columns = $this->dbi->getColumns($GLOBALS['db'], $GLOBALS['table'], true);
         // Get details about the geometry functions
-        $geom_types = Gis::getDataTypes();
+        $geomTypes = Gis::getDataTypes();
 
         foreach ($columns as $row) {
             // set column name
             $this->columnNames[] = $row['Field'];
 
-            $type = (string) $row['Type'];
+            $type = $row['Type'];
             // before any replacement
             $this->originalColumnTypes[] = mb_strtolower($type);
             // check whether table contains geometric columns
-            if (in_array($type, $geom_types)) {
+            if (in_array($type, $geomTypes)) {
                 $this->geomColumnFlag = true;
             }
 
@@ -164,23 +144,21 @@ class SearchController extends AbstractController
         }
 
         // Retrieve foreign keys
-        $this->foreigners = $this->relation->getForeigners($this->db, $this->table);
+        $this->foreigners = $this->relation->getForeigners($GLOBALS['db'], $GLOBALS['table']);
     }
 
     /**
      * Index action
      */
-    public function __invoke(): void
+    public function __invoke(ServerRequest $request): void
     {
-        global $db, $table, $urlParams, $cfg, $errorUrl;
+        $this->checkParameters(['db', 'table']);
 
-        Util::checkParameters(['db', 'table']);
+        $GLOBALS['urlParams'] = ['db' => $GLOBALS['db'], 'table' => $GLOBALS['table']];
+        $GLOBALS['errorUrl'] = Util::getScriptNameForOption($GLOBALS['cfg']['DefaultTabTable'], 'table');
+        $GLOBALS['errorUrl'] .= Url::getCommon($GLOBALS['urlParams'], '&');
 
-        $urlParams = ['db' => $db, 'table' => $table];
-        $errorUrl = Util::getScriptNameForOption($cfg['DefaultTabTable'], 'table');
-        $errorUrl .= Url::getCommon($urlParams, '&');
-
-        DbTableExists::check();
+        DbTableExists::check($GLOBALS['db'], $GLOBALS['table']);
 
         $this->addScriptFiles([
             'makegrid.js',
@@ -216,26 +194,26 @@ class SearchController extends AbstractController
             return;
         }
 
-        $extra_data = [];
-        $row_info_query = 'SELECT * FROM ' . Util::backquote($_POST['db']) . '.'
+        $extraData = [];
+        $rowInfoQuery = 'SELECT * FROM ' . Util::backquote($_POST['db']) . '.'
             . Util::backquote($_POST['table']) . ' WHERE ' . $_POST['where_clause'];
-        $result = $this->dbi->query($row_info_query . ';');
-        $fields_meta = $this->dbi->getFieldsMeta($result);
+        $result = $this->dbi->query($rowInfoQuery . ';');
+        $fieldsMeta = $this->dbi->getFieldsMeta($result);
         while ($row = $result->fetchAssoc()) {
             // for bit fields we need to convert them to printable form
             $i = 0;
             foreach ($row as $col => $val) {
-                if (isset($fields_meta[$i]) && $fields_meta[$i]->isMappedTypeBit) {
-                    $row[$col] = Util::printableBitValue((int) $val, (int) $fields_meta[$i]->length);
+                if (isset($fieldsMeta[$i]) && $fieldsMeta[$i]->isMappedTypeBit) {
+                    $row[$col] = Util::printableBitValue((int) $val, $fieldsMeta[$i]->length);
                 }
 
                 $i++;
             }
 
-            $extra_data['row_info'] = $row;
+            $extraData['row_info'] = $row;
         }
 
-        $this->response->addJSON($extra_data);
+        $this->response->addJSON($extraData);
     }
 
     /**
@@ -246,7 +224,7 @@ class SearchController extends AbstractController
         /**
          * Selection criteria have been submitted -> do the work
          */
-        $sql_query = $this->search->buildSqlQuery();
+        $sqlQuery = $this->search->buildSqlQuery();
 
         /**
          * Add this to ensure following procedures included running correctly.
@@ -257,14 +235,14 @@ class SearchController extends AbstractController
             new RelationCleanup($this->dbi, $this->relation),
             new Operations($this->dbi, $this->relation),
             new Transformations(),
-            $this->template
+            $this->template,
         );
 
         $this->response->addHTML($sql->executeQueryAndSendQueryResponse(
-            null, // analyzed_sql_results
+            null,
             false, // is_gotofile
-            $this->db, // db
-            $this->table, // table
+            $GLOBALS['db'], // db
+            $GLOBALS['table'], // table
             null, // find_real_end
             null, // sql_query_for_bookmark
             null, // extra_data
@@ -273,8 +251,8 @@ class SearchController extends AbstractController
             $GLOBALS['goto'], // goto
             null, // disp_query
             null, // disp_message
-            $sql_query, // sql_query
-            null // complete_query
+            $sqlQuery, // sql_query
+            null, // complete_query
         ));
     }
 
@@ -283,23 +261,21 @@ class SearchController extends AbstractController
      */
     public function displaySelectionFormAction(): void
     {
-        global $goto, $cfg;
-
-        if (! isset($goto)) {
-            $goto = Util::getScriptNameForOption($cfg['DefaultTabTable'], 'table');
+        if (! isset($GLOBALS['goto'])) {
+            $GLOBALS['goto'] = Util::getScriptNameForOption($GLOBALS['cfg']['DefaultTabTable'], 'table');
         }
 
         $this->render('table/search/index', [
-            'db' => $this->db,
-            'table' => $this->table,
-            'goto' => $goto,
+            'db' => $GLOBALS['db'],
+            'table' => $GLOBALS['table'],
+            'goto' => $GLOBALS['goto'],
             'self' => $this,
             'geom_column_flag' => $this->geomColumnFlag,
             'column_names' => $this->columnNames,
             'column_types' => $this->columnTypes,
             'column_collations' => $this->columnCollations,
-            'default_sliders_state' => $cfg['InitialSlidersState'],
-            'max_rows' => intval($cfg['MaxRows']),
+            'default_sliders_state' => $GLOBALS['cfg']['InitialSlidersState'],
+            'max_rows' => intval($GLOBALS['cfg']['MaxRows']),
         ]);
     }
 
@@ -308,98 +284,117 @@ class SearchController extends AbstractController
      */
     public function rangeSearchAction(): void
     {
-        $min_max = $this->getColumnMinMax($_POST['column']);
-        $this->response->addJSON('column_data', $min_max);
+        $minMax = $this->getColumnMinMax($_POST['column']);
+        $this->response->addJSON('column_data', $minMax);
     }
 
     /**
      * Finds minimum and maximum value of a given column.
      *
      * @param string $column Column name
-     *
-     * @return array|null
      */
-    public function getColumnMinMax($column): ?array
+    public function getColumnMinMax(string $column): array|null
     {
-        $sql_query = 'SELECT MIN(' . Util::backquote($column) . ') AS `min`, '
+        $sqlQuery = 'SELECT MIN(' . Util::backquote($column) . ') AS `min`, '
             . 'MAX(' . Util::backquote($column) . ') AS `max` '
-            . 'FROM ' . Util::backquote($this->db) . '.'
-            . Util::backquote($this->table);
+            . 'FROM ' . Util::backquote($GLOBALS['db']) . '.'
+            . Util::backquote($GLOBALS['table']);
 
-        return $this->dbi->fetchSingleRow($sql_query);
+        return $this->dbi->fetchSingleRow($sqlQuery);
     }
 
     /**
      * Provides a column's type, collation, operators list, and criteria value
      * to display in table search form
      *
-     * @param int $search_index Row number in table search form
-     * @param int $column_index Column index in ColumnNames array
+     * @param int $searchIndex Row number in table search form
+     * @param int $columnIndex Column index in ColumnNames array
      *
-     * @return array Array containing column's properties
+     * @return mixed[] Array containing column's properties
      */
-    public function getColumnProperties($search_index, $column_index)
+    public function getColumnProperties(int $searchIndex, int $columnIndex): array
     {
-        $selected_operator = ($_POST['criteriaColumnOperators'][$search_index] ?? '');
-        $entered_value = ($_POST['criteriaValues'] ?? '');
+        $selectedOperator = ($_POST['criteriaColumnOperators'][$searchIndex] ?? '');
+        $enteredValue = ($_POST['criteriaValues'] ?? '');
         //Gets column's type and collation
-        $type = $this->columnTypes[$column_index];
-        $collation = $this->columnCollations[$column_index];
+        $type = $this->columnTypes[$columnIndex];
+        $collation = $this->columnCollations[$columnIndex];
         $cleanType = preg_replace('@\(.*@s', '', $type);
         //Gets column's comparison operators depending on column type
         $typeOperators = $this->dbi->types->getTypeOperatorsHtml(
             $cleanType,
-            $this->columnNullFlags[$column_index],
-            $selected_operator
+            $this->columnNullFlags[$columnIndex],
+            $selectedOperator,
         );
         $func = $this->template->render('table/search/column_comparison_operators', [
-            'search_index' => $search_index,
+            'search_index' => $searchIndex,
             'type_operators' => $typeOperators,
         ]);
         //Gets link to browse foreign data(if any) and criteria inputbox
         $foreignData = $this->relation->getForeignData(
             $this->foreigners,
-            $this->columnNames[$column_index],
+            $this->columnNames[$columnIndex],
             false,
             '',
-            ''
+            '',
         );
         $htmlAttributes = '';
-        if (in_array($cleanType, $this->dbi->types->getIntegerTypes())) {
-            $extractedColumnspec = Util::extractColumnSpec($this->originalColumnTypes[$column_index]);
-            $is_unsigned = $extractedColumnspec['unsigned'];
-            $minMaxValues = $this->dbi->types->getIntegerRange($cleanType, ! $is_unsigned);
+        $isInteger = in_array($cleanType, $this->dbi->types->getIntegerTypes());
+        $isFloat = in_array($cleanType, $this->dbi->types->getFloatTypes());
+        if ($isInteger) {
+            $extractedColumnspec = Util::extractColumnSpec($this->originalColumnTypes[$columnIndex]);
+            $isUnsigned = $extractedColumnspec['unsigned'];
+            $minMaxValues = $this->dbi->types->getIntegerRange($cleanType, ! $isUnsigned);
             $htmlAttributes = 'data-min="' . $minMaxValues[0] . '" '
                             . 'data-max="' . $minMaxValues[1] . '"';
         }
 
         $htmlAttributes .= ' onfocus="return '
-                        . 'verifyAfterSearchFieldChange(' . $search_index . ', \'#tbl_search_form\')"';
+                        . 'verifyAfterSearchFieldChange(' . $searchIndex . ', \'#tbl_search_form\')"';
+
+        $foreignDropdown = '';
+
+        $searchColumnInForeigners = $this->relation->searchColumnInForeigners(
+            $this->foreigners,
+            $this->columnNames[$columnIndex],
+        );
+
+        if (
+            $this->foreigners
+            && $searchColumnInForeigners
+            && is_array($foreignData['disp_row'])
+        ) {
+            $foreignDropdown = $this->relation->foreignDropdown(
+                $foreignData['disp_row'],
+                $foreignData['foreign_field'],
+                $foreignData['foreign_display'],
+                '',
+                $GLOBALS['cfg']['ForeignKeyMaxLimit'],
+            );
+        }
 
         $value = $this->template->render('table/search/input_box', [
             'str' => '',
             'column_type' => (string) $type,
-            'column_data_type' => strtoupper($cleanType),
+            'column_data_type' => $isInteger ? 'INT' : ($isFloat ? 'FLOAT' : strtoupper($cleanType)),
             'html_attributes' => $htmlAttributes,
             'column_id' => 'fieldID_',
             'in_zoom_search_edit' => false,
             'foreigners' => $this->foreigners,
-            'column_name' => $this->columnNames[$column_index],
-            'column_name_hash' => md5($this->columnNames[$column_index]),
+            'column_name' => $this->columnNames[$columnIndex],
+            'column_name_hash' => md5($this->columnNames[$columnIndex]),
             'foreign_data' => $foreignData,
-            'table' => $this->table,
-            'column_index' => $search_index,
-            'foreign_max_limit' => $GLOBALS['cfg']['ForeignKeyMaxLimit'],
-            'criteria_values' => $entered_value,
-            'db' => $this->db,
+            'table' => $GLOBALS['table'],
+            'column_index' => $searchIndex,
+            'criteria_values' => $enteredValue,
+            'db' => $GLOBALS['db'],
             'in_fbs' => true,
+            'foreign_dropdown' => $foreignDropdown,
+            'search_column_in_foreigners' => $searchColumnInForeigners,
+            'is_integer' => $isInteger,
+            'is_float' => $isFloat,
         ]);
 
-        return [
-            'type' => $type,
-            'collation' => $collation,
-            'func' => $func,
-            'value' => $value,
-        ];
+        return ['type' => $type, 'collation' => $collation, 'func' => $func, 'value' => $value];
     }
 }

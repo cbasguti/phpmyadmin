@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin;
 
 use PhpMyAdmin\Html\Generator;
+use PhpMyAdmin\Identifiers\DatabaseName;
 
 use function count;
 use function implode;
@@ -13,7 +14,6 @@ use function intval;
 use function json_decode;
 use function min;
 use function preg_replace;
-use function strlen;
 use function trim;
 
 /**
@@ -21,21 +21,14 @@ use function trim;
  */
 class CreateAddField
 {
-    /** @var DatabaseInterface */
-    private $dbi;
-
-    /**
-     * @param DatabaseInterface $dbi DatabaseInterface interface
-     */
-    public function __construct(DatabaseInterface $dbi)
+    public function __construct(private DatabaseInterface $dbi)
     {
-        $this->dbi = $dbi;
     }
 
     /**
      * Transforms the radio button field_key into 4 arrays
      *
-     * @return array An array of arrays which represents column keys for each index type
+     * @return mixed[] An array of arrays which represents column keys for each index type
      * @psalm-return array{int, array, array, array, array, array}
      */
     private function getIndexedColumns(): array
@@ -47,14 +40,7 @@ class CreateAddField
         $fieldFullText = json_decode($_POST['fulltext_indexes'], true);
         $fieldSpatial = json_decode($_POST['spatial_indexes'], true);
 
-        return [
-            $fieldCount,
-            $fieldPrimary,
-            $fieldIndex,
-            $fieldUnique,
-            $fieldFullText,
-            $fieldSpatial,
-        ];
+        return [$fieldCount, $fieldPrimary, $fieldIndex, $fieldUnique, $fieldFullText, $fieldSpatial];
     }
 
     /**
@@ -65,18 +51,17 @@ class CreateAddField
      * @param bool $isCreateTable true if requirement is to get the statement
      *                            for table creation
      *
-     * @return array An array of initial sql statements
+     * @return mixed[] An array of initial sql statements
      *                             according to the request
      */
     private function buildColumnCreationStatement(
         int $fieldCount,
-        bool $isCreateTable = true
+        bool $isCreateTable = true,
     ): array {
         $definitions = [];
         $previousField = -1;
         for ($i = 0; $i < $fieldCount; ++$i) {
-            // '0' is also empty for php :-(
-            if (strlen($_POST['field_name'][$i]) === 0) {
+            if ($_POST['field_name'][$i] === '') {
                 continue;
             }
 
@@ -89,10 +74,10 @@ class CreateAddField
                 $_POST['field_null'][$i] ?? 'NO',
                 $_POST['field_default_type'][$i],
                 $_POST['field_default_value'][$i],
-                $_POST['field_extra'][$i] ?? false,
+                $_POST['field_extra'][$i] ?? '',
                 $_POST['field_comments'][$i] ?? '',
                 $_POST['field_virtuality'][$i] ?? '',
-                $_POST['field_expression'][$i] ?? ''
+                $_POST['field_expression'][$i] ?? '',
             );
 
             $definition .= $this->setColumnCreationStatementSuffix($previousField, $isCreateTable);
@@ -114,7 +99,7 @@ class CreateAddField
      */
     private function setColumnCreationStatementSuffix(
         int $previousField,
-        bool $isCreateTable = true
+        bool $isCreateTable = true,
     ): string {
         // no suffix is needed if request is a table creation
         if ($isCreateTable) {
@@ -145,18 +130,18 @@ class CreateAddField
     /**
      * Create relevant index statements
      *
-     * @param array  $index         an array of index columns
-     * @param string $indexChoice   index choice that which represents
-     *                              the index type of $indexed_fields
-     * @param bool   $isCreateTable true if requirement is to get the statement
-     *                              for table creation
+     * @param mixed[] $index         an array of index columns
+     * @param string  $indexChoice   index choice that which represents
+     *                               the index type of $indexed_fields
+     * @param bool    $isCreateTable true if requirement is to get the statement
+     *                               for table creation
      *
      * @return string sql statement for indexes
      */
     private function buildIndexStatement(
         array $index,
         string $indexChoice,
-        bool $isCreateTable = true
+        bool $isCreateTable = true,
     ): string {
         if ($index === []) {
             return '';
@@ -317,14 +302,14 @@ class CreateAddField
     /**
      * Returns the definition of a partition/subpartition
      *
-     * @param array $partition      array of partition/subpartition details
-     * @param bool  $isSubPartition whether a subpartition
+     * @param mixed[] $partition      array of partition/subpartition details
+     * @param bool    $isSubPartition whether a subpartition
      *
      * @return string partition/subpartition definition
      */
     private function getPartitionDefinition(
         array $partition,
-        bool $isSubPartition = false
+        bool $isSubPartition = false,
     ): string {
         $sqlQuery = ' ' . ($isSubPartition ? 'SUB' : '') . 'PARTITION ';
         $sqlQuery .= $partition['name'];
@@ -406,7 +391,7 @@ class CreateAddField
         }
 
         if (! empty($_POST['tbl_collation'])) {
-            $sqlQuery .= Util::getCharsetQueryPart($_POST['tbl_collation'] ?? '');
+            $sqlQuery .= Util::getCharsetQueryPart($_POST['tbl_collation']);
         }
 
         if (
@@ -414,13 +399,11 @@ class CreateAddField
             && ! empty($_POST['tbl_storage_engine'])
             && $_POST['tbl_storage_engine'] === 'FEDERATED'
         ) {
-            $sqlQuery .= " CONNECTION = '"
-                . $this->dbi->escapeString($_POST['connection']) . "'";
+            $sqlQuery .= ' CONNECTION = ' . $this->dbi->quoteString($_POST['connection']);
         }
 
         if (! empty($_POST['comment'])) {
-            $sqlQuery .= ' COMMENT = \''
-                . $this->dbi->escapeString($_POST['comment']) . '\'';
+            $sqlQuery .= ' COMMENT = ' . $this->dbi->quoteString($_POST['comment']);
         }
 
         $sqlQuery .= $this->getPartitionsDefinition();
@@ -459,13 +442,12 @@ class CreateAddField
      * @param string $table current table
      */
     public function getColumnCreationQuery(
-        string $table
+        string $table,
     ): string {
         // get column addition statements
         $sqlStatement = $this->getColumnCreationStatements(false);
 
-        $sqlQuery = 'ALTER TABLE ' .
-            Util::backquote($table) . ' ' . $sqlStatement;
+        $sqlQuery = 'ALTER TABLE ' . Util::backquote($table) . ' ' . $sqlStatement;
         if (isset($_POST['online_transaction'])) {
             $sqlQuery .= ', ALGORITHM=INPLACE, LOCK=NONE';
         }
@@ -476,23 +458,23 @@ class CreateAddField
     /**
      * Function to execute the column creation statement
      *
-     * @param string $db       current database
-     * @param string $sqlQuery the query to run
-     * @param string $errorUrl error page url
+     * @param DatabaseName $db       current database
+     * @param string       $sqlQuery the query to run
+     * @param string       $errorUrl error page url
      */
     public function tryColumnCreationQuery(
-        string $db,
+        DatabaseName $db,
         string $sqlQuery,
-        string $errorUrl
+        string $errorUrl,
     ): bool {
         // To allow replication, we first select the db to use and then run queries
         // on this db.
         if (! $this->dbi->selectDb($db)) {
             Generator::mysqlDie(
                 $this->dbi->getError(),
-                'USE ' . Util::backquote($db),
+                'USE ' . Util::backquote($db->getName()),
                 false,
-                $errorUrl
+                $errorUrl,
             );
         }
 

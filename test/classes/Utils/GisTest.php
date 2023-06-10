@@ -8,28 +8,34 @@ use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Tests\Stubs\DummyResult;
 use PhpMyAdmin\Utils\Gis;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 use function hex2bin;
 
-/**
- * @covers \PhpMyAdmin\Utils\Gis
- */
+#[CoversClass(Gis::class)]
 class GisTest extends AbstractTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
+    }
+
     /**
-     * @param string $expectedQuery The query to expect
-     * @param array  $returnData    The data to return for fetchRow
-     * @param bool   $SRIDOption    Use the SRID option or not
-     * @param int    $mysqlVersion  The mysql version to return for getVersion
-     *
-     * @dataProvider providerConvertToWellKnownText
+     * @param string  $expectedQuery The query to expect
+     * @param mixed[] $returnData    The data to return for fetchRow
+     * @param bool    $SRIDOption    Use the SRID option or not
+     * @param int     $mysqlVersion  The mysql version to return for getVersion
      */
+    #[DataProvider('providerConvertToWellKnownText')]
     public function testConvertToWellKnownText(
         string $expectedQuery,
         array $returnData,
         string $expectedResult,
         bool $SRIDOption,
-        int $mysqlVersion
+        int $mysqlVersion,
     ): void {
         $resultStub = $this->createMock(DummyResult::class);
 
@@ -55,17 +61,18 @@ class GisTest extends AbstractTestCase
         if (! $SRIDOption) {
             // Also test default signature
             $this->assertSame($expectedResult, Gis::convertToWellKnownText(
-                (string) hex2bin('000000000101000000000000000000F03F000000000000F03F')
+                (string) hex2bin('000000000101000000000000000000F03F000000000000F03F'),
             ));
         }
 
         $this->assertSame($expectedResult, Gis::convertToWellKnownText(
             (string) hex2bin('000000000101000000000000000000F03F000000000000F03F'),
-            $SRIDOption
+            $SRIDOption,
         ));
     }
 
-    public function providerConvertToWellKnownText(): array
+    /** @return mixed[][] */
+    public static function providerConvertToWellKnownText(): array
     {
         return [
             [

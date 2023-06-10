@@ -4,24 +4,26 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Plugins\Export;
 
+use PhpMyAdmin\Database\Events;
+use PhpMyAdmin\Database\Routines;
 use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Dbal\Connection;
 use PhpMyAdmin\Plugins\ExportPlugin;
 use PhpMyAdmin\Properties\Options\Groups\OptionsPropertyMainGroup;
 use PhpMyAdmin\Properties\Options\Groups\OptionsPropertyRootGroup;
 use PhpMyAdmin\Properties\Options\Items\BoolPropertyItem;
 use PhpMyAdmin\Properties\Options\Items\HiddenPropertyItem;
 use PhpMyAdmin\Properties\Plugins\ExportPluginProperties;
+use PhpMyAdmin\Triggers\Triggers;
 use PhpMyAdmin\Util;
 use PhpMyAdmin\Version;
 
 use function __;
-use function count;
 use function htmlspecialchars;
 use function is_array;
 use function mb_substr;
 use function rtrim;
 use function str_replace;
-use function stripslashes;
 use function strlen;
 
 use const PHP_VERSION;
@@ -33,20 +35,16 @@ class ExportXml extends ExportPlugin
 {
     /**
      * Table name
-     *
-     * @var string
      */
-    private $table;
+    private string $table = '';
     /**
      * Table names
      *
-     * @var array
+     * @var mixed[]
      */
-    private $tables = [];
+    private array $tables = [];
 
-    /**
-     * @psalm-return non-empty-lowercase-string
-     */
+    /** @psalm-return non-empty-lowercase-string */
     public function getName(): string
     {
         return 'xml';
@@ -57,13 +55,14 @@ class ExportXml extends ExportPlugin
      */
     private function initSpecificVariables(): void
     {
-        global $table, $tables;
-        $this->setTable($table);
-        if (! is_array($tables)) {
+        $GLOBALS['tables'] ??= null;
+
+        $this->setTable($GLOBALS['table']);
+        if (! is_array($GLOBALS['tables'])) {
             return;
         }
 
-        $this->setTables($tables);
+        $this->setTables($GLOBALS['tables']);
     }
 
     protected function setProperties(): ExportPluginProperties
@@ -91,38 +90,38 @@ class ExportXml extends ExportPlugin
         // export structure main group
         $structure = new OptionsPropertyMainGroup(
             'structure',
-            __('Object creation options (all are recommended)')
+            __('Object creation options (all are recommended)'),
         );
 
         // create primary items and add them to the group
         $leaf = new BoolPropertyItem(
             'export_events',
-            __('Events')
+            __('Events'),
         );
         $structure->addProperty($leaf);
         $leaf = new BoolPropertyItem(
             'export_functions',
-            __('Functions')
+            __('Functions'),
         );
         $structure->addProperty($leaf);
         $leaf = new BoolPropertyItem(
             'export_procedures',
-            __('Procedures')
+            __('Procedures'),
         );
         $structure->addProperty($leaf);
         $leaf = new BoolPropertyItem(
             'export_tables',
-            __('Tables')
+            __('Tables'),
         );
         $structure->addProperty($leaf);
         $leaf = new BoolPropertyItem(
             'export_triggers',
-            __('Triggers')
+            __('Triggers'),
         );
         $structure->addProperty($leaf);
         $leaf = new BoolPropertyItem(
             'export_views',
-            __('Views')
+            __('Views'),
         );
         $structure->addProperty($leaf);
         $exportSpecificOptions->addProperty($structure);
@@ -130,12 +129,12 @@ class ExportXml extends ExportPlugin
         // data main group
         $data = new OptionsPropertyMainGroup(
             'data',
-            __('Data dump options')
+            __('Data dump options'),
         );
         // create primary items and add them to the group
         $leaf = new BoolPropertyItem(
             'export_contents',
-            __('Export contents')
+            __('Export contents'),
         );
         $data->addProperty($leaf);
         $exportSpecificOptions->addProperty($data);
@@ -147,53 +146,36 @@ class ExportXml extends ExportPlugin
     }
 
     /**
-     * Generates output for SQL defintions of routines
+     * Generates output for SQL definitions.
      *
-     * @param string $db      Database name
-     * @param string $type    Item type to be used in XML output
-     * @param string $dbitype Item type used in DBI queries
-     *
-     * @return string XML with definitions
-     */
-    private function exportRoutinesDefinition($db, $type, $dbitype)
-    {
-        global $dbi;
-
-        // Export routines
-        $routines = $dbi->getProceduresOrFunctions($db, $dbitype);
-
-        return $this->exportDefinitions($db, $type, $dbitype, $routines);
-    }
-
-    /**
-     * Generates output for SQL defintions
-     *
-     * @param string $db      Database name
-     * @param string $type    Item type to be used in XML output
-     * @param string $dbitype Item type used in DBI queries
-     * @param array  $names   Names of items to export
+     * @param string   $db    Database name
+     * @param string   $type  Item type to be used in XML output
+     * @param string[] $names Names of items to export
+     * @psalm-param 'event'|'function'|'procedure' $type
      *
      * @return string XML with definitions
      */
-    private function exportDefinitions($db, $type, $dbitype, array $names)
+    private function exportDefinitions(string $db, string $type, array $names): string
     {
-        global $crlf, $dbi;
-
         $head = '';
 
-        if ($names) {
-            foreach ($names as $name) {
-                $head .= '            <pma:' . $type . ' name="'
-                    . htmlspecialchars($name) . '">' . $crlf;
+        foreach ($names as $name) {
+            $head .= '            <pma:' . $type . ' name="' . htmlspecialchars($name) . '">' . "\n";
 
-                // Do some formatting
-                $sql = $dbi->getDefinition($db, $dbitype, $name);
-                $sql = htmlspecialchars(rtrim($sql));
-                $sql = str_replace("\n", "\n                ", $sql);
-
-                $head .= '                ' . $sql . $crlf;
-                $head .= '            </pma:' . $type . '>' . $crlf;
+            if ($type === 'function') {
+                $definition = Routines::getFunctionDefinition($GLOBALS['dbi'], $db, $name);
+            } elseif ($type === 'procedure') {
+                $definition = Routines::getProcedureDefinition($GLOBALS['dbi'], $db, $name);
+            } else {
+                $definition = Events::getDefinition($GLOBALS['dbi'], $db, $name);
             }
+
+            // Do some formatting
+            $sql = htmlspecialchars(rtrim((string) $definition));
+            $sql = str_replace("\n", "\n                ", $sql);
+
+            $head .= '                ' . $sql . "\n";
+            $head .= '            </pma:' . $type . '>' . "\n";
         }
 
         return $head;
@@ -206,16 +188,16 @@ class ExportXml extends ExportPlugin
     public function exportHeader(): bool
     {
         $this->initSpecificVariables();
-        global $crlf, $cfg, $db, $dbi;
+
         $table = $this->getTable();
         $tables = $this->getTables();
 
-        $export_struct = isset($GLOBALS['xml_export_functions'])
+        $exportStruct = isset($GLOBALS['xml_export_functions'])
             || isset($GLOBALS['xml_export_procedures'])
             || isset($GLOBALS['xml_export_tables'])
             || isset($GLOBALS['xml_export_triggers'])
             || isset($GLOBALS['xml_export_views']);
-        $export_data = isset($GLOBALS['xml_export_contents']);
+        $exportData = isset($GLOBALS['xml_export_contents']);
 
         if ($GLOBALS['output_charset_conversion']) {
             $charset = $GLOBALS['charset'];
@@ -223,57 +205,57 @@ class ExportXml extends ExportPlugin
             $charset = 'utf-8';
         }
 
-        $head = '<?xml version="1.0" encoding="' . $charset . '"?>' . $crlf
-            . '<!--' . $crlf
-            . '- phpMyAdmin XML Dump' . $crlf
-            . '- version ' . Version::VERSION . $crlf
-            . '- https://www.phpmyadmin.net' . $crlf
-            . '-' . $crlf
-            . '- ' . __('Host:') . ' ' . htmlspecialchars($cfg['Server']['host']);
-        if (! empty($cfg['Server']['port'])) {
-            $head .= ':' . $cfg['Server']['port'];
+        $head = '<?xml version="1.0" encoding="' . $charset . '"?>' . "\n"
+            . '<!--' . "\n"
+            . '- phpMyAdmin XML Dump' . "\n"
+            . '- version ' . Version::VERSION . "\n"
+            . '- https://www.phpmyadmin.net' . "\n"
+            . '-' . "\n"
+            . '- ' . __('Host:') . ' ' . htmlspecialchars($GLOBALS['cfg']['Server']['host']);
+        if (! empty($GLOBALS['cfg']['Server']['port'])) {
+            $head .= ':' . $GLOBALS['cfg']['Server']['port'];
         }
 
-        $head .= $crlf
+        $head .= "\n"
             . '- ' . __('Generation Time:') . ' '
-            . Util::localisedDate() . $crlf
-            . '- ' . __('Server version:') . ' ' . $dbi->getVersionString() . $crlf
-            . '- ' . __('PHP Version:') . ' ' . PHP_VERSION . $crlf
-            . '-->' . $crlf . $crlf;
+            . Util::localisedDate() . "\n"
+            . '- ' . __('Server version:') . ' ' . $GLOBALS['dbi']->getVersionString() . "\n"
+            . '- ' . __('PHP Version:') . ' ' . PHP_VERSION . "\n"
+            . '-->' . "\n\n";
 
         $head .= '<pma_xml_export version="1.0"'
-            . ($export_struct
+            . ($exportStruct
                 ? ' xmlns:pma="https://www.phpmyadmin.net/some_doc_url/"'
                 : '')
-            . '>' . $crlf;
+            . '>' . "\n";
 
-        if ($export_struct) {
-            $result = $dbi->fetchResult(
+        if ($exportStruct) {
+            $result = $GLOBALS['dbi']->fetchResult(
                 'SELECT `DEFAULT_CHARACTER_SET_NAME`, `DEFAULT_COLLATION_NAME`'
                 . ' FROM `information_schema`.`SCHEMATA` WHERE `SCHEMA_NAME`'
-                . ' = \'' . $dbi->escapeString($db) . '\' LIMIT 1'
+                . ' = ' . $GLOBALS['dbi']->quoteString($GLOBALS['db']) . ' LIMIT 1',
             );
-            $db_collation = $result[0]['DEFAULT_COLLATION_NAME'];
-            $db_charset = $result[0]['DEFAULT_CHARACTER_SET_NAME'];
+            $dbCollation = $result[0]['DEFAULT_COLLATION_NAME'];
+            $dbCharset = $result[0]['DEFAULT_CHARACTER_SET_NAME'];
 
-            $head .= '    <!--' . $crlf;
-            $head .= '    - Structure schemas' . $crlf;
-            $head .= '    -->' . $crlf;
-            $head .= '    <pma:structure_schemas>' . $crlf;
-            $head .= '        <pma:database name="' . htmlspecialchars($db)
-                . '" collation="' . htmlspecialchars($db_collation) . '" charset="' . htmlspecialchars($db_charset)
-                . '">' . $crlf;
+            $head .= '    <!--' . "\n";
+            $head .= '    - Structure schemas' . "\n";
+            $head .= '    -->' . "\n";
+            $head .= '    <pma:structure_schemas>' . "\n";
+            $head .= '        <pma:database name="' . htmlspecialchars($GLOBALS['db'])
+                . '" collation="' . htmlspecialchars($dbCollation) . '" charset="' . htmlspecialchars($dbCharset)
+                . '">' . "\n";
 
-            if (count($tables) === 0) {
+            if ($tables === []) {
                 $tables[] = $table;
             }
 
             foreach ($tables as $table) {
                 // Export tables and views
-                $result = $dbi->fetchResult(
-                    'SHOW CREATE TABLE ' . Util::backquote($db) . '.'
+                $result = $GLOBALS['dbi']->fetchResult(
+                    'SHOW CREATE TABLE ' . Util::backquote($GLOBALS['db']) . '.'
                     . Util::backquote($table),
-                    0
+                    0,
                 );
 
                 if ($result === []) {
@@ -282,38 +264,38 @@ class ExportXml extends ExportPlugin
 
                 $tbl = (string) $result[$table][1];
 
-                $is_view = $dbi->getTable($db, $table)
+                $isView = $GLOBALS['dbi']->getTable($GLOBALS['db'], $table)
                     ->isView();
 
-                if ($is_view) {
+                if ($isView) {
                     $type = 'view';
                 } else {
                     $type = 'table';
                 }
 
-                if ($is_view && ! isset($GLOBALS['xml_export_views'])) {
+                if ($isView && ! isset($GLOBALS['xml_export_views'])) {
                     continue;
                 }
 
-                if (! $is_view && ! isset($GLOBALS['xml_export_tables'])) {
+                if (! $isView && ! isset($GLOBALS['xml_export_tables'])) {
                     continue;
                 }
 
                 $head .= '            <pma:' . $type . ' name="' . htmlspecialchars($table) . '">'
-                    . $crlf;
+                    . "\n";
 
                 $tbl = '                ' . htmlspecialchars($tbl);
                 $tbl = str_replace("\n", "\n                ", $tbl);
 
-                $head .= $tbl . ';' . $crlf;
-                $head .= '            </pma:' . $type . '>' . $crlf;
+                $head .= $tbl . ';' . "\n";
+                $head .= '            </pma:' . $type . '>' . "\n";
 
                 if (! isset($GLOBALS['xml_export_triggers']) || ! $GLOBALS['xml_export_triggers']) {
                     continue;
                 }
 
                 // Export triggers
-                $triggers = $dbi->getTriggers($db, $table);
+                $triggers = Triggers::getDetails($GLOBALS['dbi'], $GLOBALS['db'], $table);
                 if (! $triggers) {
                     continue;
                 }
@@ -321,45 +303,52 @@ class ExportXml extends ExportPlugin
                 foreach ($triggers as $trigger) {
                     $code = $trigger['create'];
                     $head .= '            <pma:trigger name="'
-                        . htmlspecialchars($trigger['name']) . '">' . $crlf;
+                        . htmlspecialchars($trigger['name']) . '">' . "\n";
 
                     // Do some formatting
                     $code = mb_substr(rtrim($code), 0, -3);
                     $code = '                ' . htmlspecialchars($code);
                     $code = str_replace("\n", "\n                ", $code);
 
-                    $head .= $code . $crlf;
-                    $head .= '            </pma:trigger>' . $crlf;
+                    $head .= $code . "\n";
+                    $head .= '            </pma:trigger>' . "\n";
                 }
 
                 unset($trigger, $triggers);
             }
 
             if (isset($GLOBALS['xml_export_functions']) && $GLOBALS['xml_export_functions']) {
-                $head .= $this->exportRoutinesDefinition($db, 'function', 'FUNCTION');
+                $head .= $this->exportDefinitions(
+                    $GLOBALS['db'],
+                    'function',
+                    Routines::getFunctionNames($GLOBALS['dbi'], $GLOBALS['db']),
+                );
             }
 
             if (isset($GLOBALS['xml_export_procedures']) && $GLOBALS['xml_export_procedures']) {
-                $head .= $this->exportRoutinesDefinition($db, 'procedure', 'PROCEDURE');
+                $head .= $this->exportDefinitions(
+                    $GLOBALS['db'],
+                    'procedure',
+                    Routines::getProcedureNames($GLOBALS['dbi'], $GLOBALS['db']),
+                );
             }
 
             if (isset($GLOBALS['xml_export_events']) && $GLOBALS['xml_export_events']) {
                 // Export events
-                $events = $dbi->fetchResult(
+                $events = $GLOBALS['dbi']->fetchResult(
                     'SELECT EVENT_NAME FROM information_schema.EVENTS '
-                    . "WHERE EVENT_SCHEMA='" . $dbi->escapeString($db)
-                    . "'"
+                    . 'WHERE EVENT_SCHEMA=' . $GLOBALS['dbi']->quoteString($GLOBALS['db']),
                 );
-                $head .= $this->exportDefinitions($db, 'event', 'EVENT', $events);
+                $head .= $this->exportDefinitions($GLOBALS['db'], 'event', $events);
             }
 
             unset($result);
 
-            $head .= '        </pma:database>' . $crlf;
-            $head .= '    </pma:structure_schemas>' . $crlf;
+            $head .= '        </pma:database>' . "\n";
+            $head .= '    </pma:structure_schemas>' . "\n";
 
-            if ($export_data) {
-                $head .= $crlf;
+            if ($exportData) {
+                $head .= "\n";
             }
         }
 
@@ -382,20 +371,18 @@ class ExportXml extends ExportPlugin
      * @param string $db      Database name
      * @param string $dbAlias Aliases of db
      */
-    public function exportDBHeader($db, $dbAlias = ''): bool
+    public function exportDBHeader(string $db, string $dbAlias = ''): bool
     {
-        global $crlf;
-
-        if (empty($dbAlias)) {
+        if ($dbAlias === '') {
             $dbAlias = $db;
         }
 
         if (isset($GLOBALS['xml_export_contents']) && $GLOBALS['xml_export_contents']) {
-            $head = '    <!--' . $crlf
+            $head = '    <!--' . "\n"
                 . '    - ' . __('Database:') . ' \''
-                . htmlspecialchars($dbAlias) . '\'' . $crlf
-                . '    -->' . $crlf . '    <database name="'
-                . htmlspecialchars($dbAlias) . '">' . $crlf;
+                . htmlspecialchars($dbAlias) . '\'' . "\n"
+                . '    -->' . "\n" . '    <database name="'
+                . htmlspecialchars($dbAlias) . '">' . "\n";
 
             return $this->export->outputHandler($head);
         }
@@ -408,12 +395,10 @@ class ExportXml extends ExportPlugin
      *
      * @param string $db Database name
      */
-    public function exportDBFooter($db): bool
+    public function exportDBFooter(string $db): bool
     {
-        global $crlf;
-
         if (isset($GLOBALS['xml_export_contents']) && $GLOBALS['xml_export_contents']) {
-            return $this->export->outputHandler('    </database>' . $crlf);
+            return $this->export->outputHandler('    </database>' . "\n");
         }
 
         return true;
@@ -426,7 +411,7 @@ class ExportXml extends ExportPlugin
      * @param string $exportType 'server', 'database', 'table'
      * @param string $dbAlias    Aliases of db
      */
-    public function exportDBCreate($db, $exportType, $dbAlias = ''): bool
+    public function exportDBCreate(string $db, string $exportType, string $dbAlias = ''): bool
     {
         return true;
     }
@@ -434,53 +419,46 @@ class ExportXml extends ExportPlugin
     /**
      * Outputs the content of a table in XML format
      *
-     * @param string $db       database name
-     * @param string $table    table name
-     * @param string $crlf     the end of line sequence
-     * @param string $errorUrl the url to go back in case of error
-     * @param string $sqlQuery SQL query for obtaining data
-     * @param array  $aliases  Aliases of db/table/columns
+     * @param string  $db       database name
+     * @param string  $table    table name
+     * @param string  $errorUrl the url to go back in case of error
+     * @param string  $sqlQuery SQL query for obtaining data
+     * @param mixed[] $aliases  Aliases of db/table/columns
      */
     public function exportData(
-        $db,
-        $table,
-        $crlf,
-        $errorUrl,
-        $sqlQuery,
-        array $aliases = []
+        string $db,
+        string $table,
+        string $errorUrl,
+        string $sqlQuery,
+        array $aliases = [],
     ): bool {
-        global $dbi;
-
         // Do not export data for merge tables
-        if ($dbi->getTable($db, $table)->isMerge()) {
+        if ($GLOBALS['dbi']->getTable($db, $table)->isMerge()) {
             return true;
         }
 
-        $db_alias = $db;
-        $table_alias = $table;
-        $this->initAlias($aliases, $db_alias, $table_alias);
+        $dbAlias = $db;
+        $tableAlias = $table;
+        $this->initAlias($aliases, $dbAlias, $tableAlias);
         if (isset($GLOBALS['xml_export_contents']) && $GLOBALS['xml_export_contents']) {
-            $result = $dbi->query($sqlQuery, DatabaseInterface::CONNECT_USER, DatabaseInterface::QUERY_UNBUFFERED);
+            $result = $GLOBALS['dbi']->query($sqlQuery, Connection::TYPE_USER, DatabaseInterface::QUERY_UNBUFFERED);
 
-            $columns_cnt = $result->numFields();
-            $columns = [];
-            foreach ($result->getFieldNames() as $column) {
-                $columns[] = stripslashes($column);
-            }
+            $columnsCnt = $result->numFields();
+            $columns = $result->getFieldNames();
 
             $buffer = '        <!-- ' . __('Table') . ' '
-                . htmlspecialchars($table_alias) . ' -->' . $crlf;
+                . htmlspecialchars($tableAlias) . ' -->' . "\n";
             if (! $this->export->outputHandler($buffer)) {
                 return false;
             }
 
             while ($record = $result->fetchRow()) {
                 $buffer = '        <table name="'
-                    . htmlspecialchars($table_alias) . '">' . $crlf;
-                for ($i = 0; $i < $columns_cnt; $i++) {
-                    $col_as = $columns[$i];
-                    if (! empty($aliases[$db]['tables'][$table]['columns'][$col_as])) {
-                        $col_as = $aliases[$db]['tables'][$table]['columns'][$col_as];
+                    . htmlspecialchars($tableAlias) . '">' . "\n";
+                for ($i = 0; $i < $columnsCnt; $i++) {
+                    $colAs = $columns[$i];
+                    if (! empty($aliases[$db]['tables'][$table]['columns'][$colAs])) {
+                        $colAs = $aliases[$db]['tables'][$table]['columns'][$colAs];
                     }
 
                     // If a cell is NULL, still export it to preserve
@@ -490,12 +468,12 @@ class ExportXml extends ExportPlugin
                     }
 
                     $buffer .= '            <column name="'
-                        . htmlspecialchars($col_as) . '">'
-                        . htmlspecialchars((string) $record[$i])
-                        . '</column>' . $crlf;
+                        . htmlspecialchars($colAs) . '">'
+                        . htmlspecialchars($record[$i])
+                        . '</column>' . "\n";
                 }
 
-                $buffer .= '        </table>' . $crlf;
+                $buffer .= '        </table>' . "\n";
 
                 if (! $this->export->outputHandler($buffer)) {
                     return false;
@@ -510,10 +488,8 @@ class ExportXml extends ExportPlugin
 
     /**
      * Gets the table name
-     *
-     * @return string
      */
-    private function getTable()
+    private function getTable(): string
     {
         return $this->table;
     }
@@ -523,7 +499,7 @@ class ExportXml extends ExportPlugin
      *
      * @param string $table table name
      */
-    private function setTable($table): void
+    private function setTable(string $table): void
     {
         $this->table = $table;
     }
@@ -531,9 +507,9 @@ class ExportXml extends ExportPlugin
     /**
      * Gets the table names
      *
-     * @return array
+     * @return mixed[]
      */
-    private function getTables()
+    private function getTables(): array
     {
         return $this->tables;
     }
@@ -541,7 +517,7 @@ class ExportXml extends ExportPlugin
     /**
      * Sets the table names
      *
-     * @param array $tables table names
+     * @param mixed[] $tables table names
      */
     private function setTables(array $tables): void
     {
@@ -550,9 +526,7 @@ class ExportXml extends ExportPlugin
 
     public static function isAvailable(): bool
     {
-        global $db;
-
         // Can't do server export.
-        return isset($db) && strlen($db) > 0;
+        return isset($GLOBALS['db']) && strlen($GLOBALS['db']) > 0;
     }
 }

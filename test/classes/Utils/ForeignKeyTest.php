@@ -7,43 +7,44 @@ namespace PhpMyAdmin\Tests\Utils;
 use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Utils\ForeignKey;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * @covers \PhpMyAdmin\Utils\ForeignKey
- */
+#[CoversClass(ForeignKey::class)]
 class ForeignKeyTest extends AbstractTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
+    }
+
     /**
      * foreign key supported test
      *
      * @param string $a Engine
      * @param bool   $e Expected Value
-     *
-     * @dataProvider providerIsSupported
      */
+    #[DataProvider('providerIsSupported')]
     public function testIsSupported(string $a, bool $e): void
     {
         $GLOBALS['server'] = 1;
 
         $this->assertEquals(
             $e,
-            ForeignKey::isSupported($a)
+            ForeignKey::isSupported($a),
         );
     }
 
     /**
      * data provider for foreign key supported test
      *
-     * @return array
+     * @return mixed[]
      */
-    public function providerIsSupported(): array
+    public static function providerIsSupported(): array
     {
-        return [
-            ['MyISAM', false],
-            ['innodb', true],
-            ['pBxT', true],
-            ['ndb', true],
-        ];
+        return [['MyISAM', false], ['innodb', true], ['pBxT', true], ['ndb', true]];
     }
 
     public function testIsCheckEnabled(): void
@@ -52,35 +53,27 @@ class ForeignKeyTest extends AbstractTestCase
 
         $GLOBALS['cfg']['DefaultForeignKeyChecks'] = 'enable';
         $this->assertTrue(
-            ForeignKey::isCheckEnabled()
+            ForeignKey::isCheckEnabled(),
         );
 
         $GLOBALS['cfg']['DefaultForeignKeyChecks'] = 'disable';
         $this->assertFalse(
-            ForeignKey::isCheckEnabled()
+            ForeignKey::isCheckEnabled(),
         );
 
         $GLOBALS['cfg']['DefaultForeignKeyChecks'] = 'default';
         $this->assertTrue(
-            ForeignKey::isCheckEnabled()
+            ForeignKey::isCheckEnabled(),
         );
     }
 
-    /**
-     * @return array[]
-     */
-    public function providerCheckInit(): array
+    /** @return mixed[][] */
+    public static function providerCheckInit(): array
     {
-        return [
-            ['', 'OFF'],
-            ['0', 'OFF'],
-            ['1', 'ON'],
-        ];
+        return [['', 'OFF'], ['0', 'OFF'], ['1', 'ON']];
     }
 
-    /**
-     * @dataProvider providerCheckInit
-     */
+    #[DataProvider('providerCheckInit')]
     public function testHandleDisableCheckInit(string $checksValue, string $setVariableParam): void
     {
         $dbi = $this->getMockBuilder(DatabaseInterface::class)
@@ -102,9 +95,7 @@ class ForeignKeyTest extends AbstractTestCase
         $this->assertTrue(ForeignKey::handleDisableCheckInit());
     }
 
-    /**
-     * @dataProvider providerCheckInit
-     */
+    #[DataProvider('providerCheckInit')]
     public function testHandleDisableCheckInitVarFalse(string $checksValue, string $setVariableParam): void
     {
         $dbi = $this->getMockBuilder(DatabaseInterface::class)
@@ -126,20 +117,13 @@ class ForeignKeyTest extends AbstractTestCase
         $this->assertFalse(ForeignKey::handleDisableCheckInit());
     }
 
-    /**
-     * @return array[]
-     */
-    public function providerCheckCleanup(): array
+    /** @return mixed[][] */
+    public static function providerCheckCleanup(): array
     {
-        return [
-            [true, 'ON'],
-            [false, 'OFF'],
-        ];
+        return [[true, 'ON'], [false, 'OFF']];
     }
 
-    /**
-     * @dataProvider providerCheckCleanup
-     */
+    #[DataProvider('providerCheckCleanup')]
     public function testHandleDisableCheckCleanup(bool $checkValue, string $setVariableParam): void
     {
         $dbi = $this->getMockBuilder(DatabaseInterface::class)

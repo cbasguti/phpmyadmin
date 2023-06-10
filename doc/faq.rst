@@ -436,6 +436,7 @@ HHVM is supported up to phpMyAdmin 4.8.
 
 Since release 5.0, phpMyAdmin supports only PHP 7.1 and newer.
 Since release 5.2, phpMyAdmin supports only PHP 7.2 and newer.
+Since release 6.0, phpMyAdmin supports only PHP 8.1 and newer.
 
 .. _faq1_32:
 
@@ -694,7 +695,7 @@ A list of files and corresponding functionality which degrade gracefully when re
 * :file:`./examples/` (configuration examples)
 * :file:`./sql/` (SQL scripts to configure advanced functionalities)
 * :file:`./js/src/` (Source files to re-build `./js/dist/`)
-* :file:`./js/config/` (Configuration files to re-build `./js/dist/`)
+* :file:`./js/global.d.ts` JS type declaration file
 * Run `rm -rv vendor/tecnickcom/tcpdf && composer dump-autoload --no-interaction --optimize --dev` (exporting to PDF)
 * Run `rm -rv vendor/williamdes/mariadb-mysql-kbs && composer dump-autoload --no-interaction --optimize --dev` (external links to MariaDB and MySQL documentations)
 * Run `rm -rv vendor/code-lts/u2f-php-server && composer dump-autoload --no-interaction --optimize --dev` (U2F second factor authentication)
@@ -899,7 +900,7 @@ And then this hexadecimal value can be used in the configuration file.
 
     $cfg['blowfish_secret'] = sodium_hex2bin('f16ce59f45714194371b48fe362072dc3b019da7861558cd4ad29e4d6fb13851');
 
-The `sodium_hex2bin <https://www.php.net/sodium_hex2bin>`_ is used here to convert the hexadecimal value back to the
+The `sodium_hex2bin <https://www.php.net/sodium_hex2bin>`_ function is used here to convert the hexadecimal value back to the
 binary format.
 
 .. _faqlimitations:

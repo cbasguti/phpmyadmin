@@ -1,4 +1,4 @@
-name: Run Selenium tests
+name: "End-to-End tests"
 
 on:
   push:
@@ -11,14 +11,17 @@ on:
 permissions:
   contents: read
 
+env:
+  php-version: "8.1"
+
 jobs:
-  test-selenium:
-    name: Selenium tests on PHP ${{ matrix.php-version }} and ${{ matrix.os }}
+  selenium:
+    name: "Selenium"
     if: "!contains(github.event.head_commit.message, '[ci selenium skip]')"
-    runs-on: ${{ matrix.os }}
+    runs-on: "ubuntu-latest"
     services:
       database-server:
-        image: ${{ matrix.db-server }}
+        image: "mysql:5.7"
         env:
           MYSQL_ROOT_PASSWORD: testbench
         ports:
@@ -53,10 +56,30 @@ jobs:
           --cap-add=NET_RAW
           --restart on-failure
     strategy:
+      fail-fast: false
       matrix:
-        php-version: ["7.2"]
-        os: [ubuntu-latest]
-        db-server: ["mysql:5.7"]
+        test-name:
+          - "ChangePassword"
+          - "CreateDropDatabase"
+          - "CreateRemoveUser"
+          - "Database/Events"
+          - "Database/Operations"
+          - "Database/Procedures"
+          - "Database/Structure"
+          - "Export"
+          - "Import"
+          - "Login"
+          - "Normalization"
+          - "ServerSettings"
+          - "SqlQuery"
+          - "Table/Browse"
+          - "Table/Create"
+          - "Table/Insert"
+          - "Table/Operations"
+          - "Table/Structure"
+          - "Tracking"
+          - "Triggers"
+          - "Xss"
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -70,11 +93,12 @@ jobs:
       - name: Generate mo files
         run: ./scripts/generate-mo --quiet
 
-      - name: Set up PHP ${{ matrix.php-version }}
+      - name: Set up PHP ${{ env.php-version }}
         uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php-version }}
-          extensions: mbstring, iconv, mysqli, zip, gd, bz2
+          coverage: "none"
+          php-version: ${{ env.php-version }}
+          extensions: :opcache, mbstring, iconv, mysqli, zip, gd, bz2
 
       - name: Install Composer dependencies
         uses: ramsey/composer-install@v2
@@ -84,19 +108,8 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v3
         with:
-          node-version: 12
-
-      - name: Get Yarn cache directory path
-        id: yarn-cache-dir-path
-        run: echo "dir=$(yarn cache dir)" >> $GITHUB_OUTPUT
-
-      - name: Cache Yarn dependencies
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
+          node-version: '14'
+          cache: 'yarn'
 
       - name: Install modules
         run: yarn install --non-interactive --production
@@ -107,7 +120,7 @@ jobs:
       - name: Start server
         env:
           CI_MODE: selenium
-          FPM_PATH: php-fpm7.2
+          FPM_PATH: php-fpm${{ env.php-version }}
           SKIP_STANDALONE: 1
         run: |
           ./test/start-local-server
@@ -125,7 +138,7 @@ jobs:
           TESTSUITE_DATABASE_PREFIX: "selenium"
           TESTSUITE_SELENIUM_HOST: "127.0.0.1"
           TESTSUITE_SELENIUM_PORT: "4444"
-        run: ./vendor/bin/phpunit --testsuite selenium --verbose --debug --no-coverage --stop-on-skipped
+        run: ./vendor/bin/phpunit --testsuite selenium --no-logging --no-coverage --stop-on-skipped --testdox test/selenium/${{ matrix.test-name }}Test.php
 
       - name: Output logs and stop server
         env:

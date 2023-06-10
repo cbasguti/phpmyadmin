@@ -11,15 +11,13 @@ use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Tests\Stubs\DummyResult;
 use PhpMyAdmin\Version;
+use PHPUnit\Framework\Attributes\CoversClass;
 use ReflectionMethod;
 
-/**
- * @covers \PhpMyAdmin\Database\Designer
- */
+#[CoversClass(Designer::class)]
 class DesignerTest extends AbstractTestCase
 {
-    /** @var Designer */
-    private $designer;
+    private Designer $designer;
 
     /**
      * Setup for test cases
@@ -28,12 +26,11 @@ class DesignerTest extends AbstractTestCase
     {
         parent::setUp();
 
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
+
         $GLOBALS['server'] = 1;
         $GLOBALS['cfg']['ServerDefault'] = 1;
-        $GLOBALS['cfg']['PDFPageSizes'] = [
-            'A3',
-            'A4',
-        ];
+        $GLOBALS['cfg']['PDFPageSizes'] = ['A3', 'A4'];
         $GLOBALS['cfg']['PDFDefaultPageSize'] = 'A4';
         $GLOBALS['cfg']['Schema']['pdf_orientation'] = 'L';
         $GLOBALS['cfg']['Schema']['pdf_paper'] = 'A4';
@@ -69,22 +66,16 @@ class DesignerTest extends AbstractTestCase
             ->method('tryQueryAsControlUser')
             ->with(
                 'SELECT `page_nr`, `page_descr` FROM `pmadb`.`pdf_pages`'
-                . " WHERE db_name = '" . $db . "' ORDER BY `page_descr`"
+                . " WHERE db_name = '" . $db . "' ORDER BY `page_descr`",
             )
             ->will($this->returnValue($resultStub));
 
         $resultStub->expects($this->exactly(3))
             ->method('fetchAssoc')
             ->willReturnOnConsecutiveCalls(
-                [
-                    'page_nr' => '1',
-                    'page_descr' => 'page1',
-                ],
-                [
-                    'page_nr' => '2',
-                    'page_descr' => 'page2',
-                ],
-                []
+                ['page_nr' => '1', 'page_descr' => 'page1'],
+                ['page_nr' => '2', 'page_descr' => 'page2'],
+                [],
             );
 
         $dbi->expects($this->any())
@@ -105,15 +96,11 @@ class DesignerTest extends AbstractTestCase
         $this->designer = new Designer($GLOBALS['dbi'], new Relation($GLOBALS['dbi']), new Template());
 
         $method = new ReflectionMethod(Designer::class, 'getPageIdsAndNames');
-        $method->setAccessible(true);
         $result = $method->invokeArgs($this->designer, [$db]);
 
         $this->assertEquals(
-            [
-                '1' => 'page1',
-                '2' => 'page2',
-            ],
-            $result
+            ['1' => 'page1', '2' => 'page2'],
+            $result,
         );
     }
 
@@ -159,11 +146,11 @@ class DesignerTest extends AbstractTestCase
 
         $this->assertStringContainsString(
             '<input type="radio" name="save_page" id="savePageSameRadio" value="same" checked>',
-            $result
+            $result,
         );
         $this->assertStringContainsString(
             '<input type="radio" name="save_page" id="savePageNewRadio" value="new">',
-            $result
+            $result,
         );
         $this->assertStringContainsString('<input type="text" name="selected_value" id="selected_value">', $result);
     }
@@ -188,7 +175,7 @@ class DesignerTest extends AbstractTestCase
         // orientation
         $this->assertStringContainsString(
             '<select class="form-select" name="pdf_orientation" id="select_pdf_orientation">',
-            $result
+            $result,
         );
         $this->assertStringContainsString('<option value="L" selected>Landscape</option>', $result);
         $this->assertStringContainsString('<option value="P">Portrait</option>', $result);
@@ -196,7 +183,7 @@ class DesignerTest extends AbstractTestCase
         // paper size
         $this->assertStringContainsString(
             '<select class="form-select" name="pdf_paper" id="select_pdf_paper">',
-            $result
+            $result,
         );
         $this->assertStringContainsString('<option value="A3">A3</option>', $result);
         $this->assertStringContainsString('<option value="A4" selected>A4</option>', $result);

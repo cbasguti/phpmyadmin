@@ -12,7 +12,6 @@ use PhpMyAdmin\Charsets\Collation;
 
 use function __;
 use function array_keys;
-use function count;
 use function explode;
 use function is_string;
 use function ksort;
@@ -29,7 +28,7 @@ class Charsets
      *
      * @var array<string, string>
      */
-    public static $mysqlCharsetMap = [
+    public static array $mysqlCharsetMap = [
         'big5' => 'big5',
         'cp-866' => 'cp866',
         'euc-jp' => 'ujis',
@@ -57,27 +56,24 @@ class Charsets
 
     /**
      * The charset for the server
-     *
-     * @var Charset|null
      */
-    private static $serverCharset = null;
+    private static Charset|null $serverCharset = null;
 
     /** @var array<string, Charset> */
-    private static $charsets = [];
+    private static array $charsets = [];
 
     /** @var array<string, array<string, Collation>> */
-    private static $collations = [];
+    private static array $collations = [];
 
     /**
      * Loads charset data from the server
      *
-     * @param DatabaseInterface $dbi       DatabaseInterface instance
-     * @param bool              $disableIs Disable use of INFORMATION_SCHEMA
+     * @param bool $disableIs Disable use of INFORMATION_SCHEMA
      */
     private static function loadCharsets(DatabaseInterface $dbi, bool $disableIs): void
     {
         /* Data already loaded */
-        if (count(self::$charsets) > 0) {
+        if (self::$charsets !== []) {
             return;
         }
 
@@ -104,13 +100,12 @@ class Charsets
     /**
      * Loads collation data from the server
      *
-     * @param DatabaseInterface $dbi       DatabaseInterface instance
-     * @param bool              $disableIs Disable use of INFORMATION_SCHEMA
+     * @param bool $disableIs Disable use of INFORMATION_SCHEMA
      */
     private static function loadCollations(DatabaseInterface $dbi, bool $disableIs): void
     {
         /* Data already loaded */
-        if (count(self::$collations) > 0) {
+        if (self::$collations !== []) {
             return;
         }
 
@@ -141,8 +136,7 @@ class Charsets
     /**
      * Get current server charset
      *
-     * @param DatabaseInterface $dbi       DatabaseInterface instance
-     * @param bool              $disableIs Disable use of INFORMATION_SCHEMA
+     * @param bool $disableIs Disable use of INFORMATION_SCHEMA
      */
     public static function getServerCharset(DatabaseInterface $dbi, bool $disableIs): Charset
     {
@@ -172,10 +166,7 @@ class Charsets
 
         if (self::$serverCharset === null) {// Fallback in case nothing is found
             return Charset::fromServer(
-                [
-                    'Charset' => __('Unknown'),
-                    'Description' => __('Unknown'),
-                ]
+                ['Charset' => __('Unknown'), 'Description' => __('Unknown')],
             );
         }
 
@@ -185,8 +176,7 @@ class Charsets
     /**
      * Get all server charsets
      *
-     * @param DatabaseInterface $dbi       DatabaseInterface instance
-     * @param bool              $disableIs Disable use of INFORMATION_SCHEMA
+     * @param bool $disableIs Disable use of INFORMATION_SCHEMA
      *
      * @return array<string, Charset>
      */
@@ -200,8 +190,7 @@ class Charsets
     /**
      * Get all server collations
      *
-     * @param DatabaseInterface $dbi       DatabaseInterface instance
-     * @param bool              $disableIs Disable use of INFORMATION_SCHEMA
+     * @param bool $disableIs Disable use of INFORMATION_SCHEMA
      *
      * @return array<string, array<string, Collation>>
      */
@@ -213,13 +202,15 @@ class Charsets
     }
 
     /**
-     * @param DatabaseInterface $dbi       DatabaseInterface instance
-     * @param bool              $disableIs Disable use of INFORMATION_SCHEMA
-     * @param string|null       $name      Collation name
+     * @param bool   $disableIs Disable use of INFORMATION_SCHEMA
+     * @param string $name      Collation name
      */
-    public static function findCollationByName(DatabaseInterface $dbi, bool $disableIs, ?string $name): ?Collation
-    {
-        $charset = explode('_', $name ?? '')[0];
+    public static function findCollationByName(
+        DatabaseInterface $dbi,
+        bool $disableIs,
+        string $name,
+    ): Collation|null {
+        $charset = explode('_', $name)[0];
         $collations = self::getCollations($dbi, $disableIs);
 
         return $collations[$charset][$name] ?? null;

@@ -6,8 +6,9 @@ namespace PhpMyAdmin\ConfigStorage;
 
 use PhpMyAdmin\ConfigStorage\Features\PdfFeature;
 use PhpMyAdmin\DatabaseInterface;
-use PhpMyAdmin\Dbal\DatabaseName;
-use PhpMyAdmin\Dbal\TableName;
+use PhpMyAdmin\Dbal\Connection;
+use PhpMyAdmin\Identifiers\DatabaseName;
+use PhpMyAdmin\Identifiers\TableName;
 use PhpMyAdmin\InternalRelations;
 use PhpMyAdmin\RecentFavoriteTable;
 use PhpMyAdmin\SqlParser\Parser;
@@ -18,6 +19,7 @@ use PhpMyAdmin\Util;
 use PhpMyAdmin\Version;
 
 use function __;
+use function array_fill_keys;
 use function array_keys;
 use function array_reverse;
 use function array_search;
@@ -56,18 +58,20 @@ use const SQL_DIR;
  */
 class Relation
 {
-    /** @var DatabaseInterface */
-    public $dbi;
+    /** @var RelationParameters[] $cache */
+    private static array $cache = [];
 
-    /** @param DatabaseInterface $dbi */
-    public function __construct($dbi)
+    public function __construct(public DatabaseInterface $dbi)
     {
-        $this->dbi = $dbi;
     }
 
     public function getRelationParameters(): RelationParameters
     {
         $server = $GLOBALS['server'];
+
+        if (isset(self::$cache[$server])) {
+            return self::$cache[$server];
+        }
 
         if (! isset($_SESSION['relation']) || ! is_array($_SESSION['relation'])) {
             $_SESSION['relation'] = [];
@@ -78,13 +82,15 @@ class Relation
             && isset($_SESSION['relation'][$server]['version'])
             && $_SESSION['relation'][$server]['version'] === Version::VERSION
         ) {
-            return RelationParameters::fromArray($_SESSION['relation'][$server]);
+            self::$cache[$server] = RelationParameters::fromArray($_SESSION['relation'][$server]);
+
+            return self::$cache[$server];
         }
 
-        $relationParameters = RelationParameters::fromArray($this->checkRelationsParam());
-        $_SESSION['relation'][$server] = $relationParameters->toArray();
+        self::$cache[$server] = RelationParameters::fromArray($this->checkRelationsParam());
+        $_SESSION['relation'][$server] = self::$cache[$server]->toArray();
 
-        return $relationParameters;
+        return self::$cache[$server];
     }
 
     /**
@@ -161,7 +167,7 @@ class Relation
      *
      * @return array<string, bool|string|null>|null
      */
-    private function fillRelationParamsWithTableNames(array $relationParams): ?array
+    private function fillRelationParamsWithTableNames(array $relationParams): array|null
     {
         if ($this->arePmadbTablesAllDisabled()) {
             return null;
@@ -228,20 +234,11 @@ class Relation
      */
     private function checkRelationsParam(): array
     {
-        $relationParams = [];
-        $relationParams['version'] = Version::VERSION;
-
         $workToTable = [
             'relwork' => 'relation',
-            'displaywork' => [
-                'relation',
-                'table_info',
-            ],
+            'displaywork' => ['relation', 'table_info'],
             'bookmarkwork' => 'bookmarktable',
-            'pdfwork' => [
-                'table_coords',
-                'pdf_pages',
-            ],
+            'pdfwork' => ['table_coords', 'pdf_pages'],
             'commwork' => 'column_info',
             'mimework' => 'column_info',
             'historywork' => 'history',
@@ -250,10 +247,7 @@ class Relation
             'uiprefswork' => 'table_uiprefs',
             'trackingwork' => 'tracking',
             'userconfigwork' => 'userconfig',
-            'menuswork' => [
-                'users',
-                'usergroups',
-            ],
+            'menuswork' => ['users', 'usergroups'],
             'navwork' => 'navigationhiding',
             'savedsearcheswork' => 'savedsearches',
             'centralcolumnswork' => 'central_columns',
@@ -261,10 +255,9 @@ class Relation
             'exporttemplateswork' => 'export_templates',
         ];
 
-        foreach (array_keys($workToTable) as $work) {
-            $relationParams[$work] = false;
-        }
+        $relationParams = array_fill_keys(array_keys($workToTable), false);
 
+        $relationParams['version'] = Version::VERSION;
         $relationParams['allworks'] = false;
         $relationParams['user'] = null;
         $relationParams['db'] = null;
@@ -272,7 +265,7 @@ class Relation
         if (
             $GLOBALS['server'] == 0
             || empty($GLOBALS['cfg']['Server']['pmadb'])
-            || ! $this->dbi->selectDb($GLOBALS['cfg']['Server']['pmadb'], DatabaseInterface::CONNECT_CONTROL)
+            || ! $this->dbi->selectDb($GLOBALS['cfg']['Server']['pmadb'], Connection::TYPE_CONTROL)
         ) {
             // No server selected -> no bookmark table
             // we return the array with the falses in it,
@@ -355,14 +348,11 @@ class Relation
     {
         // From 4.3, new input oriented transformation feature was introduced.
         // Check whether column_info table has input transformation columns
-        $new_cols = [
-            'input_transformation',
-            'input_transformation_options',
-        ];
+        $newCols = ['input_transformation', 'input_transformation_options'];
         $query = 'SHOW COLUMNS FROM '
             . Util::backquote($GLOBALS['cfg']['Server']['pmadb'])
             . '.' . Util::backquote($GLOBALS['cfg']['Server']['column_info'])
-            . ' WHERE Field IN (\'' . implode('\', \'', $new_cols) . '\')';
+            . ' WHERE Field IN (\'' . implode('\', \'', $newCols) . '\')';
         $result = $this->dbi->tryQueryAsControlUser($query);
         if ($result) {
             $rows = $result->numRows();
@@ -381,29 +371,26 @@ class Relation
             // replace pma__column_info table name from query
             // to with set in config.inc.php
             $query = str_replace(
-                [
-                    '`phpmyadmin`',
-                    '`pma__column_info`',
-                ],
+                ['`phpmyadmin`', '`pma__column_info`'],
                 [
                     Util::backquote($GLOBALS['cfg']['Server']['pmadb']),
                     Util::backquote($GLOBALS['cfg']['Server']['column_info']),
                 ],
-                (string) $query
+                (string) $query,
             );
-            $this->dbi->tryMultiQuery($query, DatabaseInterface::CONNECT_CONTROL);
+            $this->dbi->tryMultiQuery($query, Connection::TYPE_CONTROL);
             // skips result sets of query as we are not interested in it
             do {
                 $hasResult = (
-                    $this->dbi->moreResults(DatabaseInterface::CONNECT_CONTROL)
-                    && $this->dbi->nextResult(DatabaseInterface::CONNECT_CONTROL)
+                    $this->dbi->moreResults(Connection::TYPE_CONTROL)
+                    && $this->dbi->nextResult(Connection::TYPE_CONTROL)
                 );
             } while ($hasResult);
 
-            $error = $this->dbi->getError(DatabaseInterface::CONNECT_CONTROL);
+            $error = $this->dbi->getError(Connection::TYPE_CONTROL);
 
             // return true if no error exists otherwise false
-            return empty($error);
+            return $error === '';
         }
 
         // some failure, either in upgrading or something else
@@ -420,33 +407,32 @@ class Relation
      * @param string $column the name of the column to check for
      * @param string $source the source for foreign key information
      *
-     * @return array    db,table,column
+     * @return mixed[]    db,table,column
      */
-    public function getForeigners($db, $table, $column = '', $source = 'both')
+    public function getForeigners(string $db, string $table, string $column = '', string $source = 'both'): array
     {
         $relationFeature = $this->getRelationParameters()->relationFeature;
         $foreign = [];
 
         if ($relationFeature !== null && ($source === 'both' || $source === 'internal')) {
-            $rel_query = 'SELECT `master_field`, `foreign_db`, '
+            $relQuery = 'SELECT `master_field`, `foreign_db`, '
                 . '`foreign_table`, `foreign_field`'
                 . ' FROM ' . Util::backquote($relationFeature->database)
                 . '.' . Util::backquote($relationFeature->relation)
-                . ' WHERE `master_db` = \'' . $this->dbi->escapeString($db) . '\''
-                . ' AND `master_table` = \'' . $this->dbi->escapeString($table) . '\'';
+                . ' WHERE `master_db` = ' . $this->dbi->quoteString($db)
+                . ' AND `master_table` = ' . $this->dbi->quoteString($table);
             if (strlen($column) > 0) {
-                $rel_query .= ' AND `master_field` = '
-                    . '\'' . $this->dbi->escapeString($column) . '\'';
+                $relQuery .= ' AND `master_field` = ' . $this->dbi->quoteString($column);
             }
 
-            $foreign = $this->dbi->fetchResult($rel_query, 'master_field', null, DatabaseInterface::CONNECT_CONTROL);
+            $foreign = $this->dbi->fetchResult($relQuery, 'master_field', null, Connection::TYPE_CONTROL);
         }
 
         if (($source === 'both' || $source === 'foreign') && strlen($table) > 0) {
-            $tableObj = new Table($table, $db);
-            $show_create_table = $tableObj->showCreate();
-            if ($show_create_table) {
-                $parser = new Parser($show_create_table);
+            $tableObj = new Table($table, $db, $this->dbi);
+            $showCreateTable = $tableObj->showCreate();
+            if ($showCreateTable) {
+                $parser = new Parser($showCreateTable);
                 $stmt = $parser->statements[0];
                 $foreign['foreign_keys_data'] = [];
                 if ($stmt instanceof CreateStatement) {
@@ -491,9 +477,9 @@ class Relation
      * @param string $db    the name of the db to check for
      * @param string $table the name of the table to check for
      *
-     * @return string|false field name or false
+     * @return string field name
      */
-    public function getDisplayField($db, $table)
+    public function getDisplayField(string $db, string $table): string
     {
         $displayFeature = $this->getRelationParameters()->displayFeature;
 
@@ -501,17 +487,13 @@ class Relation
          * Try to fetch the display field from DB.
          */
         if ($displayFeature !== null) {
-            $disp_query = 'SELECT `display_field`'
+            $dispQuery = 'SELECT `display_field`'
                     . ' FROM ' . Util::backquote($displayFeature->database)
                     . '.' . Util::backquote($displayFeature->tableInfo)
-                    . ' WHERE `db_name` = \'' . $this->dbi->escapeString((string) $db) . '\''
-                    . ' AND `table_name` = \'' . $this->dbi->escapeString((string) $table) . '\'';
+                    . ' WHERE `db_name` = ' . $this->dbi->quoteString($db)
+                    . ' AND `table_name` = ' . $this->dbi->quoteString($table);
 
-            $row = $this->dbi->fetchSingleRow(
-                $disp_query,
-                DatabaseInterface::FETCH_ASSOC,
-                DatabaseInterface::CONNECT_CONTROL
-            );
+            $row = $this->dbi->fetchSingleRow($dispQuery, DatabaseInterface::FETCH_ASSOC, Connection::TYPE_CONTROL);
             if (isset($row['display_field'])) {
                 return $row['display_field'];
             }
@@ -540,7 +522,7 @@ class Relation
             }
         }
 
-        return false;
+        return '';
     }
 
     /**
@@ -549,9 +531,9 @@ class Relation
      * @param string $db    the name of the db to check for
      * @param string $table the name of the table to check for
      *
-     * @return array    [column_name] = comment
+     * @return string[]    [column_name] = comment
      */
-    public function getComments($db, $table = ''): array
+    public function getComments(string $db, string $table = ''): array
     {
         if ($table === '') {
             return [$this->getDbComment($db)];
@@ -562,7 +544,7 @@ class Relation
         // MySQL native column comments
         $columns = $this->dbi->getColumns($db, $table, true);
         foreach ($columns as $column) {
-            if (empty($column['Comment'])) {
+            if ($column['Comment'] === '') {
                 continue;
             }
 
@@ -582,16 +564,16 @@ class Relation
         $columnCommentsFeature = $this->getRelationParameters()->columnCommentsFeature;
         if ($columnCommentsFeature !== null) {
             // pmadb internal db comment
-            $com_qry = 'SELECT `comment`'
+            $comQry = 'SELECT `comment`'
                     . ' FROM ' . Util::backquote($columnCommentsFeature->database)
                     . '.' . Util::backquote($columnCommentsFeature->columnInfo)
-                    . ' WHERE db_name = \'' . $this->dbi->escapeString($db) . '\''
+                    . ' WHERE db_name = ' . $this->dbi->quoteString($db, Connection::TYPE_CONTROL)
                     . ' AND table_name  = \'\''
                     . ' AND column_name = \'(db_comment)\'';
-            $com_rs = $this->dbi->tryQueryAsControlUser($com_qry);
+            $comRs = $this->dbi->tryQueryAsControlUser($comQry);
 
-            if ($com_rs && $com_rs->numRows() > 0) {
-                $row = $com_rs->fetchAssoc();
+            if ($comRs && $comRs->numRows() > 0) {
+                $row = $comRs->fetchAssoc();
 
                 return (string) $row['comment'];
             }
@@ -603,22 +585,22 @@ class Relation
     /**
      * Gets the comment for a db
      *
-     * @return array comments
+     * @return mixed[] comments
      */
-    public function getDbComments()
+    public function getDbComments(): array
     {
         $columnCommentsFeature = $this->getRelationParameters()->columnCommentsFeature;
 
         if ($columnCommentsFeature !== null) {
             // pmadb internal db comment
-            $com_qry = 'SELECT `db_name`, `comment`'
+            $comQry = 'SELECT `db_name`, `comment`'
                     . ' FROM ' . Util::backquote($columnCommentsFeature->database)
                     . '.' . Util::backquote($columnCommentsFeature->columnInfo)
                     . ' WHERE `column_name` = \'(db_comment)\'';
-            $com_rs = $this->dbi->tryQueryAsControlUser($com_qry);
+            $comRs = $this->dbi->tryQueryAsControlUser($comQry);
 
-            if ($com_rs && $com_rs->numRows() > 0) {
-                return $com_rs->fetchAllKeyPair();
+            if ($comRs && $comRs->numRows() > 0) {
+                return $comRs->fetchAllKeyPair();
             }
         }
 
@@ -631,7 +613,7 @@ class Relation
      * @param string $db      the name of the db
      * @param string $comment the value of the column
      */
-    public function setDbComment($db, $comment = ''): bool
+    public function setDbComment(string $db, string $comment = ''): bool
     {
         $columnCommentsFeature = $this->getRelationParameters()->columnCommentsFeature;
         if ($columnCommentsFeature === null) {
@@ -639,28 +621,28 @@ class Relation
         }
 
         if (strlen($comment) > 0) {
-            $upd_query = 'INSERT INTO '
+            $updQuery = 'INSERT INTO '
                 . Util::backquote($columnCommentsFeature->database) . '.'
                 . Util::backquote($columnCommentsFeature->columnInfo)
                 . ' (`db_name`, `table_name`, `column_name`, `comment`)'
-                . ' VALUES (\''
-                . $this->dbi->escapeString($db)
-                . "', '', '(db_comment)', '"
-                . $this->dbi->escapeString($comment)
-                . "') "
+                . ' VALUES ('
+                . $this->dbi->quoteString($db, Connection::TYPE_CONTROL)
+                . ", '', '(db_comment)', "
+                . $this->dbi->quoteString($comment, Connection::TYPE_CONTROL)
+                . ') '
                 . ' ON DUPLICATE KEY UPDATE '
-                . "`comment` = '" . $this->dbi->escapeString($comment) . "'";
+                . '`comment` = ' . $this->dbi->quoteString($comment, Connection::TYPE_CONTROL);
         } else {
-            $upd_query = 'DELETE FROM '
+            $updQuery = 'DELETE FROM '
                 . Util::backquote($columnCommentsFeature->database) . '.'
                 . Util::backquote($columnCommentsFeature->columnInfo)
-                . ' WHERE `db_name`     = \'' . $this->dbi->escapeString($db)
-                . '\'
+                . ' WHERE `db_name`     = ' . $this->dbi->quoteString($db, Connection::TYPE_CONTROL)
+                . '
                     AND `table_name`  = \'\'
                     AND `column_name` = \'(db_comment)\'';
         }
 
-        return (bool) $this->dbi->queryAsControlUser($upd_query);
+        return (bool) $this->dbi->queryAsControlUser($updQuery);
     }
 
     /**
@@ -671,7 +653,7 @@ class Relation
      * @param string $username the username
      * @param string $sqlquery the sql query
      */
-    public function setHistory($db, $table, $username, $sqlquery): void
+    public function setHistory(string $db, string $table, string $username, string $sqlquery): void
     {
         $maxCharactersInDisplayedSQL = $GLOBALS['cfg']['MaxCharactersInDisplayedSQL'];
         // Prevent to run this automatically on Footer class destroying in testsuite
@@ -685,11 +667,7 @@ class Relation
             $_SESSION['sql_history'] = [];
         }
 
-        $_SESSION['sql_history'][] = [
-            'db' => $db,
-            'table' => $table,
-            'sqlquery' => $sqlquery,
-        ];
+        $_SESSION['sql_history'][] = ['db' => $db, 'table' => $table, 'sqlquery' => $sqlquery];
 
         if (count($_SESSION['sql_history']) > $GLOBALS['cfg']['QueryHistoryMax']) {
             // history should not exceed a maximum count
@@ -710,11 +688,11 @@ class Relation
                     `timevalue`,
                     `sqlquery`)
             VALUES
-                  (\'' . $this->dbi->escapeString($username) . '\',
-                   \'' . $this->dbi->escapeString($db) . '\',
-                   \'' . $this->dbi->escapeString($table) . '\',
+                  (' . $this->dbi->quoteString($username, Connection::TYPE_CONTROL) . ',
+                   ' . $this->dbi->quoteString($db, Connection::TYPE_CONTROL) . ',
+                   ' . $this->dbi->quoteString($table, Connection::TYPE_CONTROL) . ',
                    NOW(),
-                   \'' . $this->dbi->escapeString($sqlquery) . '\')'
+                   ' . $this->dbi->quoteString($sqlquery, Connection::TYPE_CONTROL) . ')',
         );
 
         $this->purgeHistory($username);
@@ -725,9 +703,9 @@ class Relation
      *
      * @param string $username the username
      *
-     * @return array|bool list of history items
+     * @return mixed[]|bool list of history items
      */
-    public function getHistory($username)
+    public function getHistory(string $username): array|bool
     {
         $sqlHistoryFeature = $this->getRelationParameters()->sqlHistoryFeature;
         if ($sqlHistoryFeature === null) {
@@ -746,17 +724,17 @@ class Relation
             return false;
         }
 
-        $hist_query = '
+        $histQuery = '
              SELECT `db`,
                     `table`,
                     `sqlquery`,
                     `timevalue`
                FROM ' . Util::backquote($sqlHistoryFeature->database)
                 . '.' . Util::backquote($sqlHistoryFeature->history) . '
-              WHERE `username` = \'' . $this->dbi->escapeString($username) . '\'
+              WHERE `username` = ' . $this->dbi->quoteString($username) . '
            ORDER BY `id` DESC';
 
-        return $this->dbi->fetchResult($hist_query, null, null, DatabaseInterface::CONNECT_CONTROL);
+        return $this->dbi->fetchResult($histQuery, null, null, Connection::TYPE_CONTROL);
     }
 
     /**
@@ -767,24 +745,24 @@ class Relation
      *
      * @param string $username the username
      */
-    public function purgeHistory($username): void
+    public function purgeHistory(string $username): void
     {
         $sqlHistoryFeature = $this->getRelationParameters()->sqlHistoryFeature;
         if (! $GLOBALS['cfg']['QueryHistoryDB'] || $sqlHistoryFeature === null) {
             return;
         }
 
-        $search_query = '
+        $searchQuery = '
             SELECT `timevalue`
             FROM ' . Util::backquote($sqlHistoryFeature->database)
                 . '.' . Util::backquote($sqlHistoryFeature->history) . '
-            WHERE `username` = \'' . $this->dbi->escapeString($username) . '\'
+            WHERE `username` = ' . $this->dbi->quoteString($username) . '
             ORDER BY `timevalue` DESC
             LIMIT ' . $GLOBALS['cfg']['QueryHistoryMax'] . ', 1';
 
-        $max_time = $this->dbi->fetchValue($search_query, 0, DatabaseInterface::CONNECT_CONTROL);
+        $maxTime = $this->dbi->fetchValue($searchQuery, 0, Connection::TYPE_CONTROL);
 
-        if (! $max_time) {
+        if (! $maxTime) {
             return;
         }
 
@@ -792,22 +770,22 @@ class Relation
             'DELETE FROM '
             . Util::backquote($sqlHistoryFeature->database) . '.'
             . Util::backquote($sqlHistoryFeature->history) . '
-              WHERE `username` = \'' . $this->dbi->escapeString($username)
-            . '\'
-                AND `timevalue` <= \'' . $max_time . '\''
+              WHERE `username` = ' . $this->dbi->quoteString($username, Connection::TYPE_CONTROL)
+            . '
+                AND `timevalue` <= \'' . $maxTime . '\'',
         );
     }
 
     /**
      * Prepares the dropdown for one mode
      *
-     * @param array  $foreign the keys and values for foreigns
-     * @param string $data    the current data of the dropdown
-     * @param string $mode    the needed mode
+     * @param mixed[] $foreign the keys and values for foreigns
+     * @param string  $data    the current data of the dropdown
+     * @param string  $mode    the needed mode
      *
      * @return string[] the <option value=""><option>s
      */
-    public function buildForeignDropdown(array $foreign, $data, $mode): array
+    public function buildForeignDropdown(array $foreign, string $data, string $mode): array
     {
         $reloptions = [];
 
@@ -832,18 +810,17 @@ class Relation
         foreach ($foreign as $key => $value) {
             $key = (string) $key;
             $value = (string) $value;
-            $data = (string) $data;
 
             if (mb_check_encoding($key, 'utf-8') && ! preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F\x80-\x9F]/u', $key)) {
-                $selected = ($key == $data);
+                $selected = ($key === $data);
                 // show as text if it's valid utf-8
                 $key = htmlspecialchars($key);
             } else {
                 $key = '0x' . bin2hex($key);
                 if (str_contains($data, '0x')) {
-                    $selected = ($key == trim($data));
+                    $selected = ($key === trim($data));
                 } else {
-                    $selected = ($key == '0x' . $data);
+                    $selected = ($key === '0x' . $data);
                 }
             }
 
@@ -860,8 +837,8 @@ class Relation
                         mb_substr(
                             $value,
                             0,
-                            (int) $GLOBALS['cfg']['LimitChars']
-                        ) . '...'
+                            (int) $GLOBALS['cfg']['LimitChars'],
+                        ) . '...',
                     );
                 }
             } else {
@@ -892,20 +869,20 @@ class Relation
     /**
      * Outputs dropdown with values of foreign fields
      *
-     * @param array[]  $disp_row        array of the displayed row
-     * @param string   $foreign_field   the foreign field
-     * @param string   $foreign_display the foreign field to display
-     * @param string   $data            the current data of the dropdown (field in row)
-     * @param int|null $max             maximum number of items in the dropdown
+     * @param mixed[][] $dispRow        array of the displayed row
+     * @param string    $foreignField   the foreign field
+     * @param string    $foreignDisplay the foreign field to display
+     * @param string    $data           the current data of the dropdown (field in row)
+     * @param int|null  $max            maximum number of items in the dropdown
      *
      * @return string   the <option value=""><option>s
      */
     public function foreignDropdown(
-        array $disp_row,
-        $foreign_field,
-        string $foreign_display,
-        $data,
-        $max = null
+        array $dispRow,
+        string $foreignField,
+        string $foreignDisplay,
+        string $data,
+        int|null $max = null,
     ): string {
         if ($max === null) {
             $max = $GLOBALS['cfg']['ForeignKeyMaxLimit'];
@@ -914,12 +891,12 @@ class Relation
         $foreign = [];
 
         // collect the data
-        foreach ($disp_row as $relrow) {
-            $key = $relrow[$foreign_field];
+        foreach ($dispRow as $relrow) {
+            $key = $relrow[$foreignField];
 
             // if the display field has been defined for this foreign table
-            if ($foreign_display) {
-                $value = $relrow[$foreign_display];
+            if ($foreignDisplay) {
+                $value = $relrow[$foreignDisplay];
             } else {
                 $value = '';
             }
@@ -930,7 +907,7 @@ class Relation
         // put the dropdown sections in correct order
         $top = [];
         $bottom = [];
-        if ($foreign_display) {
+        if ($foreignDisplay) {
             if (
                 isset($GLOBALS['cfg']['ForeignKeyDropdownOrder'])
                 && is_array($GLOBALS['cfg']['ForeignKeyDropdownOrder'])
@@ -943,7 +920,7 @@ class Relation
                     $top = $this->buildForeignDropdown(
                         $foreign,
                         $data,
-                        (string) $GLOBALS['cfg']['ForeignKeyDropdownOrder'][0]
+                        (string) $GLOBALS['cfg']['ForeignKeyDropdownOrder'][0],
                     );
                 }
 
@@ -955,7 +932,7 @@ class Relation
                     $bottom = $this->buildForeignDropdown(
                         $foreign,
                         $data,
-                        (string) $GLOBALS['cfg']['ForeignKeyDropdownOrder'][1]
+                        (string) $GLOBALS['cfg']['ForeignKeyDropdownOrder'][1],
                     );
                 }
             } else {
@@ -968,17 +945,17 @@ class Relation
 
         // beginning of dropdown
         $ret = '<option value="">&nbsp;</option>';
-        $top_count = count($top);
-        if ($max == -1 || $top_count < $max) {
+        $topCount = count($top);
+        if ($max == -1 || $topCount < $max) {
             $ret .= implode('', $top);
-            if ($foreign_display && $top_count > 0) {
+            if ($foreignDisplay && $topCount > 0) {
                 // this empty option is to visually mark the beginning of the
                 // second series of values (bottom)
                 $ret .= '<option value="">&nbsp;</option>';
             }
         }
 
-        if ($foreign_display) {
+        if ($foreignDisplay) {
             $ret .= implode('', $bottom);
         }
 
@@ -988,36 +965,36 @@ class Relation
     /**
      * Gets foreign keys in preparation for a drop-down selector
      *
-     * @param array|bool $foreigners     array of the foreign keys
-     * @param string     $field          the foreign field name
-     * @param bool       $override_total whether to override the total
-     * @param string     $foreign_filter a possible filter
-     * @param string     $foreign_limit  a possible LIMIT clause
-     * @param bool       $get_total      optional, whether to get total num of rows
-     *                                   in $foreignData['the_total;]
-     *                                   (has an effect of performance)
+     * @param mixed[]|bool $foreigners    array of the foreign keys
+     * @param string       $field         the foreign field name
+     * @param bool         $overrideTotal whether to override the total
+     * @param string       $foreignFilter a possible filter
+     * @param string       $foreignLimit  a possible LIMIT clause
+     * @param bool         $getTotal      optional, whether to get total num of rows
+     *                                    in $foreignData['the_total;]
+     *                                    (has an effect of performance)
      *
      * @return array<string, mixed>    data about the foreign keys
      * @psalm-return array{
      *     foreign_link: bool,
-     *     the_total: mixed,
+     *     the_total: int|string|null,
      *     foreign_display: string,
      *     disp_row: list<non-empty-array>|null,
      *     foreign_field: mixed
      * }
      */
     public function getForeignData(
-        $foreigners,
-        $field,
-        $override_total,
-        string $foreign_filter,
-        $foreign_limit,
-        $get_total = false
+        array|bool $foreigners,
+        string $field,
+        bool $overrideTotal,
+        string $foreignFilter,
+        string $foreignLimit,
+        bool $getTotal = false,
     ): array {
         // we always show the foreign field in the drop-down; if a display
         // field is defined, we show it besides the foreign field
-        $foreign_link = false;
-        $disp_row = $foreign_display = $the_total = $foreign_field = null;
+        $foreignLink = false;
+        $dispRow = $foreignDisplay = $theTotal = $foreignField = null;
         do {
             if (! $foreigners) {
                 break;
@@ -1028,9 +1005,9 @@ class Relation
                 break;
             }
 
-            $foreign_db = $foreigner['foreign_db'];
-            $foreign_table = $foreigner['foreign_table'];
-            $foreign_field = $foreigner['foreign_field'];
+            $foreignDb = $foreigner['foreign_db'];
+            $foreignTable = $foreigner['foreign_table'];
+            $foreignField = $foreigner['foreign_field'];
 
             // Count number of rows in the foreign table. Currently we do
             // not use a drop-down if more than ForeignKeyMaxLimit rows in the
@@ -1042,78 +1019,78 @@ class Relation
 
             // Check if table has more rows than specified by
             // $GLOBALS['cfg']['ForeignKeyMaxLimit']
-            $moreThanLimit = $this->dbi->getTable($foreign_db, $foreign_table)
+            $moreThanLimit = $this->dbi->getTable($foreignDb, $foreignTable)
                 ->checkIfMinRecordsExist($GLOBALS['cfg']['ForeignKeyMaxLimit']);
 
-            if ($override_total === true || ! $moreThanLimit) {
+            if ($overrideTotal || ! $moreThanLimit) {
                 // foreign_display can be false if no display field defined:
-                $foreign_display = $this->getDisplayField($foreign_db, $foreign_table);
+                $foreignDisplay = $this->getDisplayField($foreignDb, $foreignTable);
 
-                $f_query_main = 'SELECT ' . Util::backquote($foreign_field)
+                $fQueryMain = 'SELECT ' . Util::backquote($foreignField)
                     . (
-                        $foreign_display === false
+                        $foreignDisplay === ''
                             ? ''
-                            : ', ' . Util::backquote($foreign_display)
+                            : ', ' . Util::backquote($foreignDisplay)
                     );
-                $f_query_from = ' FROM ' . Util::backquote($foreign_db)
-                    . '.' . Util::backquote($foreign_table);
-                $f_query_filter = $foreign_filter === '' ? '' : ' WHERE '
-                    . Util::backquote($foreign_field)
-                    . ' LIKE "%' . $this->dbi->escapeString($foreign_filter) . '%"'
+                $fQueryFrom = ' FROM ' . Util::backquote($foreignDb)
+                    . '.' . Util::backquote($foreignTable);
+                $fQueryFilter = $foreignFilter === '' ? '' : ' WHERE '
+                    . Util::backquote($foreignField)
+                    . ' LIKE ' . $this->dbi->quoteString(
+                        '%' . $this->dbi->escapeMysqlWildcards($foreignFilter) . '%',
+                    )
                     . (
-                        $foreign_display === false
+                        $foreignDisplay === ''
                         ? ''
-                        : ' OR ' . Util::backquote($foreign_display)
-                        . ' LIKE "%' . $this->dbi->escapeString($foreign_filter)
-                        . '%"'
+                        : ' OR ' . Util::backquote($foreignDisplay)
+                        . ' LIKE ' . $this->dbi->quoteString(
+                            '%' . $this->dbi->escapeMysqlWildcards($foreignFilter) . '%',
+                        )
                     );
-                $f_query_order = $foreign_display === false ? '' : ' ORDER BY '
-                    . Util::backquote($foreign_table) . '.'
-                    . Util::backquote($foreign_display);
+                $fQueryOrder = $foreignDisplay === '' ? '' : ' ORDER BY '
+                    . Util::backquote($foreignTable) . '.'
+                    . Util::backquote($foreignDisplay);
 
-                $f_query_limit = $foreign_limit ?: '';
+                $fQueryLimit = $foreignLimit !== '' ? $foreignLimit : '';
 
-                if ($foreign_filter !== '') {
-                    $the_total = $this->dbi->fetchValue('SELECT COUNT(*)' . $f_query_from . $f_query_filter);
-                    if ($the_total === false) {
-                        $the_total = 0;
+                if ($foreignFilter !== '') {
+                    $theTotal = $this->dbi->fetchValue('SELECT COUNT(*)' . $fQueryFrom . $fQueryFilter);
+                    if ($theTotal === false) {
+                        $theTotal = 0;
                     }
                 }
 
-                $disp = $this->dbi->tryQuery(
-                    $f_query_main . $f_query_from . $f_query_filter
-                    . $f_query_order . $f_query_limit
-                );
+                $disp = $this->dbi->tryQuery($fQueryMain . $fQueryFrom . $fQueryFilter . $fQueryOrder . $fQueryLimit);
                 if ($disp && $disp->numRows() > 0) {
                     // If a resultset has been created, pre-cache it in the $disp_row
                     // array. This helps us from not needing to use mysql_data_seek by
                     // accessing a pre-cached PHP array. Usually those resultsets are
                     // not that big, so a performance hit should not be expected.
-                    $disp_row = $disp->fetchAllAssoc();
+                    $dispRow = $disp->fetchAllAssoc();
                 } else {
                     // Either no data in the foreign table or
                     // user does not have select permission to foreign table/field
                     // Show an input field with a 'Browse foreign values' link
-                    $disp_row = null;
-                    $foreign_link = true;
+                    $dispRow = null;
+                    $foreignLink = true;
                 }
             } else {
-                $disp_row = null;
-                $foreign_link = true;
+                $dispRow = null;
+                $foreignLink = true;
             }
         } while (false);
 
-        if ($get_total && isset($foreign_db, $foreign_table)) {
-            $the_total = $this->dbi->getTable($foreign_db, $foreign_table)
+        if ($getTotal && isset($foreignDb, $foreignTable)) {
+            $theTotal = $this->dbi->getTable($foreignDb, $foreignTable)
                 ->countRecords(true);
         }
 
         return [
-            'foreign_link' => $foreign_link,
-            'the_total' => $the_total,
-            'foreign_display' => $foreign_display ?: '',
-            'disp_row' => $disp_row,
-            'foreign_field' => $foreign_field,
+            'foreign_link' => $foreignLink,
+            'the_total' => $theTotal,
+            'foreign_display' => is_string($foreignDisplay) ? $foreignDisplay : '',
+            'disp_row' => $dispRow,
+            'foreign_field' => $foreignField,
         ];
     }
 
@@ -1122,91 +1099,80 @@ class Relation
      *
      * usually called after a column in a table was renamed
      *
-     * @param string $db       database name
-     * @param string $table    table name
-     * @param string $field    old field name
-     * @param string $new_name new field name
+     * @param string $db      database name
+     * @param string $table   table name
+     * @param string $field   old field name
+     * @param string $newName new field name
      */
-    public function renameField($db, $table, $field, $new_name): void
+    public function renameField(string $db, string $table, string $field, string $newName): void
     {
         $relationParameters = $this->getRelationParameters();
 
         if ($relationParameters->displayFeature !== null) {
-            $table_query = 'UPDATE '
+            $tableQuery = 'UPDATE '
                 . Util::backquote($relationParameters->displayFeature->database) . '.'
                 . Util::backquote($relationParameters->displayFeature->tableInfo)
-                . '   SET display_field = \'' . $this->dbi->escapeString($new_name) . '\''
-                . ' WHERE db_name       = \'' . $this->dbi->escapeString($db)
-                . '\''
-                . '   AND table_name    = \'' . $this->dbi->escapeString($table)
-                . '\''
-                . '   AND display_field = \'' . $this->dbi->escapeString($field)
-                . '\'';
-            $this->dbi->queryAsControlUser($table_query);
+                . '   SET display_field = ' . $this->dbi->quoteString($newName, Connection::TYPE_CONTROL)
+                . ' WHERE db_name       = ' . $this->dbi->quoteString($db, Connection::TYPE_CONTROL)
+                . '   AND table_name    = ' . $this->dbi->quoteString($table, Connection::TYPE_CONTROL)
+                . '   AND display_field = ' . $this->dbi->quoteString($field, Connection::TYPE_CONTROL);
+            $this->dbi->queryAsControlUser($tableQuery);
         }
 
         if ($relationParameters->relationFeature === null) {
             return;
         }
 
-        $table_query = 'UPDATE '
+        $tableQuery = 'UPDATE '
             . Util::backquote($relationParameters->relationFeature->database) . '.'
             . Util::backquote($relationParameters->relationFeature->relation)
-            . '   SET master_field = \'' . $this->dbi->escapeString($new_name) . '\''
-            . ' WHERE master_db    = \'' . $this->dbi->escapeString($db)
-            . '\''
-            . '   AND master_table = \'' . $this->dbi->escapeString($table)
-            . '\''
-            . '   AND master_field = \'' . $this->dbi->escapeString($field)
-            . '\'';
-        $this->dbi->queryAsControlUser($table_query);
+            . '   SET master_field = ' . $this->dbi->quoteString($newName, Connection::TYPE_CONTROL)
+            . ' WHERE master_db    = ' . $this->dbi->quoteString($db, Connection::TYPE_CONTROL)
+            . '   AND master_table = ' . $this->dbi->quoteString($table, Connection::TYPE_CONTROL)
+            . '   AND master_field = ' . $this->dbi->quoteString($field, Connection::TYPE_CONTROL);
+        $this->dbi->queryAsControlUser($tableQuery);
 
-        $table_query = 'UPDATE '
+        $tableQuery = 'UPDATE '
             . Util::backquote($relationParameters->relationFeature->database) . '.'
             . Util::backquote($relationParameters->relationFeature->relation)
-            . '   SET foreign_field = \'' . $this->dbi->escapeString($new_name) . '\''
-            . ' WHERE foreign_db    = \'' . $this->dbi->escapeString($db)
-            . '\''
-            . '   AND foreign_table = \'' . $this->dbi->escapeString($table)
-            . '\''
-            . '   AND foreign_field = \'' . $this->dbi->escapeString($field)
-            . '\'';
-        $this->dbi->queryAsControlUser($table_query);
+            . '   SET foreign_field = ' . $this->dbi->quoteString($newName, Connection::TYPE_CONTROL)
+            . ' WHERE foreign_db    = ' . $this->dbi->quoteString($db, Connection::TYPE_CONTROL)
+            . '   AND foreign_table = ' . $this->dbi->quoteString($table, Connection::TYPE_CONTROL)
+            . '   AND foreign_field = ' . $this->dbi->quoteString($field, Connection::TYPE_CONTROL);
+        $this->dbi->queryAsControlUser($tableQuery);
     }
 
     /**
      * Performs SQL query used for renaming table.
      *
-     * @param string $source_db    Source database name
-     * @param string $target_db    Target database name
-     * @param string $source_table Source table name
-     * @param string $target_table Target table name
-     * @param string $db_field     Name of database field
-     * @param string $table_field  Name of table field
+     * @param string $sourceDb    Source database name
+     * @param string $targetDb    Target database name
+     * @param string $sourceTable Source table name
+     * @param string $targetTable Target table name
+     * @param string $dbField     Name of database field
+     * @param string $tableField  Name of table field
      */
     public function renameSingleTable(
         DatabaseName $configStorageDatabase,
         TableName $configStorageTable,
-        string $source_db,
-        string $target_db,
-        string $source_table,
-        string $target_table,
-        string $db_field,
-        string $table_field
+        string $sourceDb,
+        string $targetDb,
+        string $sourceTable,
+        string $targetTable,
+        string $dbField,
+        string $tableField,
     ): void {
         $query = 'UPDATE '
             . Util::backquote($configStorageDatabase) . '.'
             . Util::backquote($configStorageTable)
             . ' SET '
-            . $db_field . ' = \'' . $this->dbi->escapeString($target_db)
-            . '\', '
-            . $table_field . ' = \'' . $this->dbi->escapeString($target_table)
-            . '\''
+            . $dbField . ' = ' . $this->dbi->quoteString($targetDb, Connection::TYPE_CONTROL)
+            . ', '
+            . $tableField . ' = ' . $this->dbi->quoteString($targetTable, Connection::TYPE_CONTROL)
             . ' WHERE '
-            . $db_field . '  = \'' . $this->dbi->escapeString($source_db) . '\''
+            . $dbField . '  = ' . $this->dbi->quoteString($sourceDb, Connection::TYPE_CONTROL)
             . ' AND '
-            . $table_field . ' = \'' . $this->dbi->escapeString($source_table)
-            . '\'';
+            . $tableField . ' = ' . $this->dbi->quoteString($sourceTable, Connection::TYPE_CONTROL);
         $this->dbi->queryAsControlUser($query);
     }
 
@@ -1215,12 +1181,12 @@ class Relation
      *
      * usually called after table has been moved
      *
-     * @param string $source_db    Source database name
-     * @param string $target_db    Target database name
-     * @param string $source_table Source table name
-     * @param string $target_table Target table name
+     * @param string $sourceDb    Source database name
+     * @param string $targetDb    Target database name
+     * @param string $sourceTable Source table name
+     * @param string $targetTable Target table name
      */
-    public function renameTable($source_db, $target_db, $source_table, $target_table): void
+    public function renameTable(string $sourceDb, string $targetDb, string $sourceTable, string $targetTable): void
     {
         $relationParameters = $this->getRelationParameters();
 
@@ -1229,12 +1195,12 @@ class Relation
             $this->renameSingleTable(
                 $relationParameters->columnCommentsFeature->database,
                 $relationParameters->columnCommentsFeature->columnInfo,
-                $source_db,
-                $target_db,
-                $source_table,
-                $target_table,
+                $sourceDb,
+                $targetDb,
+                $sourceTable,
+                $targetTable,
                 'db_name',
-                'table_name'
+                'table_name',
             );
         }
 
@@ -1245,12 +1211,12 @@ class Relation
             $this->renameSingleTable(
                 $relationParameters->displayFeature->database,
                 $relationParameters->displayFeature->tableInfo,
-                $source_db,
-                $target_db,
-                $source_table,
-                $target_table,
+                $sourceDb,
+                $targetDb,
+                $sourceTable,
+                $targetTable,
                 'db_name',
-                'table_name'
+                'table_name',
             );
         }
 
@@ -1258,49 +1224,48 @@ class Relation
             $this->renameSingleTable(
                 $relationParameters->relationFeature->database,
                 $relationParameters->relationFeature->relation,
-                $source_db,
-                $target_db,
-                $source_table,
-                $target_table,
+                $sourceDb,
+                $targetDb,
+                $sourceTable,
+                $targetTable,
                 'foreign_db',
-                'foreign_table'
+                'foreign_table',
             );
 
             $this->renameSingleTable(
                 $relationParameters->relationFeature->database,
                 $relationParameters->relationFeature->relation,
-                $source_db,
-                $target_db,
-                $source_table,
-                $target_table,
+                $sourceDb,
+                $targetDb,
+                $sourceTable,
+                $targetTable,
                 'master_db',
-                'master_table'
+                'master_table',
             );
         }
 
         if ($relationParameters->pdfFeature !== null) {
-            if ($source_db == $target_db) {
+            if ($sourceDb === $targetDb) {
                 // rename within the database can be handled
                 $this->renameSingleTable(
                     $relationParameters->pdfFeature->database,
                     $relationParameters->pdfFeature->tableCoords,
-                    $source_db,
-                    $target_db,
-                    $source_table,
-                    $target_table,
+                    $sourceDb,
+                    $targetDb,
+                    $sourceTable,
+                    $targetTable,
                     'db_name',
-                    'table_name'
+                    'table_name',
                 );
             } else {
                 // if the table is moved out of the database we can no longer keep the
                 // record for table coordinate
-                $remove_query = 'DELETE FROM '
+                $removeQuery = 'DELETE FROM '
                     . Util::backquote($relationParameters->pdfFeature->database) . '.'
                     . Util::backquote($relationParameters->pdfFeature->tableCoords)
-                    . " WHERE db_name  = '" . $this->dbi->escapeString($source_db) . "'"
-                    . " AND table_name = '" . $this->dbi->escapeString($source_table)
-                    . "'";
-                $this->dbi->queryAsControlUser($remove_query);
+                    . ' WHERE db_name  = ' . $this->dbi->quoteString($sourceDb, Connection::TYPE_CONTROL)
+                    . ' AND table_name = ' . $this->dbi->quoteString($sourceTable, Connection::TYPE_CONTROL);
+                $this->dbi->queryAsControlUser($removeQuery);
             }
         }
 
@@ -1308,12 +1273,12 @@ class Relation
             $this->renameSingleTable(
                 $relationParameters->uiPreferencesFeature->database,
                 $relationParameters->uiPreferencesFeature->tableUiPrefs,
-                $source_db,
-                $target_db,
-                $source_table,
-                $target_table,
+                $sourceDb,
+                $targetDb,
+                $sourceTable,
+                $targetTable,
                 'db_name',
-                'table_name'
+                'table_name',
             );
         }
 
@@ -1325,26 +1290,23 @@ class Relation
         $this->renameSingleTable(
             $relationParameters->navigationItemsHidingFeature->database,
             $relationParameters->navigationItemsHidingFeature->navigationHiding,
-            $source_db,
-            $target_db,
-            $source_table,
-            $target_table,
+            $sourceDb,
+            $targetDb,
+            $sourceTable,
+            $targetTable,
             'db_name',
-            'table_name'
+            'table_name',
         );
 
         // update data for hidden table
         $query = 'UPDATE '
             . Util::backquote($relationParameters->navigationItemsHidingFeature->database) . '.'
             . Util::backquote($relationParameters->navigationItemsHidingFeature->navigationHiding)
-            . " SET db_name = '" . $this->dbi->escapeString($target_db)
-            . "',"
-            . " item_name = '" . $this->dbi->escapeString($target_table)
-            . "'"
-            . " WHERE db_name  = '" . $this->dbi->escapeString($source_db)
-            . "'"
-            . " AND item_name = '" . $this->dbi->escapeString($source_table)
-            . "'"
+            . ' SET db_name = ' . $this->dbi->quoteString($targetDb, Connection::TYPE_CONTROL)
+            . ','
+            . ' item_name = ' . $this->dbi->quoteString($targetTable, Connection::TYPE_CONTROL)
+            . ' WHERE db_name  = ' . $this->dbi->quoteString($sourceDb, Connection::TYPE_CONTROL)
+            . ' AND item_name = ' . $this->dbi->quoteString($sourceTable, Connection::TYPE_CONTROL)
             . " AND item_type = 'table'";
         $this->dbi->queryAsControlUser($query);
     }
@@ -1355,18 +1317,18 @@ class Relation
      * @param string|null $newpage name of the new PDF page
      * @param string      $db      database name
      */
-    public function createPage(?string $newpage, PdfFeature $pdfFeature, $db): int
+    public function createPage(string|null $newpage, PdfFeature $pdfFeature, string $db): int
     {
-        $ins_query = 'INSERT INTO '
+        $insQuery = 'INSERT INTO '
             . Util::backquote($pdfFeature->database) . '.'
             . Util::backquote($pdfFeature->pdfPages)
             . ' (db_name, page_descr)'
-            . ' VALUES (\''
-            . $this->dbi->escapeString($db) . '\', \''
-            . $this->dbi->escapeString($newpage ?: __('no description')) . '\')';
-        $this->dbi->tryQueryAsControlUser($ins_query);
+            . ' VALUES ('
+            . $this->dbi->quoteString($db, Connection::TYPE_CONTROL) . ', '
+            . $this->dbi->quoteString($newpage ?: __('no description'), Connection::TYPE_CONTROL) . ')';
+        $this->dbi->tryQueryAsControlUser($insQuery);
 
-        return $this->dbi->insertId(DatabaseInterface::CONNECT_CONTROL);
+        return $this->dbi->insertId(Connection::TYPE_CONTROL);
     }
 
     /**
@@ -1376,28 +1338,27 @@ class Relation
      * @param string $db     name of master table db.
      * @param string $table  name of master table.
      * @param string $column name of master table column.
+     *
+     * @return mixed[]
      */
-    public function getChildReferences($db, $table, $column = ''): array
+    public function getChildReferences(string $db, string $table, string $column = ''): array
     {
         if (! $GLOBALS['cfg']['Server']['DisableIS']) {
-            $rel_query = 'SELECT `column_name`, `table_name`,'
+            $relQuery = 'SELECT `column_name`, `table_name`,'
                 . ' `table_schema`, `referenced_column_name`'
                 . ' FROM `information_schema`.`key_column_usage`'
-                . " WHERE `referenced_table_name` = '"
-                . $this->dbi->escapeString($table) . "'"
-                . " AND `referenced_table_schema` = '"
-                . $this->dbi->escapeString($db) . "'";
+                . ' WHERE `referenced_table_name` = '
+                . $this->dbi->quoteString($table)
+                . ' AND `referenced_table_schema` = '
+                . $this->dbi->quoteString($db);
             if ($column) {
-                $rel_query .= " AND `referenced_column_name` = '"
-                    . $this->dbi->escapeString($column) . "'";
+                $relQuery .= ' AND `referenced_column_name` = '
+                    . $this->dbi->quoteString($column);
             }
 
             return $this->dbi->fetchResult(
-                $rel_query,
-                [
-                    'referenced_column_name',
-                    null,
-                ]
+                $relQuery,
+                ['referenced_column_name', null],
             );
         }
 
@@ -1407,37 +1368,32 @@ class Relation
     /**
      * Check child table references and foreign key for a table column.
      *
-     * @param string     $db                    name of master table db.
-     * @param string     $table                 name of master table.
-     * @param string     $column                name of master table column.
-     * @param array|null $foreigners_full       foreigners array for the whole table.
-     * @param array|null $child_references_full child references for the whole table.
+     * @param string       $db                  name of master table db.
+     * @param string       $table               name of master table.
+     * @param string       $column              name of master table column.
+     * @param mixed[]|null $foreignersFull      foreigners array for the whole table.
+     * @param mixed[]|null $childReferencesFull child references for the whole table.
      *
      * @return array<string, mixed> telling about references if foreign key.
      * @psalm-return array{isEditable: bool, isForeignKey: bool, isReferenced: bool, references: string[]}
      */
     public function checkChildForeignReferences(
-        $db,
-        $table,
-        $column,
-        $foreigners_full = null,
-        $child_references_full = null
+        string $db,
+        string $table,
+        string $column,
+        array|null $foreignersFull = null,
+        array|null $childReferencesFull = null,
     ): array {
-        $column_status = [
-            'isEditable' => true,
-            'isReferenced' => false,
-            'isForeignKey' => false,
-            'references' => [],
-        ];
+        $columnStatus = ['isEditable' => true, 'isReferenced' => false, 'isForeignKey' => false, 'references' => []];
 
         $foreigners = [];
-        if ($foreigners_full !== null) {
-            if (isset($foreigners_full[$column])) {
-                $foreigners[$column] = $foreigners_full[$column];
+        if ($foreignersFull !== null) {
+            if (isset($foreignersFull[$column])) {
+                $foreigners[$column] = $foreignersFull[$column];
             }
 
-            if (isset($foreigners_full['foreign_keys_data'])) {
-                $foreigners['foreign_keys_data'] = $foreigners_full['foreign_keys_data'];
+            if (isset($foreignersFull['foreign_keys_data'])) {
+                $foreigners['foreign_keys_data'] = $foreignersFull['foreign_keys_data'];
             }
         } else {
             $foreigners = $this->getForeigners($db, $table, $column, 'foreign');
@@ -1445,42 +1401,40 @@ class Relation
 
         $foreigner = $this->searchColumnInForeigners($foreigners, $column);
 
-        $child_references = [];
-        if ($child_references_full !== null) {
-            if (isset($child_references_full[$column])) {
-                $child_references = $child_references_full[$column];
+        $childReferences = [];
+        if ($childReferencesFull !== null) {
+            if (isset($childReferencesFull[$column])) {
+                $childReferences = $childReferencesFull[$column];
             }
         } else {
-            $child_references = $this->getChildReferences($db, $table, $column);
+            $childReferences = $this->getChildReferences($db, $table, $column);
         }
 
-        if (count($child_references) > 0 || $foreigner) {
-            $column_status['isEditable'] = false;
-            if (count($child_references) > 0) {
-                $column_status['isReferenced'] = true;
-                foreach ($child_references as $columns) {
-                    $column_status['references'][] = Util::backquote($columns['table_schema'])
+        if (count($childReferences) > 0 || $foreigner) {
+            $columnStatus['isEditable'] = false;
+            if (count($childReferences) > 0) {
+                $columnStatus['isReferenced'] = true;
+                foreach ($childReferences as $columns) {
+                    $columnStatus['references'][] = Util::backquote($columns['table_schema'])
                         . '.' . Util::backquote($columns['table_name']);
                 }
             }
 
             if ($foreigner) {
-                $column_status['isForeignKey'] = true;
+                $columnStatus['isForeignKey'] = true;
             }
         }
 
-        return $column_status;
+        return $columnStatus;
     }
 
     /**
      * Search a table column in foreign data.
      *
-     * @param array  $foreigners Table Foreign data
-     * @param string $column     Column name
-     *
-     * @return array|false
+     * @param mixed[] $foreigners Table Foreign data
+     * @param string  $column     Column name
      */
-    public function searchColumnInForeigners(array $foreigners, $column)
+    public function searchColumnInForeigners(array $foreigners, string $column): array|false
     {
         if (isset($foreigners[$column])) {
             return $foreigners[$column];
@@ -1491,15 +1445,15 @@ class Relation
         }
 
         $foreigner = [];
-        foreach ($foreigners['foreign_keys_data'] as $one_key) {
-            $column_index = array_search($column, $one_key['index_list']);
-            if ($column_index !== false) {
-                $foreigner['foreign_field'] = $one_key['ref_index_list'][$column_index];
-                $foreigner['foreign_db'] = $one_key['ref_db_name'] ?? $GLOBALS['db'];
-                $foreigner['foreign_table'] = $one_key['ref_table_name'];
-                $foreigner['constraint'] = $one_key['constraint'];
-                $foreigner['on_update'] = $one_key['on_update'] ?? 'RESTRICT';
-                $foreigner['on_delete'] = $one_key['on_delete'] ?? 'RESTRICT';
+        foreach ($foreigners['foreign_keys_data'] as $oneKey) {
+            $columnIndex = array_search($column, $oneKey['index_list']);
+            if ($columnIndex !== false) {
+                $foreigner['foreign_field'] = $oneKey['ref_index_list'][$columnIndex];
+                $foreigner['foreign_db'] = $oneKey['ref_db_name'] ?? $GLOBALS['db'];
+                $foreigner['foreign_table'] = $oneKey['ref_table_name'];
+                $foreigner['constraint'] = $oneKey['constraint'];
+                $foreigner['on_update'] = $oneKey['on_update'] ?? 'RESTRICT';
+                $foreigner['on_delete'] = $oneKey['on_delete'] ?? 'RESTRICT';
 
                 return $foreigner;
             }
@@ -1511,14 +1465,16 @@ class Relation
     /**
      * Returns default PMA table names and their create queries.
      *
+     * @param array<string, string> $tableNameReplacements
+     *
      * @return array<string, string> table name, create query
      */
-    public function getDefaultPmaTableNames(array $tableNameReplacements): array
+    public function getCreateTableSqlQueries(array $tableNameReplacements): array
     {
-        $pma_tables = [];
-        $create_tables_file = (string) file_get_contents(SQL_DIR . 'create_tables.sql');
+        $pmaTables = [];
+        $createTablesFile = (string) file_get_contents(SQL_DIR . 'create_tables.sql');
 
-        $queries = explode(';', $create_tables_file);
+        $queries = explode(';', $createTablesFile);
 
         foreach ($queries as $query) {
             if (! preg_match('/CREATE TABLE IF NOT EXISTS `(.*)` \(/', $query, $table)) {
@@ -1533,10 +1489,10 @@ class Relation
                 $query = str_replace($tableName, $tableNameReplacements[$tableName], $query);
             }
 
-            $pma_tables[$tableName] = $query . ';';
+            $pmaTables[$tableName] = $query . ';';
         }
 
-        return $pma_tables;
+        return $pmaTables;
     }
 
     /**
@@ -1546,15 +1502,16 @@ class Relation
     {
         $this->dbi->tryQuery(
             'CREATE DATABASE IF NOT EXISTS ' . Util::backquote($configurationStorageDbName),
-            DatabaseInterface::CONNECT_CONTROL
+            Connection::TYPE_CONTROL,
         );
 
-        $error = $this->dbi->getError(DatabaseInterface::CONNECT_CONTROL);
+        $error = $this->dbi->getError(Connection::TYPE_CONTROL);
         if (! $error) {
             // Re-build the cache to show the list of tables created or not
             // This is the case when the DB could be created but no tables just after
             // So just purge the cache and show the new configuration storage state
             unset($_SESSION['relation'][$GLOBALS['server']]);
+            unset(self::$cache[$GLOBALS['server']]);
             $this->getRelationParameters();
 
             return true;
@@ -1567,9 +1524,9 @@ class Relation
                 __(
                     'You do not have necessary privileges to create a database named'
                     . ' \'%s\'. You may go to \'Operations\' tab of any'
-                    . ' database to set up the phpMyAdmin configuration storage there.'
+                    . ' database to set up the phpMyAdmin configuration storage there.',
                 ),
-                $configurationStorageDbName
+                $configurationStorageDbName,
             );
         }
 
@@ -1582,7 +1539,7 @@ class Relation
      * @param string $db     database
      * @param bool   $create whether to create tables if they don't exist.
      */
-    public function fixPmaTables($db, $create = true): void
+    public function fixPmaTables(string $db, bool $create = true): void
     {
         if ($this->arePmadbTablesAllDisabled()) {
             return;
@@ -1610,28 +1567,20 @@ class Relation
             'pma__export_templates' => 'export_templates',
         ];
 
-        $existingTables = $this->dbi->getTables($db, DatabaseInterface::CONNECT_CONTROL);
+        $existingTables = $this->dbi->getTables($db, Connection::TYPE_CONTROL);
 
-        /** @var array<string, string> $tableNameReplacements */
-        $tableNameReplacements = [];
+        $tableNameReplacements = $this->getTableReplacementNames($tablesToFeatures);
 
-        // Build a map of replacements between default table names and name built by the user
-        foreach ($tablesToFeatures as $table => $feature) {
-            // Empty, we can not do anything about it
-            if (empty($GLOBALS['cfg']['Server'][$feature])) {
-                continue;
+        $createQueries = [];
+        if ($create) {
+            $createQueries = $this->getCreateTableSqlQueries($tableNameReplacements);
+            if (! $this->dbi->selectDb($db, Connection::TYPE_CONTROL)) {
+                $GLOBALS['message'] = $this->dbi->getError(Connection::TYPE_CONTROL);
+
+                return;
             }
-
-            // Default table name, nothing to do
-            if ($GLOBALS['cfg']['Server'][$feature] === $table) {
-                continue;
-            }
-
-            // Set the replacement to transform the default table name into a custom name
-            $tableNameReplacements[$table] = $GLOBALS['cfg']['Server'][$feature];
         }
 
-        $createQueries = null;
         $foundOne = false;
         foreach ($tablesToFeatures as $table => $feature) {
             if (($GLOBALS['cfg']['Server'][$feature] ?? null) === false) {
@@ -1643,38 +1592,29 @@ class Relation
             // use the possible replaced name first and fallback on the table name
             // if no replacement exists
             if (! in_array($tableNameReplacements[$table] ?? $table, $existingTables)) {
-                if ($create) {
-                    if ($createQueries == null) { // first create
-                        $createQueries = $this->getDefaultPmaTableNames($tableNameReplacements);
-                        if (! $this->dbi->selectDb($db, DatabaseInterface::CONNECT_CONTROL)) {
-                            $GLOBALS['message'] = $this->dbi->getError(DatabaseInterface::CONNECT_CONTROL);
-
-                            return;
-                        }
-                    }
-
-                    $this->dbi->tryQuery($createQueries[$table], DatabaseInterface::CONNECT_CONTROL);
-
-                    $error = $this->dbi->getError(DatabaseInterface::CONNECT_CONTROL);
-                    if ($error) {
-                        $GLOBALS['message'] = $error;
-
-                        return;
-                    }
-
-                    $foundOne = true;
-                    if (empty($GLOBALS['cfg']['Server'][$feature])) {
-                        // Do not override a user defined value, only fill if empty
-                        $GLOBALS['cfg']['Server'][$feature] = $table;
-                    }
+                if (! $create) {
+                    continue;
                 }
-            } else {
-                $foundOne = true;
-                if (empty($GLOBALS['cfg']['Server'][$feature])) {
-                    // Do not override a user defined value, only fill if empty
-                    $GLOBALS['cfg']['Server'][$feature] = $table;
+
+                $this->dbi->tryQuery($createQueries[$table], Connection::TYPE_CONTROL);
+
+                $error = $this->dbi->getError(Connection::TYPE_CONTROL);
+                if ($error) {
+                    $GLOBALS['message'] = $error;
+
+                    return;
                 }
             }
+
+            $foundOne = true;
+
+            // Do not override a user defined value, only fill if empty
+            if (isset($GLOBALS['cfg']['Server'][$feature]) && $GLOBALS['cfg']['Server'][$feature] !== '') {
+                continue;
+            }
+
+            // Fill it with the default table name
+            $GLOBALS['cfg']['Server'][$feature] = $table;
         }
 
         if (! $foundOne) {
@@ -1683,6 +1623,7 @@ class Relation
 
         $GLOBALS['cfg']['Server']['pmadb'] = $db;
         unset($_SESSION['relation'][$GLOBALS['server']]);
+        unset(self::$cache[$GLOBALS['server']]);
 
         $relationParameters = $this->getRelationParameters();
         if (
@@ -1696,13 +1637,13 @@ class Relation
         // re-initialize the favorite and recent tables stored in the
         // session from the current configuration storage.
         if ($relationParameters->favoriteTablesFeature !== null) {
-            $fav_tables = RecentFavoriteTable::getInstance('favorite');
-            $_SESSION['tmpval']['favoriteTables'][$GLOBALS['server']] = $fav_tables->getFromDb();
+            $favTables = RecentFavoriteTable::getInstance('favorite');
+            $_SESSION['tmpval']['favoriteTables'][$GLOBALS['server']] = $favTables->getFromDb();
         }
 
         if ($relationParameters->recentlyUsedTablesFeature !== null) {
-            $recent_tables = RecentFavoriteTable::getInstance('recent');
-            $_SESSION['tmpval']['recentTables'][$GLOBALS['server']] = $recent_tables->getFromDb();
+            $recentTables = RecentFavoriteTable::getInstance('recent');
+            $_SESSION['tmpval']['recentTables'][$GLOBALS['server']] = $recentTables->getFromDb();
         }
 
         // Reload navi panel to update the recent/favorite lists.
@@ -1716,25 +1657,22 @@ class Relation
      * @param string $db        database name
      * @param string $table     table name
      *
-     * @return array ($res_rel, $have_rel)
+     * @return mixed[] ($res_rel, $have_rel)
      * @psalm-return array{array, bool}
      */
-    public function getRelationsAndStatus(bool $condition, $db, $table)
+    public function getRelationsAndStatus(bool $condition, string $db, string $table): array
     {
-        $have_rel = false;
-        $res_rel = [];
+        $haveRel = false;
+        $resRel = [];
         if ($condition) {
             // Find which tables are related with the current one and write it in
             // an array
-            $res_rel = $this->getForeigners($db, $table);
+            $resRel = $this->getForeigners($db, $table);
 
-            $have_rel = count($res_rel) > 0;
+            $haveRel = $resRel !== [];
         }
 
-        return [
-            $res_rel,
-            $have_rel,
-        ];
+        return [$resRel, $haveRel];
     }
 
     /**
@@ -1795,14 +1733,14 @@ class Relation
      * @param string $foreignDb        Database name
      * @param string $tblStorageEngine Table storage engine
      *
-     * @return array Table names
+     * @return mixed[] Table names
      */
-    public function getTables($foreignDb, $tblStorageEngine)
+    public function getTables(string $foreignDb, string $tblStorageEngine): array
     {
         $tables = [];
         $tablesRows = $this->dbi->query('SHOW TABLE STATUS FROM ' . Util::backquote($foreignDb));
         while ($row = $tablesRows->fetchRow()) {
-            if (! isset($row[1]) || mb_strtoupper($row[1]) != $tblStorageEngine) {
+            if (! isset($row[1]) || mb_strtoupper($row[1]) !== $tblStorageEngine) {
                 continue;
             }
 
@@ -1818,9 +1756,7 @@ class Relation
 
     public function getConfigurationStorageDbName(): string
     {
-        global $cfg;
-
-        $cfgStorageDbName = $cfg['Server']['pmadb'] ?? '';
+        $cfgStorageDbName = $GLOBALS['cfg']['Server']['pmadb'] ?? '';
 
         // Use "phpmyadmin" as a default database name to check to keep the behavior consistent
         return empty($cfgStorageDbName) ? 'phpmyadmin' : $cfgStorageDbName;
@@ -1849,5 +1785,26 @@ class Relation
         }
 
         $this->fixPmaTables($GLOBALS['db'], false);
+    }
+
+    /**
+     * @param non-empty-array<string, string> $tablesToFeatures
+     *
+     * @return array<string, string>
+     */
+    private function getTableReplacementNames(array $tablesToFeatures): array
+    {
+        $tableNameReplacements = [];
+
+        foreach ($tablesToFeatures as $table => $feature) {
+            if (empty($GLOBALS['cfg']['Server'][$feature]) || $GLOBALS['cfg']['Server'][$feature] === $table) {
+                continue;
+            }
+
+            // Set the replacement to transform the default table name into a custom name
+            $tableNameReplacements[$table] = $GLOBALS['cfg']['Server'][$feature];
+        }
+
+        return $tableNameReplacements;
     }
 }

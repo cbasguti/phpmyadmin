@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Table;
 
 use PhpMyAdmin\DatabaseInterface;
-use PhpMyAdmin\Dbal\DatabaseName;
-use PhpMyAdmin\Dbal\TableName;
 use PhpMyAdmin\Dbal\Warning;
+use PhpMyAdmin\Identifiers\DatabaseName;
+use PhpMyAdmin\Identifiers\TableName;
 use PhpMyAdmin\Index;
 use PhpMyAdmin\Table\Maintenance\Message;
 use PhpMyAdmin\Util;
@@ -18,12 +18,8 @@ use function sprintf;
 
 final class Maintenance
 {
-    /** @var DatabaseInterface */
-    private $dbi;
-
-    public function __construct(DatabaseInterface $dbi)
+    public function __construct(private DatabaseInterface $dbi)
     {
-        $this->dbi = $dbi;
     }
 
     /**
@@ -105,9 +101,7 @@ final class Maintenance
         return [$rows, $query, $warnings];
     }
 
-    /**
-     * @param TableName[] $tables
-     */
+    /** @param TableName[] $tables */
     public function getIndexesProblems(DatabaseName $db, array $tables): string
     {
         $indexesProblems = '';

@@ -8,8 +8,7 @@ Configuration
 All configurable data is placed in :file:`config.inc.php` in phpMyAdmin's
 toplevel directory.  If this file does not exist, please refer to the
 :ref:`setup` section to create one. This file only needs to contain the
-parameters you want to change from their corresponding default value in
-:file:`libraries/config.default.php` (this file is not intended for changes).
+parameters you want to change from their corresponding default value.
 
 .. seealso::
 
@@ -231,9 +230,7 @@ Server connection settings
     added which contains the login information for the different servers. The
     first :config:option:`$cfg['Servers'][$i]['host']` contains the hostname of
     the first server, the second :config:option:`$cfg['Servers'][$i]['host']`
-    the hostname of the second server, etc. In
-    :file:`libraries/config.default.php`, there is only one section for server
-    definition, however you can put as many as you need in
+    the hostname of the second server, etc. You can put as many sections for server definition as you need in
     :file:`config.inc.php`, copy that block or needed parts (you don't have to
     define all settings, just those you need to change).
 
@@ -597,7 +594,10 @@ Server connection settings
         :config:option:`$cfg['Servers'][$i]['ssl_ca']`,
         :config:option:`$cfg['Servers'][$i]['ssl_ca_path']`,
         :config:option:`$cfg['Servers'][$i]['ssl_ciphers']`,
-        :config:option:`$cfg['Servers'][$i]['ssl_verify']`
+        :config:option:`$cfg['Servers'][$i]['ssl_verify']`,
+        :config:option:`$cfg['Servers'][$i]['socket']`,
+        :config:option:`$cfg['Servers'][$i]['compress']`,
+        :config:option:`$cfg['Servers'][$i]['hide_connection_errors']`
 
 .. config:option:: $cfg['Servers'][$i]['auth_type']
 
@@ -2430,12 +2430,22 @@ Main panel
 
 .. config:option:: $cfg['ShowServerInfo']
 
-    :type: boolean
+    :type: boolean|string
     :default: true
 
     Defines whether to display detailed server information on main page.
+    Possible values are:
+
+    * ``true`` to show all server information
+    * ``false`` to hide server information
+    * ``'database-server'`` to show only database server information
+    * ``'web-server'`` to show only web server information
+
     You can additionally hide more information by using
     :config:option:`$cfg['Servers'][$i]['verbose']`.
+
+    .. versionchanged:: 6.0.0
+        Added ``'database-server'`` and ``'web-server'`` options.
 
 .. config:option:: $cfg['ShowPhpInfo']
 
@@ -3529,6 +3539,15 @@ Various display setting
     If :config:option:`$cfg['QueryHistoryDB']` is set to ``true`` you can
     specify the amount of saved history items using
     :config:option:`$cfg['QueryHistoryMax']`.
+
+.. config:option:: $cfg['AllowSharedBookmarks']
+
+    :type: boolean
+    :default: true
+
+    .. versionadded:: 6.0.0
+
+    Allow users to create bookmarks that are available for all other users
 
 .. config:option:: $cfg['BrowseMIME']
 

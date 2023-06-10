@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Selenium\Table;
 
 use PhpMyAdmin\Tests\Selenium\TestBase;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @coversNothing
- */
+#[CoversNothing]
 class OperationsTest extends TestBase
 {
     /**
@@ -29,7 +29,7 @@ class OperationsTest extends TestBase
             . ' PRIMARY KEY (`id`)'
             . ') ENGINE=MYISAM;'
             . 'INSERT INTO test_table (val, val2) VALUES (22, 33);'
-            . 'INSERT INTO test_table (val, val2) VALUES (33, 44);'
+            . 'INSERT INTO test_table (val, val2) VALUES (33, 44);',
         );
 
         $this->login();
@@ -48,14 +48,13 @@ class OperationsTest extends TestBase
 
     /**
      * Test for changing a table order
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testChangeTableOrder(): void
     {
         $this->selectByLabel(
             $this->byName('order_field'),
-            'val'
+            'val',
         );
 
         $this->byId('tableOrderDescRadio')->click();
@@ -63,11 +62,8 @@ class OperationsTest extends TestBase
 
         $this->waitAjax();
 
-        $this->waitForElement(
-            'xpath',
-            "//div[@class='alert alert-success' and "
-            . "contains(., 'Your SQL query has been executed successfully')]"
-        );
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString('Your SQL query has been executed successfully', $success->getText());
 
         $this->byPartialLinkText('Browse')->click();
 
@@ -76,15 +72,14 @@ class OperationsTest extends TestBase
 
         $this->assertEquals(
             '2',
-            $this->getCellByTableClass('table_results', 1, 5)
+            $this->getCellByTableClass('table_results', 1, 5),
         );
     }
 
     /**
      * Test for moving a table
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testMoveTable(): void
     {
         $this->byCssSelector("form#moveTableForm input[name='new_name']")
@@ -93,12 +88,11 @@ class OperationsTest extends TestBase
         $this->byCssSelector("form#moveTableForm input[type='submit']")->click();
         $this->waitAjax();
 
-        $this->waitForElement(
-            'xpath',
-            "//div[@class='alert alert-success' and "
-            . "contains(., 'Table `" . $this->databaseName
-            . '`.`test_table` has been '
-            . 'moved to `' . $this->databaseName . "`.`test_table2`.')]"
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString(
+            'Table `' . $this->databaseName . '`.`test_table` has been moved to `'
+            . $this->databaseName . '`.`test_table2`',
+            $success->getText(),
         );
 
         $this->dbQuery(
@@ -107,15 +101,14 @@ class OperationsTest extends TestBase
             function (): void {
                 $this->assertTrue($this->isElementPresent('className', 'table_results'));
                 $this->assertEquals('test_table2', $this->getCellByTableClass('table_results', 1, 1));
-            }
+            },
         );
     }
 
     /**
      * Test for renaming a table
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testRenameTable(): void
     {
         $this->byCssSelector("form#tableOptionsForm input[name='new_name']")
@@ -128,11 +121,8 @@ class OperationsTest extends TestBase
         $this->byCssSelector("form#tableOptionsForm input[type='submit']")->click();
         $this->waitAjax();
 
-        $this->waitForElement(
-            'xpath',
-            "//div[@class='alert alert-success' and "
-            . "contains(., 'Table test_table has been renamed to test_table2')]"
-        );
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString('Table test_table has been renamed to test_table2', $success->getText());
 
         $this->dbQuery(
             'USE `' . $this->databaseName . '`;'
@@ -140,15 +130,14 @@ class OperationsTest extends TestBase
             function (): void {
                 $this->assertTrue($this->isElementPresent('className', 'table_results'));
                 $this->assertEquals('test_table2', $this->getCellByTableClass('table_results', 1, 1));
-            }
+            },
         );
     }
 
     /**
      * Test for copying a table
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testCopyTable(): void
     {
         $this->scrollIntoView('copyTable');
@@ -158,12 +147,11 @@ class OperationsTest extends TestBase
         $this->waitForElement('cssSelector', 'form#copyTable input[type=\'submit\']')->click();
         $this->waitAjax();
 
-        $this->waitForElement(
-            'xpath',
-            "//div[@class='alert alert-success' and "
-            . "contains(., 'Table `" . $this->databaseName
-            . '`.`test_table` has been '
-            . 'copied to `' . $this->databaseName . "`.`test_table2`.')]"
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString(
+            'Table `' . $this->databaseName . '`.`test_table` has been copied to `'
+            . $this->databaseName . '`.`test_table2`',
+            $success->getText(),
         );
 
         $this->dbQuery(
@@ -171,63 +159,55 @@ class OperationsTest extends TestBase
             function (): void {
                 $this->assertTrue($this->isElementPresent('className', 'table_results'));
                 $this->assertEquals('2', $this->getCellByTableClass('table_results', 1, 1));
-            }
+            },
         );
     }
 
     /**
      * Test for truncating a table
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testTruncateTable(): void
     {
         $this->scrollToBottom();
         $this->waitUntilElementIsVisible('id', 'drop_tbl_anchor', 30);
         $this->byId('truncate_tbl_anchor')->click();
-        $this->byCssSelector('button.submitOK')->click();
+        $this->waitForElement('id', 'functionConfirmOkButton')->click();
         $this->waitAjax();
 
-        $this->waitForElement(
-            'xpath',
-            '//div[@class=\'alert alert-success\' and contains(., \'MySQL returned an empty result set\')]'
-        );
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString('MySQL returned an empty result set', $success->getText());
 
         $this->dbQuery(
             'SELECT CONCAT("Count: ", COUNT(*)) as c FROM `' . $this->databaseName . '`.test_table',
             function (): void {
                 $this->assertTrue($this->isElementPresent('className', 'table_results'));
                 $this->assertEquals('Count: 0', $this->getCellByTableClass('table_results', 1, 1));
-            }
+            },
         );
     }
 
     /**
      * Test for dropping a table
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testDropTable(): void
     {
         $dropLink = $this->waitUntilElementIsVisible('partialLinkText', 'Delete the table (DROP)', 30);
         $this->scrollToBottom();
         $dropLink->click();
-        $this->byCssSelector('button.submitOK')->click();
+        $this->waitForElement('id', 'functionConfirmOkButton')->click();
         $this->waitAjax();
 
-        $this->waitForElement(
-            'xpath',
-            '//div[@class=\'alert alert-success\' and contains(., \'MySQL returned an empty result set\')]'
-        );
-
-        $this->waitForElement('xpath', "//a[@class='nav-link text-nowrap' and contains(., 'Structure')]");
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString('MySQL returned an empty result set', $success->getText());
 
         $this->dbQuery(
             'USE `' . $this->databaseName . '`;'
             . 'SHOW TABLES',
             function (): void {
                 $this->assertFalse($this->isElementPresent('className', 'table_results'));
-            }
+            },
         );
     }
 }

@@ -4,32 +4,31 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Controllers\Table;
 
+use PhpMyAdmin\Controllers\AbstractController;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Url;
 
 use function __;
+use function array_values;
 use function is_array;
 
 final class ExportRowsController extends AbstractController
 {
-    /** @var ExportController */
-    private $exportController;
-
     public function __construct(
         ResponseRenderer $response,
         Template $template,
-        string $db,
-        string $table,
-        ExportController $exportController
+        private ExportController $exportController,
     ) {
-        parent::__construct($response, $template, $db, $table);
-        $this->exportController = $exportController;
+        parent::__construct($response, $template);
     }
 
-    public function __invoke(): void
+    public function __invoke(ServerRequest $request): void
     {
-        global $active_page, $single_table, $where_clause;
+        $GLOBALS['active_page'] ??= null;
+        $GLOBALS['single_table'] ??= null;
+        $GLOBALS['where_clause'] ??= null;
 
         if (isset($_POST['goto']) && (! isset($_POST['rows_to_delete']) || ! is_array($_POST['rows_to_delete']))) {
             $this->response->setRequestStatus(false);
@@ -39,21 +38,19 @@ final class ExportRowsController extends AbstractController
         }
 
         // Needed to allow SQL export
-        $single_table = true;
+        $GLOBALS['single_table'] = true;
 
         // As we got the rows to be exported from the
         // 'rows_to_delete' checkbox, we use the index of it as the
         // indicating WHERE clause. Then we build the array which is used
         // for the /table/change script.
-        $where_clause = [];
+        $GLOBALS['where_clause'] = [];
         if (isset($_POST['rows_to_delete']) && is_array($_POST['rows_to_delete'])) {
-            foreach ($_POST['rows_to_delete'] as $i_where_clause) {
-                $where_clause[] = $i_where_clause;
-            }
+            $GLOBALS['where_clause'] = array_values($_POST['rows_to_delete']);
         }
 
-        $active_page = Url::getFromRoute('/table/export');
+        $GLOBALS['active_page'] = Url::getFromRoute('/table/export');
 
-        ($this->exportController)();
+        ($this->exportController)($request);
     }
 }

@@ -4,46 +4,27 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Gis;
 
+use PhpMyAdmin\Gis\Ds\ScaleData;
 use PhpMyAdmin\Gis\GisMultiPolygon;
 use PhpMyAdmin\Image\ImageWrapper;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use TCPDF;
 
-use function preg_match;
-
-/**
- * @covers \PhpMyAdmin\Gis\GisMultiPolygon
- */
+#[CoversClass(GisMultiPolygon::class)]
+#[PreserveGlobalState(false)]
+#[RunTestsInSeparateProcesses]
 class GisMultiPolygonTest extends GisGeomTestCase
 {
-    /** @var    GisMultiPolygon */
-    protected $object;
-
-    /**
-     * Sets up the fixture, for example, opens a network connection.
-     * This method is called before a test is executed.
-     */
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->object = GisMultiPolygon::singleton();
-    }
-
-    /**
-     * Tears down the fixture, for example, closes a network connection.
-     * This method is called after a test is executed.
-     */
-    protected function tearDown(): void
-    {
-        parent::tearDown();
-        unset($this->object);
-    }
-
     /**
      * Provide some common data to data providers
      *
-     * @return array common data for data providers
+     * @return mixed[][]
      */
-    private function getData(): array
+    private static function getData(): array
     {
         return [
             'MULTIPOLYGON' => [
@@ -52,67 +33,28 @@ class GisMultiPolygonTest extends GisGeomTestCase
                     'no_of_lines' => 2,
                     0 => [
                         'no_of_points' => 5,
-                        0 => [
-                            'x' => 35,
-                            'y' => 10,
-                        ],
-                        1 => [
-                            'x' => 10,
-                            'y' => 20,
-                        ],
-                        2 => [
-                            'x' => 15,
-                            'y' => 40,
-                        ],
-                        3 => [
-                            'x' => 45,
-                            'y' => 45,
-                        ],
-                        4 => [
-                            'x' => 35,
-                            'y' => 10,
-                        ],
+                        0 => ['x' => 35, 'y' => 10],
+                        1 => ['x' => 10, 'y' => 20],
+                        2 => ['x' => 15, 'y' => 40],
+                        3 => ['x' => 45, 'y' => 45],
+                        4 => ['x' => 35, 'y' => 10],
                     ],
                     1 => [
                         'no_of_points' => 4,
-                        0 => [
-                            'x' => 20,
-                            'y' => 30,
-                        ],
-                        1 => [
-                            'x' => 35,
-                            'y' => 32,
-                        ],
-                        2 => [
-                            'x' => 30,
-                            'y' => 20,
-                        ],
-                        3 => [
-                            'x' => 20,
-                            'y' => 30,
-                        ],
+                        0 => ['x' => 20, 'y' => 30],
+                        1 => ['x' => 35, 'y' => 32],
+                        2 => ['x' => 30, 'y' => 20],
+                        3 => ['x' => 20, 'y' => 30],
                     ],
                 ],
                 1 => [
                     'no_of_lines' => 1,
                     0 => [
                         'no_of_points' => 4,
-                        0 => [
-                            'x' => 123,
-                            'y' => 0,
-                        ],
-                        1 => [
-                            'x' => 23,
-                            'y' => 30,
-                        ],
-                        2 => [
-                            'x' => 17,
-                            'y' => 63,
-                        ],
-                        3 => [
-                            'x' => 123,
-                            'y' => 0,
-                        ],
+                        0 => ['x' => 123, 'y' => 0],
+                        1 => ['x' => 23, 'y' => 30],
+                        2 => ['x' => 17, 'y' => 63],
+                        3 => ['x' => 123, 'y' => 0],
                     ],
                 ],
             ],
@@ -120,15 +62,28 @@ class GisMultiPolygonTest extends GisGeomTestCase
     }
 
     /**
+     * Test for generateWkt
+     *
+     * @param array<mixed> $gisData
+     * @param int          $index   index in $gis_data
+     * @param string|null  $empty   empty parameter
+     * @param string       $output  expected output
+     */
+    #[DataProvider('providerForTestGenerateWkt')]
+    public function testGenerateWkt(array $gisData, int $index, string|null $empty, string $output): void
+    {
+        $object = GisMultiPolygon::singleton();
+        $this->assertEquals($output, $object->generateWkt($gisData, $index, $empty));
+    }
+
+    /**
      * data provider for testGenerateWkt
      *
-     * @return array data for testGenerateWkt
+     * @return array<array{array<mixed>, int, string|null, string}>
      */
-    public function providerForTestGenerateWkt(): array
+    public static function providerForTestGenerateWkt(): array
     {
-        $temp = [
-            0 => $this->getData(),
-        ];
+        $temp = [0 => self::getData()];
 
         $temp1 = $temp;
         $temp1[0]['MULTIPOLYGON']['no_of_polygons'] = 0;
@@ -148,12 +103,7 @@ class GisMultiPolygonTest extends GisGeomTestCase
                     . ',(20 30,35 32,30 20,20 30)),((123 0,23 30,17 63,123 0)))',
             ],
             // at lease one polygon should be there
-            [
-                $temp1,
-                0,
-                null,
-                'MULTIPOLYGON(((35 10,10 20,15 40,45 45,35 10),(20 30,35 32,30 20,20 30)))',
-            ],
+            [$temp1, 0, null, 'MULTIPOLYGON(((35 10,10 20,15 40,45 45,35 10),(20 30,35 32,30 20,20 30)))'],
             // a polygon should have at least one ring
             [
                 $temp2,
@@ -174,32 +124,30 @@ class GisMultiPolygonTest extends GisGeomTestCase
     }
 
     /**
+     * test generateParams method
+     *
+     * @param string       $wkt    point in WKT form
+     * @param array<mixed> $params expected output array
+     */
+    #[DataProvider('providerForTestGenerateParams')]
+    public function testGenerateParams(string $wkt, array $params): void
+    {
+        $object = GisMultiPolygon::singleton();
+        $this->assertEquals($params, $object->generateParams($wkt));
+    }
+
+    /**
      * data provider for testGenerateParams
      *
-     * @return array data for testGenerateParams
+     * @return array<array{string, array<mixed>}>
      */
-    public function providerForTestGenerateParams(): array
+    public static function providerForTestGenerateParams(): array
     {
-        $temp = $this->getData();
-
-        $temp1 = $this->getData();
-        $temp1['gis_type'] = 'MULTIPOLYGON';
-
         return [
             [
                 "'MULTIPOLYGON(((35 10,10 20,15 40,45 45,35 10),"
                 . "(20 30,35 32,30 20,20 30)),((123 0,23 30,17 63,123 0)))',124",
-                null,
-                [
-                    'srid' => '124',
-                    0 => $temp,
-                ],
-            ],
-            [
-                'MULTIPOLYGON(((35 10,10 20,15 40,45 45,35 10)'
-                    . ',(20 30,35 32,30 20,20 30)),((123 0,23 30,17 63,123 0)))',
-                2,
-                [2 => $temp1],
+                ['srid' => 124, 0 => self::getData()],
             ],
         ];
     }
@@ -207,22 +155,22 @@ class GisMultiPolygonTest extends GisGeomTestCase
     /**
      * test getShape method
      *
-     * @param array  $row_data array of GIS data
-     * @param string $shape    expected shape in WKT
-     *
-     * @dataProvider providerForTestGetShape
+     * @param mixed[] $rowData array of GIS data
+     * @param string  $shape   expected shape in WKT
      */
-    public function testGetShape(array $row_data, string $shape): void
+    #[DataProvider('providerForTestGetShape')]
+    public function testGetShape(array $rowData, string $shape): void
     {
-        $this->assertEquals($this->object->getShape($row_data), $shape);
+        $object = GisMultiPolygon::singleton();
+        $this->assertEquals($shape, $object->getShape($rowData));
     }
 
     /**
      * data provider for testGetShape
      *
-     * @return array data for testGetShape
+     * @return array<array{mixed[], string}>
      */
-    public function providerForTestGetShape(): array
+    public static function providerForTestGetShape(): array
     {
         return [
             [
@@ -230,66 +178,27 @@ class GisMultiPolygonTest extends GisGeomTestCase
                     'parts' => [
                         0 => [
                             'points' => [
-                                0 => [
-                                    'x' => 10,
-                                    'y' => 10,
-                                ],
-                                1 => [
-                                    'x' => 10,
-                                    'y' => 40,
-                                ],
-                                2 => [
-                                    'x' => 50,
-                                    'y' => 40,
-                                ],
-                                3 => [
-                                    'x' => 50,
-                                    'y' => 10,
-                                ],
-                                4 => [
-                                    'x' => 10,
-                                    'y' => 10,
-                                ],
+                                0 => ['x' => 10, 'y' => 10],
+                                1 => ['x' => 10, 'y' => 40],
+                                2 => ['x' => 50, 'y' => 40],
+                                3 => ['x' => 50, 'y' => 10],
+                                4 => ['x' => 10, 'y' => 10],
                             ],
                         ],
                         1 => [
                             'points' => [
-                                0 => [
-                                    'x' => 60,
-                                    'y' => 40,
-                                ],
-                                1 => [
-                                    'x' => 75,
-                                    'y' => 65,
-                                ],
-                                2 => [
-                                    'x' => 90,
-                                    'y' => 40,
-                                ],
-                                3 => [
-                                    'x' => 60,
-                                    'y' => 40,
-                                ],
+                                0 => ['x' => 60, 'y' => 40],
+                                1 => ['x' => 75, 'y' => 65],
+                                2 => ['x' => 90, 'y' => 40],
+                                3 => ['x' => 60, 'y' => 40],
                             ],
                         ],
                         2 => [
                             'points' => [
-                                0 => [
-                                    'x' => 20,
-                                    'y' => 20,
-                                ],
-                                1 => [
-                                    'x' => 40,
-                                    'y' => 20,
-                                ],
-                                2 => [
-                                    'x' => 25,
-                                    'y' => 30,
-                                ],
-                                3 => [
-                                    'x' => 20,
-                                    'y' => 20,
-                                ],
+                                0 => ['x' => 20, 'y' => 20],
+                                1 => ['x' => 40, 'y' => 20],
+                                2 => ['x' => 25, 'y' => 30],
+                                3 => ['x' => 20, 'y' => 20],
                             ],
                         ],
                     ],
@@ -301,94 +210,104 @@ class GisMultiPolygonTest extends GisGeomTestCase
     }
 
     /**
+     * test scaleRow method
+     *
+     * @param string    $spatial spatial data of a row
+     * @param ScaleData $minMax  expected results
+     */
+    #[DataProvider('providerForTestScaleRow')]
+    public function testScaleRow(string $spatial, ScaleData $minMax): void
+    {
+        $object = GisMultiPolygon::singleton();
+        $this->assertEquals($minMax, $object->scaleRow($spatial));
+    }
+
+    /**
      * data provider for testScaleRow
      *
-     * @return array data for testScaleRow
+     * @return array<array{string, ScaleData}>
      */
-    public function providerForTestScaleRow(): array
+    public static function providerForTestScaleRow(): array
     {
         return [
             [
                 'MULTIPOLYGON(((136 40,147 83,16 75,136 40)),((105 0,56 20,78 73,105 0)))',
-                [
-                    'minX' => 16,
-                    'maxX' => 147,
-                    'minY' => 0,
-                    'maxY' => 83,
-                ],
+                new ScaleData(147, 16, 83, 0),
             ],
             [
                 'MULTIPOLYGON(((35 10,10 20,15 40,45 45,35 10),(20 30,35 32,30 20'
                     . ',20 30)),((105 0,56 20,78 73,105 0)))',
-                [
-                    'minX' => 10,
-                    'maxX' => 105,
-                    'minY' => 0,
-                    'maxY' => 73,
-                ],
+                new ScaleData(105, 10, 73, 0),
             ],
         ];
     }
 
-    /**
-     * @requires extension gd
-     */
+    #[RequiresPhpExtension('gd')]
     public function testPrepareRowAsPng(): void
     {
-        $image = ImageWrapper::create(120, 150);
+        $object = GisMultiPolygon::singleton();
+        $image = ImageWrapper::create(200, 124, ['red' => 229, 'green' => 229, 'blue' => 229]);
         $this->assertNotNull($image);
-        $return = $this->object->prepareRowAsPng(
-            'MULTIPOLYGON(((136 40,147 83,16 75,136 40)),((105 0,56 20,78 73,105 0)))',
+        $return = $object->prepareRowAsPng(
+            'MULTIPOLYGON(((5 5,95 5,95 95,5 95,5 5),(10 10,10 40,40 40,40 10,10 10),(60 60,90 60,90 90,60 90,6'
+            . '0 60)),((-5 -5,-95 -5,-95 -95,-5 -95,-5 -5),(-10 -10,-10 -40,-40 -40,-40 -10,-10 -10),(-60 -60,-90'
+            . ' -60,-90 -90,-60 -90,-60 -60)))',
             'image',
-            '#B02EE0',
-            ['x' => 12, 'y' => 69, 'scale' => 2, 'height' => 150],
-            $image
+            [176, 46, 224],
+            ['x' => -202, 'y' => -125, 'scale' => 0.50, 'height' => 124],
+            $image,
         );
-        $this->assertEquals(120, $return->width());
-        $this->assertEquals(150, $return->height());
+        $this->assertEquals(200, $return->width());
+        $this->assertEquals(124, $return->height());
+
+        $fileExpected = $this->testDir . '/multipolygon-expected.png';
+        $fileActual = $this->testDir . '/multipolygon-actual.png';
+        $this->assertTrue($image->png($fileActual));
+        $this->assertFileEquals($fileExpected, $fileActual);
     }
 
     /**
      * test case for prepareRowAsPdf() method
      *
-     * @param string $spatial    GIS MULTIPOLYGON object
-     * @param string $label      label for the GIS MULTIPOLYGON object
-     * @param string $fill_color color for the GIS MULTIPOLYGON object
-     * @param array  $scale_data array containing data related to scaling
-     * @param TCPDF  $pdf        TCPDF instance
-     *
-     * @dataProvider providerForPrepareRowAsPdf
+     * @param string                   $spatial   GIS MULTIPOLYGON object
+     * @param string                   $label     label for the GIS MULTIPOLYGON object
+     * @param int[]                    $color     color for the GIS MULTIPOLYGON object
+     * @param array<string, int|float> $scaleData array containing data related to scaling
      */
+    #[DataProvider('providerForPrepareRowAsPdf')]
     public function testPrepareRowAsPdf(
         string $spatial,
         string $label,
-        string $fill_color,
-        array $scale_data,
-        TCPDF $pdf
+        array $color,
+        array $scaleData,
+        TCPDF $pdf,
     ): void {
-        $return = $this->object->prepareRowAsPdf($spatial, $label, $fill_color, $scale_data, $pdf);
-        $this->assertInstanceOf(TCPDF::class, $return);
+        $object = GisMultiPolygon::singleton();
+        $return = $object->prepareRowAsPdf($spatial, $label, $color, $scaleData, $pdf);
+
+        $fileExpected = $this->testDir . '/multipolygon-expected.pdf';
+        $fileActual = $this->testDir . '/multipolygon-actual.pdf';
+        $return->Output($fileActual, 'F');
+        $this->assertFileEquals($fileExpected, $fileActual);
     }
 
     /**
      * data provider for testPrepareRowAsPdf() test case
      *
-     * @return array test data for testPrepareRowAsPdf() test case
+     * @return array<array{string, string, int[], array<string, int|float>, TCPDF}>
      */
-    public function providerForPrepareRowAsPdf(): array
+    public static function providerForPrepareRowAsPdf(): array
     {
         return [
             [
-                'MULTIPOLYGON(((136 40,147 83,16 75,136 40)),((105 0,56 20,78 73,105 0)))',
+                'MULTIPOLYGON(((5 5,95 5,95 95,5 95,5 5),(10 10,10 40,40 40,40 10,10 10),(60 60,90 60,90 90,60 90,6'
+                . '0 60)),((-5 -5,-95 -5,-95 -95,-5 -95,-5 -5),(-10 -10,-10 -40,-40 -40,-40 -10,-10 -10),(-60 -60,-90'
+                . ' -60,-90 -90,-60 -90,-60 -60)))',
                 'pdf',
-                '#B02EE0',
-                [
-                    'x' => 12,
-                    'y' => 69,
-                    'scale' => 2,
-                    'height' => 150,
-                ],
-                new TCPDF(),
+                [176, 46, 224],
+                ['x' => -110, 'y' => -157, 'scale' => 0.95, 'height' => 297],
+
+                parent::createEmptyPdf('MULTIPOLYGON'),
             ],
         ];
     }
@@ -396,50 +315,46 @@ class GisMultiPolygonTest extends GisGeomTestCase
     /**
      * test case for prepareRowAsSvg() method
      *
-     * @param string $spatial   GIS MULTIPOLYGON object
-     * @param string $label     label for the GIS MULTIPOLYGON object
-     * @param string $fillColor color for the GIS MULTIPOLYGON object
-     * @param array  $scaleData array containing data related to scaling
-     * @param string $output    expected output
-     *
-     * @dataProvider providerForPrepareRowAsSvg
+     * @param string             $spatial   GIS MULTIPOLYGON object
+     * @param string             $label     label for the GIS MULTIPOLYGON object
+     * @param int[]              $color     color for the GIS MULTIPOLYGON object
+     * @param array<string, int> $scaleData array containing data related to scaling
+     * @param string             $output    expected output
      */
+    #[DataProvider('providerForPrepareRowAsSvg')]
     public function testPrepareRowAsSvg(
         string $spatial,
         string $label,
-        string $fillColor,
+        array $color,
         array $scaleData,
-        string $output
+        string $output,
     ): void {
-        $string = $this->object->prepareRowAsSvg($spatial, $label, $fillColor, $scaleData);
-        $this->assertEquals(1, preg_match($output, $string));
+        $object = GisMultiPolygon::singleton();
+        $svg = $object->prepareRowAsSvg($spatial, $label, $color, $scaleData);
+        $this->assertEquals($output, $svg);
     }
 
     /**
      * data provider for testPrepareRowAsSvg() test case
      *
-     * @return array test data for testPrepareRowAsSvg() test case
+     * @return array<array{string, string, int[], array<string, int>, string}>
      */
-    public function providerForPrepareRowAsSvg(): array
+    public static function providerForPrepareRowAsSvg(): array
     {
         return [
             [
-                'MULTIPOLYGON(((136 40,147 83,16 75,136 40)),((105 0,56 20,78 73,105 0)))',
+                'MULTIPOLYGON(((5 5,95 5,95 95,5 95,5 5),(10 10,10 40,40 40,40 10,10 10),(60 60,90 60,90 90,60 90,6'
+                . '0 60)),((-5 -5,-95 -5,-95 -95,-5 -95,-5 -5),(-10 -10,-10 -40,-40 -40,-40 -10,-10 -10),(-60 -60,-90'
+                . ' -60,-90 -90,-60 -90,-60 -60)))',
                 'svg',
-                '#B02EE0',
-                [
-                    'x' => 12,
-                    'y' => 69,
-                    'scale' => 2,
-                    'height' => 150,
-                ],
-                '/^(<path d=" M 248, 208 L 270, 122 L 8, 138 Z " name="svg" class="'
-                . 'multipolygon vector" stroke="black" stroke-width="0.5" fill="'
-                . '#B02EE0" fill-rule="evenodd" fill-opacity="0.8" id="svg)(\d+)'
-                . '("\/><path d=" M 186, 288 L 88, 248 L 132, 142 Z " name="svg" '
-                . 'class="multipolygon vector" stroke="black" stroke-width="0.5" '
-                . 'fill="#B02EE0" fill-rule="evenodd" fill-opacity="0.8" id="svg)'
-                . '(\d+)("\/>)$/',
+                [176, 46, 224],
+                ['x' => -50, 'y' => -50, 'scale' => 2, 'height' => 400],
+                '<path d=" M 110, 290 L 290, 290 L 290, 110 L 110, 110 Z  M 120, 280 L 120, 220 L 180, 220 L 180, 28'
+                . '0 Z  M 220, 180 L 280, 180 L 280, 120 L 220, 120 Z " name="svg" class="multipolygon vector" stroke='
+                . '"black" stroke-width="0.5" fill="#b02ee0" fill-rule="evenodd" fill-opacity="0.8" id="svg1234567890"'
+                . '/><path d=" M 90, 310 L -90, 310 L -90, 490 L 90, 490 Z  M 80, 320 L 80, 380 L 20, 380 L 20, 320 Z '
+                . ' M -20, 420 L -80, 420 L -80, 480 L -20, 480 Z " name="svg" class="multipolygon vector" stroke="bla'
+                . 'ck" stroke-width="0.5" fill="#b02ee0" fill-rule="evenodd" fill-opacity="0.8" id="svg1234567890"/>',
             ],
         ];
     }
@@ -447,41 +362,31 @@ class GisMultiPolygonTest extends GisGeomTestCase
     /**
      * test case for prepareRowAsOl() method
      *
-     * @param string $spatial    GIS MULTIPOLYGON object
-     * @param int    $srid       spatial reference ID
-     * @param string $label      label for the GIS MULTIPOLYGON object
-     * @param array  $fill_color color for the GIS MULTIPOLYGON object
-     * @param array  $scale_data array containing data related to scaling
-     * @param string $output     expected output
-     *
-     * @dataProvider providerForPrepareRowAsOl
+     * @param string $spatial GIS MULTIPOLYGON object
+     * @param int    $srid    spatial reference ID
+     * @param string $label   label for the GIS MULTIPOLYGON object
+     * @param int[]  $color   color for the GIS MULTIPOLYGON object
+     * @param string $output  expected output
      */
+    #[DataProvider('providerForPrepareRowAsOl')]
     public function testPrepareRowAsOl(
         string $spatial,
         int $srid,
         string $label,
-        array $fill_color,
-        array $scale_data,
-        string $output
+        array $color,
+        string $output,
     ): void {
-        $this->assertEquals(
-            $output,
-            $this->object->prepareRowAsOl(
-                $spatial,
-                $srid,
-                $label,
-                $fill_color,
-                $scale_data
-            )
-        );
+        $object = GisMultiPolygon::singleton();
+        $ol = $object->prepareRowAsOl($spatial, $srid, $label, $color);
+        $this->assertEquals($output, $ol);
     }
 
     /**
      * data provider for testPrepareRowAsOl() test case
      *
-     * @return array test data for testPrepareRowAsOl() test case
+     * @return array<array{string, int, string, int[], string}>
      */
-    public function providerForPrepareRowAsOl(): array
+    public static function providerForPrepareRowAsOl(): array
     {
         return [
             [
@@ -489,37 +394,11 @@ class GisMultiPolygonTest extends GisGeomTestCase
                 4326,
                 'Ol',
                 [176, 46, 224],
-                [
-                    'minX' => '0',
-                    'minY' => '0',
-                    'maxX' => '1',
-                    'maxY' => '1',
-                ],
-                'var style = new ol.style.Style({fill: new ol.style.Fill({"color":[176,46,224,0.8]}'
-                . '),stroke: new ol.style.Stroke({"color":[0,0,0],"width":0.5}),text: new ol.style.'
-                . 'Text({"text":"Ol"})});var minLoc = [0, 0];var maxLoc = [1, 1];var ext = ol.exten'
-                . 't.boundingExtent([minLoc, maxLoc]);ext = ol.proj.transformExtent(ext, ol.proj.ge'
-                . 't("EPSG:4326"), ol.proj.get(\'EPSG:3857\'));map.getView().fit(ext, map.getSize()'
-                . ');var polygonArray = [];var arr = [];var lineArr = [];var line = new ol.geom.Lin'
-                . 'earRing(new Array((new ol.geom.Point([136,40]).transform(ol.proj.get("EPSG:4326"'
-                . '), ol.proj.get(\'EPSG:3857\'))).getCoordinates(), (new ol.geom.Point([147,83]).t'
-                . 'ransform(ol.proj.get("EPSG:4326"), ol.proj.get(\'EPSG:3857\'))).getCoordinates()'
-                . ', (new ol.geom.Point([16,75]).transform(ol.proj.get("EPSG:4326"), ol.proj.get(\''
-                . 'EPSG:3857\'))).getCoordinates(), (new ol.geom.Point([136,40]).transform(ol.proj.'
-                . 'get("EPSG:4326"), ol.proj.get(\'EPSG:3857\'))).getCoordinates()));var coord = li'
-                . 'ne.getCoordinates();for (var i = 0; i < coord.length; i++) lineArr.push(coord[i]);arr.'
-                . 'push(lineArr);var polygon = new ol.geom.Polygon(arr);polygonArray.push(polygon);var arr = [];v'
-                . 'ar lineArr = [];var line = new ol.geom.LinearRing(new Array((new ol.geom.Point(['
-                . '105,0]).transform(ol.proj.get("EPSG:4326"), ol.proj.get(\'EPSG:3857\'))).getCoor'
-                . 'dinates(), (new ol.geom.Point([56,20]).transform(ol.proj.get("EPSG:4326"), ol.pr'
-                . 'oj.get(\'EPSG:3857\'))).getCoordinates(), (new ol.geom.Point([78,73]).transform('
-                . 'ol.proj.get("EPSG:4326"), ol.proj.get(\'EPSG:3857\'))).getCoordinates(), (new ol'
-                . '.geom.Point([105,0]).transform(ol.proj.get("EPSG:4326"), ol.proj.get(\'EPSG:3857'
-                . '\'))).getCoordinates()));var coord = line.getCoordinates();for (var i = 0; i < coord.length;'
-                . ' i++) lineArr.push(coord[i]);arr.push(lineArr);var polygon = new ol.geom.Polygon(arr);po'
-                . 'lygonArray.push(polygon);var multiPolygon = new ol.geom.MultiPolygon(polygonArra'
-                . 'y);var feature = new ol.Feature(multiPolygon);feature.setStyle(style);vectorLaye'
-                . 'r.addFeature(feature);',
+                'var feature = new ol.Feature(new ol.geom.MultiPolygon([[[[136,40],[147,83],[16,75]'
+                . ',[136,40]]],[[[105,0],[56,20],[78,73],[105,0]]]]).transform(\'EPSG:4326\', \'EPS'
+                . 'G:3857\'));feature.setStyle(new ol.style.Style({fill: new ol.style.Fill({"color"'
+                . ':[176,46,224,0.8]}),stroke: new ol.style.Stroke({"color":[0,0,0],"width":0.5}),t'
+                . 'ext: new ol.style.Text({"text":"Ol"})}));vectorSource.addFeature(feature);',
             ],
         ];
     }

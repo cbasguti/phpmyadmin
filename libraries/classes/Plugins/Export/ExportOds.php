@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Plugins\Export;
 
 use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Dbal\Connection;
 use PhpMyAdmin\FieldMetadata;
 use PhpMyAdmin\OpenDocument;
 use PhpMyAdmin\Plugins\ExportPlugin;
@@ -22,7 +23,6 @@ use function __;
 use function bin2hex;
 use function date;
 use function htmlspecialchars;
-use function stripslashes;
 use function strtotime;
 
 /**
@@ -35,9 +35,7 @@ class ExportOds extends ExportPlugin
         $GLOBALS['ods_buffer'] = '';
     }
 
-    /**
-     * @psalm-return non-empty-lowercase-string
-     */
+    /** @psalm-return non-empty-lowercase-string */
     public function getName(): string
     {
         return 'ods';
@@ -62,12 +60,12 @@ class ExportOds extends ExportPlugin
         // create primary items and add them to the group
         $leaf = new TextPropertyItem(
             'null',
-            __('Replace NULL with:')
+            __('Replace NULL with:'),
         );
         $generalOptions->addProperty($leaf);
         $leaf = new BoolPropertyItem(
             'columns',
-            __('Put columns names in the first row')
+            __('Put columns names in the first row'),
         );
         $generalOptions->addProperty($leaf);
         $leaf = new HiddenPropertyItem('structure_or_data');
@@ -145,8 +143,8 @@ class ExportOds extends ExportPlugin
         return $this->export->outputHandler(
             OpenDocument::create(
                 'application/vnd.oasis.opendocument.spreadsheet',
-                $GLOBALS['ods_buffer']
-            )
+                $GLOBALS['ods_buffer'],
+            ),
         );
     }
 
@@ -156,7 +154,7 @@ class ExportOds extends ExportPlugin
      * @param string $db      Database name
      * @param string $dbAlias Aliases of db
      */
-    public function exportDBHeader($db, $dbAlias = ''): bool
+    public function exportDBHeader(string $db, string $dbAlias = ''): bool
     {
         return true;
     }
@@ -166,7 +164,7 @@ class ExportOds extends ExportPlugin
      *
      * @param string $db Database name
      */
-    public function exportDBFooter($db): bool
+    public function exportDBFooter(string $db): bool
     {
         return true;
     }
@@ -178,7 +176,7 @@ class ExportOds extends ExportPlugin
      * @param string $exportType 'server', 'database', 'table'
      * @param string $dbAlias    Aliases of db
      */
-    public function exportDBCreate($db, $exportType, $dbAlias = ''): bool
+    public function exportDBCreate(string $db, string $exportType, string $dbAlias = ''): bool
     {
         return true;
     }
@@ -186,48 +184,44 @@ class ExportOds extends ExportPlugin
     /**
      * Outputs the content of a table in NHibernate format
      *
-     * @param string $db       database name
-     * @param string $table    table name
-     * @param string $crlf     the end of line sequence
-     * @param string $errorUrl the url to go back in case of error
-     * @param string $sqlQuery SQL query for obtaining data
-     * @param array  $aliases  Aliases of db/table/columns
+     * @param string  $db       database name
+     * @param string  $table    table name
+     * @param string  $errorUrl the url to go back in case of error
+     * @param string  $sqlQuery SQL query for obtaining data
+     * @param mixed[] $aliases  Aliases of db/table/columns
      */
     public function exportData(
-        $db,
-        $table,
-        $crlf,
-        $errorUrl,
-        $sqlQuery,
-        array $aliases = []
+        string $db,
+        string $table,
+        string $errorUrl,
+        string $sqlQuery,
+        array $aliases = [],
     ): bool {
-        global $what, $dbi;
+        $GLOBALS['what'] ??= null;
 
-        $db_alias = $db;
-        $table_alias = $table;
-        $this->initAlias($aliases, $db_alias, $table_alias);
+        $dbAlias = $db;
+        $tableAlias = $table;
+        $this->initAlias($aliases, $dbAlias, $tableAlias);
         // Gets the data from the database
-        $result = $dbi->query($sqlQuery, DatabaseInterface::CONNECT_USER, DatabaseInterface::QUERY_UNBUFFERED);
-        $fields_cnt = $result->numFields();
+        $result = $GLOBALS['dbi']->query($sqlQuery, Connection::TYPE_USER, DatabaseInterface::QUERY_UNBUFFERED);
+        $fieldsCnt = $result->numFields();
         /** @var FieldMetadata[] $fieldsMeta */
-        $fieldsMeta = $dbi->getFieldsMeta($result);
+        $fieldsMeta = $GLOBALS['dbi']->getFieldsMeta($result);
 
-        $GLOBALS['ods_buffer'] .= '<table:table table:name="' . htmlspecialchars($table_alias) . '">';
+        $GLOBALS['ods_buffer'] .= '<table:table table:name="' . htmlspecialchars($tableAlias) . '">';
 
         // If required, get fields name at the first line
-        if (isset($GLOBALS[$what . '_columns'])) {
+        if (isset($GLOBALS[$GLOBALS['what'] . '_columns'])) {
             $GLOBALS['ods_buffer'] .= '<table:table-row>';
             foreach ($fieldsMeta as $field) {
-                $col_as = $field->name;
-                if (! empty($aliases[$db]['tables'][$table]['columns'][$col_as])) {
-                    $col_as = $aliases[$db]['tables'][$table]['columns'][$col_as];
+                $colAs = $field->name;
+                if (! empty($aliases[$db]['tables'][$table]['columns'][$colAs])) {
+                    $colAs = $aliases[$db]['tables'][$table]['columns'][$colAs];
                 }
 
                 $GLOBALS['ods_buffer'] .= '<table:table-cell office:value-type="string">'
                     . '<text:p>'
-                    . htmlspecialchars(
-                        stripslashes($col_as)
-                    )
+                    . htmlspecialchars($colAs)
                     . '</text:p>'
                     . '</table:table-cell>';
             }
@@ -238,7 +232,7 @@ class ExportOds extends ExportPlugin
         // Format the data
         while ($row = $result->fetchRow()) {
             $GLOBALS['ods_buffer'] .= '<table:table-row>';
-            for ($j = 0; $j < $fields_cnt; $j++) {
+            for ($j = 0; $j < $fieldsCnt; $j++) {
                 if ($fieldsMeta[$j]->isMappedTypeGeometry) {
                     // export GIS types as hex
                     $row[$j] = '0x' . bin2hex($row[$j]);
@@ -247,7 +241,7 @@ class ExportOds extends ExportPlugin
                 if (! isset($row[$j])) {
                     $GLOBALS['ods_buffer'] .= '<table:table-cell office:value-type="string">'
                         . '<text:p>'
-                        . htmlspecialchars($GLOBALS[$what . '_null'])
+                        . htmlspecialchars($GLOBALS[$GLOBALS['what'] . '_null'])
                         . '</text:p>'
                         . '</table:table-cell>';
                 } elseif ($fieldsMeta[$j]->isBinary && $fieldsMeta[$j]->isBlob) {
@@ -314,16 +308,13 @@ class ExportOds extends ExportPlugin
      * @param string      $errorUrl the url to go back in case of error
      * @param string|null $db       the database where the query is executed
      * @param string      $sqlQuery the rawquery to output
-     * @param string      $crlf     the end of line sequence
      */
-    public function exportRawQuery(string $errorUrl, ?string $db, string $sqlQuery, string $crlf): bool
+    public function exportRawQuery(string $errorUrl, string|null $db, string $sqlQuery): bool
     {
-        global $dbi;
-
         if ($db !== null) {
-            $dbi->selectDb($db);
+            $GLOBALS['dbi']->selectDb($db);
         }
 
-        return $this->exportData($db ?? '', '', $crlf, $errorUrl, $sqlQuery);
+        return $this->exportData($db ?? '', '', $errorUrl, $sqlQuery);
     }
 }

@@ -4,21 +4,31 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Dbal;
 
+use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Query\Utilities;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Tests\Stubs\DummyResult;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * @coversNothing
- */
+#[CoversNothing]
 class DbiDummyTest extends AbstractTestCase
 {
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
     /**
      * Configures test parameters.
      */
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
         $GLOBALS['cfg']['DBG']['sql'] = false;
         $GLOBALS['cfg']['IconvExtraParams'] = '';
         $GLOBALS['server'] = 1;
@@ -58,29 +68,17 @@ class DbiDummyTest extends AbstractTestCase
      *
      * @param string $schema   schema name
      * @param bool   $expected expected result
-     *
-     * @dataProvider schemaData
      */
+    #[DataProvider('schemaData')]
     public function testSystemSchema(string $schema, bool $expected): void
     {
         $this->assertEquals($expected, Utilities::isSystemSchema($schema));
     }
 
-    /**
-     * Data provider for schema test
-     */
-    public function schemaData(): array
+    /** @return array<array{string, bool}> */
+    public static function schemaData(): array
     {
-        return [
-            [
-                'information_schema',
-                true,
-            ],
-            [
-                'pma_test',
-                false,
-            ],
-        ];
+        return [['information_schema', true], ['pma_test', false]];
     }
 
     /**
@@ -89,34 +87,23 @@ class DbiDummyTest extends AbstractTestCase
      * @param int    $number   error number
      * @param string $message  error message
      * @param string $expected expected result
-     *
-     * @dataProvider errorData
      */
+    #[DataProvider('errorData')]
     public function testFormatError(int $number, string $message, string $expected): void
     {
         $GLOBALS['server'] = 1;
         $this->assertEquals(
             $expected,
-            Utilities::formatError($number, $message)
+            Utilities::formatError($number, $message),
         );
     }
 
-    /**
-     * Data provider for error formatting test
-     */
-    public function errorData(): array
+    /** @return array<array{int, string, string}> */
+    public static function errorData(): array
     {
         return [
-            [
-                1234,
-                '',
-                '#1234 - ',
-            ],
-            [
-                1234,
-                'foobar',
-                '#1234 - foobar',
-            ],
+            [1234, '', '#1234 - '],
+            [1234, 'foobar', '#1234 - foobar'],
             [
                 2002,
                 'foobar',
@@ -133,11 +120,11 @@ class DbiDummyTest extends AbstractTestCase
     {
         $this->assertEquals(
             'a',
-            $this->dbi->escapeString('a')
+            $this->dbi->escapeString('a'),
         );
         $this->assertEquals(
             'a\\\'',
-            $this->dbi->escapeString('a\'')
+            $this->dbi->escapeString('a\''),
         );
     }
 }

@@ -22,49 +22,35 @@ class TableProperty
 {
     /**
      * Name
-     *
-     * @var string
      */
-    public $name;
+    public string $name;
 
     /**
      * Type
-     *
-     * @var string
      */
-    public $type;
+    public string $type;
 
     /**
      * Whether the key is nullable or not
-     *
-     * @var string
      */
-    public $nullable;
+    public string $nullable;
 
     /**
      * The key
-     *
-     * @var string
      */
-    public $key;
+    public string $key;
 
     /**
      * Default value
-     *
-     * @var mixed
      */
-    public $defaultValue;
+    public mixed $defaultValue;
 
     /**
      * Extension
-     *
-     * @var string
      */
-    public $ext;
+    public string $ext;
 
-    /**
-     * @param array $row table row
-     */
+    /** @param mixed[] $row table row */
     public function __construct(array $row)
     {
         $this->name = trim((string) $row[0]);
@@ -80,7 +66,7 @@ class TableProperty
      *
      * @return string type
      */
-    public function getPureType()
+    public function getPureType(): string
     {
         $pos = (int) mb_strpos($this->type, '(');
         if ($pos > 0) {
@@ -95,7 +81,7 @@ class TableProperty
      *
      * @return string true if the key is not null, false otherwise
      */
-    public function isNotNull()
+    public function isNotNull(): string
     {
         return $this->nullable === 'NO' ? 'true' : 'false';
     }
@@ -115,7 +101,7 @@ class TableProperty
      *
      * @return string type
      */
-    public function getDotNetPrimitiveType()
+    public function getDotNetPrimitiveType(): string
     {
         if (mb_strpos($this->type, 'int') === 0) {
             return 'int';
@@ -157,7 +143,7 @@ class TableProperty
      *
      * @return string type
      */
-    public function getDotNetObjectType()
+    public function getDotNetObjectType(): string
     {
         if (mb_strpos($this->type, 'int') === 0) {
             return 'Int32';
@@ -199,7 +185,7 @@ class TableProperty
      *
      * @return string containing the name of the index
      */
-    public function getIndexName()
+    public function getIndexName(): string
     {
         if (strlen($this->key) > 0) {
             return 'index="'
@@ -225,12 +211,12 @@ class TableProperty
      *
      * @return string formatted text
      */
-    public function formatCs($text)
+    public function formatCs(string $text): string
     {
         $text = str_replace(
             '#name#',
             ExportCodegen::cgMakeIdentifier($this->name, false),
-            $text
+            $text,
         );
 
         return $this->format($text);
@@ -243,18 +229,12 @@ class TableProperty
      *
      * @return string formatted text
      */
-    public function formatXml($text)
+    public function formatXml(string $text): string
     {
         $text = str_replace(
-            [
-                '#name#',
-                '#indexName#',
-            ],
-            [
-                htmlspecialchars($this->name, ENT_COMPAT, 'UTF-8'),
-                $this->getIndexName(),
-            ],
-            $text
+            ['#name#', '#indexName#'],
+            [htmlspecialchars($this->name, ENT_COMPAT, 'UTF-8'), $this->getIndexName()],
+            $text,
         );
 
         return $this->format($text);
@@ -267,17 +247,10 @@ class TableProperty
      *
      * @return string formatted text
      */
-    public function format($text)
+    public function format(string $text): string
     {
-        $text = str_replace(
-            [
-                '#ucfirstName#',
-                '#dotNetPrimitiveType#',
-                '#dotNetObjectType#',
-                '#type#',
-                '#notNull#',
-                '#unique#',
-            ],
+        return str_replace(
+            ['#ucfirstName#', '#dotNetPrimitiveType#', '#dotNetObjectType#', '#type#', '#notNull#', '#unique#'],
             [
                 ExportCodegen::cgMakeIdentifier($this->name),
                 $this->getDotNetPrimitiveType(),
@@ -286,9 +259,7 @@ class TableProperty
                 $this->isNotNull(),
                 $this->isUnique(),
             ],
-            $text
+            $text,
         );
-
-        return $text;
     }
 }

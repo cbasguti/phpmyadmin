@@ -11,20 +11,15 @@ use function array_diff;
 
 class FeaturesForm extends \PhpMyAdmin\Config\Forms\User\FeaturesForm
 {
-    /**
-     * @return array
-     */
-    public static function getForms()
+    /** @return mixed[] */
+    public static function getForms(): array
     {
         // phpcs:disable Squiz.Arrays.ArrayDeclaration.KeySpecified,Squiz.Arrays.ArrayDeclaration.NoKeySpecified
         $result = parent::getForms();
         /* Remove only_db/hide_db, we have proper Server form in setup */
         $result['Databases'] = array_diff(
             $result['Databases'],
-            [
-                'Servers/1/only_db',
-                'Servers/1/hide_db',
-            ]
+            ['Servers/1/only_db', 'Servers/1/hide_db'],
         );
         /* Following are not available to user */
         $result['Import_export'] = [
@@ -52,10 +47,7 @@ class FeaturesForm extends \PhpMyAdmin\Config\Forms\User\FeaturesForm
             'CaptchaLoginPrivateKey',
             'CaptchaSiteVerifyURL',
         ];
-        $result['Developer'] = [
-            'UserprefsDeveloperTab',
-            'DBG/sql',
-        ];
+        $result['Developer'] = ['UserprefsDeveloperTab', 'DBG/sql'];
         $result['Other_core_settings'] = [
             'OBGzip',
             'PersistentConnections',

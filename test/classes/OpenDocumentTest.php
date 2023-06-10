@@ -7,24 +7,21 @@ namespace PhpMyAdmin\Tests;
 use DateTime;
 use PhpMyAdmin\OpenDocument;
 use PhpMyAdmin\ZipExtension;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use ZipArchive;
 
 use function file_put_contents;
 use function tempnam;
 use function unlink;
 
-/**
- * @covers \PhpMyAdmin\OpenDocument
- * @requires extension zip
- */
+#[CoversClass(OpenDocument::class)]
+#[RequiresPhpExtension('zip')]
 class OpenDocumentTest extends AbstractTestCase
 {
     public function testCreateDocument(): void
     {
-        $document = OpenDocument::create(
-            'application/vnd.oasis.opendocument.text',
-            '<data>'
-        );
+        $document = OpenDocument::create('application/vnd.oasis.opendocument.text', '<data>');
         $this->assertNotFalse($document);
 
         $tmpFile = tempnam('./', 'open-document-test');
@@ -37,16 +34,13 @@ class OpenDocumentTest extends AbstractTestCase
             'data' => 'application/vnd.oasis.opendocument.text',
         ], $zipExtension->getContents($tmpFile));
 
-        $this->assertSame([
-            'error' => '',
-            'data' => '<data>',
-        ], $zipExtension->getContents($tmpFile, '/content\.xml/'));
+        $this->assertSame(['error' => '', 'data' => '<data>'], $zipExtension->getContents($tmpFile, '/content\.xml/'));
 
         $dateTimeCreation = (new DateTime())->format('Y-m-d\TH:i');
         $this->assertStringContainsString(
             // Do not use a full version or seconds could be out of sync and cause flaky test failures
             '<meta:creation-date>' . $dateTimeCreation,
-            $zipExtension->getContents($tmpFile, '/meta\.xml/')['data']
+            $zipExtension->getContents($tmpFile, '/meta\.xml/')['data'],
         );
 
         $this->assertSame(5, $zipExtension->getNumberOfFiles($tmpFile));

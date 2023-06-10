@@ -18,31 +18,19 @@ use function is_string;
  */
 final class Warning implements Stringable
 {
-    /**
-     * @var string
-     * @psalm-var 'Note'|'Warning'|'Error'|'?'
-     */
-    public $level;
+    /** @psalm-var 'Note'|'Warning'|'Error'|'?' */
+    public string $level;
 
-    /**
-     * @var int
-     * @psalm-var 0|positive-int
-     */
-    public $code;
+    /** @psalm-var 0|positive-int */
+    public int $code;
 
-    /** @var string */
-    public $message;
-
-    private function __construct(string $level, int $code, string $message)
+    private function __construct(string $level, int $code, public string $message)
     {
         $this->level = in_array($level, ['Note', 'Warning', 'Error'], true) ? $level : '?';
         $this->code = $code >= 1 ? $code : 0;
-        $this->message = $message;
     }
 
-    /**
-     * @param mixed[] $row
-     */
+    /** @param mixed[] $row */
     public static function fromArray(array $row): self
     {
         $level = '';
@@ -64,9 +52,7 @@ final class Warning implements Stringable
         return new self($level, $code, $message);
     }
 
-    /**
-     * @psalm-return non-empty-string
-     */
+    /** @psalm-return non-empty-string */
     public function __toString(): string
     {
         return $this->level . ': #' . $this->code . ($this->message !== '' ? ' ' . $this->message : '');

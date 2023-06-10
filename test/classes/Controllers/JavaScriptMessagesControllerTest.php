@@ -5,41 +5,31 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Controllers;
 
 use PhpMyAdmin\Controllers\JavaScriptMessagesController;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
-use function __;
 use function json_decode;
-use function ob_end_clean;
-use function ob_get_contents;
-use function ob_start;
 use function strlen;
 use function substr;
 
-/**
- * @covers \PhpMyAdmin\Controllers\JavaScriptMessagesController
- */
+#[CoversClass(JavaScriptMessagesController::class)]
 class JavaScriptMessagesControllerTest extends TestCase
 {
+    #[RunInSeparateProcess]
     public function testIndex(): void
     {
-        global $cfg;
-
-        $cfg['GridEditing'] = 'double-click';
-
-        ob_start();
         (new JavaScriptMessagesController())();
-        $actual = ob_get_contents();
-        ob_end_clean();
+        $actual = $this->getActualOutputForAssertion();
 
-        $this->assertIsString($actual);
-        $this->assertStringStartsWith('var Messages = {', $actual);
+        $this->assertStringStartsWith('window.Messages = {', $actual);
         $this->assertStringEndsWith('};', $actual);
 
-        $json = substr($actual, strlen('var Messages = '), -1);
+        $json = substr($actual, strlen('window.Messages = '), -1);
         $array = json_decode($json, true);
 
         $this->assertIsArray($array);
-        $this->assertArrayHasKey('strConfirm', $array);
-        $this->assertEquals(__('Confirm'), $array['strConfirm']);
+        $this->assertArrayHasKey('strDoYouReally', $array);
+        $this->assertEquals('Do you really want to execute "%s"?', $array['strDoYouReally']);
     }
 }

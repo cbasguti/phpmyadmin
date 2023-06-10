@@ -14,11 +14,9 @@ use PhpMyAdmin\Plugins\TwoFactorPlugin;
  */
 class Invalid extends TwoFactorPlugin
 {
-    /** @var string */
-    public static $id = 'invalid';
+    public static string $id = 'invalid';
 
-    /** @var bool */
-    public static $showSubmit = false;
+    public static bool $showSubmit = false;
 
     /**
      * Checks authentication, returns true on success
@@ -33,27 +31,23 @@ class Invalid extends TwoFactorPlugin
      *
      * @return string HTML code
      */
-    public function render()
+    public function render(): string
     {
         return $this->template->render('login/twofactor/invalid');
     }
 
     /**
      * Get user visible name
-     *
-     * @return string
      */
-    public static function getName()
+    public static function getName(): string
     {
         return 'Invalid two-factor authentication';
     }
 
     /**
      * Get user visible description
-     *
-     * @return string
      */
-    public static function getDescription()
+    public static function getDescription(): string
     {
         return 'Error fallback only!';
     }

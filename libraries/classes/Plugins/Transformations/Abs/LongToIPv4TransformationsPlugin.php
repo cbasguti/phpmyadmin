@@ -21,14 +21,12 @@ abstract class LongToIPv4TransformationsPlugin extends TransformationsPlugin
 {
     /**
      * Gets the transformation description of the specific plugin
-     *
-     * @return string
      */
-    public static function getInfo()
+    public static function getInfo(): string
     {
         return __(
             'Converts an (IPv4) Internet network address stored as a BIGINT'
-            . ' into a string in Internet standard dotted format.'
+            . ' into a string in Internet standard dotted format.',
         );
     }
 
@@ -36,12 +34,10 @@ abstract class LongToIPv4TransformationsPlugin extends TransformationsPlugin
      * Does the actual work of each specific transformations plugin.
      *
      * @param string             $buffer  text to be transformed
-     * @param array              $options transformation options
+     * @param mixed[]            $options transformation options
      * @param FieldMetadata|null $meta    meta information
-     *
-     * @return string
      */
-    public function applyTransformation($buffer, array $options = [], ?FieldMetadata $meta = null)
+    public function applyTransformation(string $buffer, array $options = [], FieldMetadata|null $meta = null): string
     {
         return htmlspecialchars(FormatConverter::longToIp($buffer));
     }
@@ -50,10 +46,8 @@ abstract class LongToIPv4TransformationsPlugin extends TransformationsPlugin
 
     /**
      * Gets the transformation name of the specific plugin
-     *
-     * @return string
      */
-    public static function getName()
+    public static function getName(): string
     {
         return 'Long To IPv4';
     }

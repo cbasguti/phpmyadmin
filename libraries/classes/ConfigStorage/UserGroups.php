@@ -8,6 +8,8 @@ declare(strict_types=1);
 namespace PhpMyAdmin\ConfigStorage;
 
 use PhpMyAdmin\ConfigStorage\Features\ConfigurableMenusFeature;
+use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Dbal\Connection;
 use PhpMyAdmin\Html\Generator;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Url;
@@ -19,6 +21,7 @@ use function htmlspecialchars;
 use function implode;
 use function in_array;
 use function mb_substr;
+use function sprintf;
 use function substr;
 
 /**
@@ -35,26 +38,20 @@ class UserGroups
      */
     public static function getHtmlForListingUsersofAGroup(
         ConfigurableMenusFeature $configurableMenusFeature,
-        string $userGroup
+        string $userGroup,
     ): string {
-        global $dbi;
-
         $users = [];
 
         $userGroupSpecialChars = htmlspecialchars($userGroup);
         $usersTable = Util::backquote($configurableMenusFeature->database)
             . '.' . Util::backquote($configurableMenusFeature->users);
-        $sql_query = 'SELECT `username` FROM ' . $usersTable
-            . " WHERE `usergroup`='" . $dbi->escapeString($userGroup)
-            . "'";
-        $result = $dbi->tryQueryAsControlUser($sql_query);
+        $sqlQuery = 'SELECT `username` FROM ' . $usersTable
+            . ' WHERE `usergroup`=' . $GLOBALS['dbi']->quoteString($userGroup, Connection::TYPE_CONTROL);
+        $result = $GLOBALS['dbi']->tryQueryAsControlUser($sqlQuery);
         if ($result) {
             $i = 0;
             while ($row = $result->fetchRow()) {
-                $users[] = [
-                    'count' => ++$i,
-                    'user' => $row[0],
-                ];
+                $users[] = ['count' => ++$i, 'user' => $row[0]];
             }
         }
 
@@ -73,18 +70,16 @@ class UserGroups
      */
     public static function getHtmlForUserGroupsTable(ConfigurableMenusFeature $configurableMenusFeature): string
     {
-        global $dbi;
-
         $groupTable = Util::backquote($configurableMenusFeature->database)
             . '.' . Util::backquote($configurableMenusFeature->userGroups);
-        $sql_query = 'SELECT * FROM ' . $groupTable . ' ORDER BY `usergroup` ASC';
-        $result = $dbi->tryQueryAsControlUser($sql_query);
+        $sqlQuery = 'SELECT * FROM ' . $groupTable . ' ORDER BY `usergroup` ASC';
+        $result = $GLOBALS['dbi']->tryQueryAsControlUser($sqlQuery);
         $userGroups = [];
         $userGroupsValues = [];
         $action = Url::getFromRoute('/server/privileges');
-        $hidden_inputs = null;
+        $hiddenInputs = null;
         if ($result && $result->numRows()) {
-            $hidden_inputs = Url::getHiddenInputs();
+            $hiddenInputs = Url::getHiddenInputs();
             foreach ($result as $row) {
                 $groupName = $row['usergroup'];
                 if (! isset($userGroups[$groupName])) {
@@ -102,22 +97,16 @@ class UserGroups
                 $userGroupVal['tableTab'] = self::getAllowedTabNames($tabs, 'table');
                 $userGroupVal['userGroupUrl'] = Url::getFromRoute('/server/user-groups');
                 $userGroupVal['viewUsersUrl'] = Url::getCommon(
-                    [
-                        'viewUsers' => 1,
-                        'userGroup' => $groupName,
-                    ],
+                    ['viewUsers' => 1, 'userGroup' => $groupName],
                     '',
-                    false
+                    false,
                 );
                 $userGroupVal['viewUsersIcon'] = Generator::getIcon('b_usrlist', __('View users'));
 
                 $userGroupVal['editUsersUrl'] = Url::getCommon(
-                    [
-                        'editUserGroup' => 1,
-                        'userGroup' => $groupName,
-                    ],
+                    ['editUserGroup' => 1, 'userGroup' => $groupName],
                     '',
-                    false
+                    false,
                 );
                 $userGroupVal['editUsersIcon'] = Generator::getIcon('b_edit', __('Edit'));
                 $userGroupsValues[] = $userGroupVal;
@@ -130,7 +119,7 @@ class UserGroups
 
         return $template->render('server/user_groups/user_groups', [
             'action' => $action,
-            'hidden_inputs' => $hidden_inputs ?? '',
+            'hidden_inputs' => $hiddenInputs ?? '',
             'has_rows' => $userGroups !== [],
             'user_groups_values' => $userGroupsValues,
             'add_user_url' => $addUserUrl,
@@ -142,8 +131,8 @@ class UserGroups
      * Returns the list of allowed menu tab names
      * based on a data row from usergroup table.
      *
-     * @param array  $row   row of usergroup table
-     * @param string $level 'server', 'db' or 'table'
+     * @param mixed[] $row   row of usergroup table
+     * @param string  $level 'server', 'db' or 'table'
      *
      * @return string comma separated list of allowed menu tab names
      */
@@ -162,27 +151,27 @@ class UserGroups
         return implode(', ', $tabNames);
     }
 
-    /**
-     * Deletes a user group
-     *
-     * @param string $userGroup user group name
-     */
-    public static function delete(ConfigurableMenusFeature $configurableMenusFeature, string $userGroup): void
-    {
-        global $dbi;
+    /** @param non-empty-string $userGroupName */
+    public static function delete(
+        DatabaseInterface $dbi,
+        ConfigurableMenusFeature $configurableMenusFeature,
+        string $userGroupName,
+    ): void {
+        $statement = sprintf(
+            'DELETE FROM %s.%s WHERE `usergroup`=%s',
+            Util::backquote($configurableMenusFeature->database),
+            Util::backquote($configurableMenusFeature->users),
+            $dbi->quoteString($userGroupName, Connection::TYPE_CONTROL),
+        );
+        $dbi->queryAsControlUser($statement);
 
-        $userTable = Util::backquote($configurableMenusFeature->database)
-            . '.' . Util::backquote($configurableMenusFeature->users);
-        $groupTable = Util::backquote($configurableMenusFeature->database)
-            . '.' . Util::backquote($configurableMenusFeature->userGroups);
-        $sql_query = 'DELETE FROM ' . $userTable
-            . " WHERE `usergroup`='" . $dbi->escapeString($userGroup)
-            . "'";
-        $dbi->queryAsControlUser($sql_query);
-        $sql_query = 'DELETE FROM ' . $groupTable
-            . " WHERE `usergroup`='" . $dbi->escapeString($userGroup)
-            . "'";
-        $dbi->queryAsControlUser($sql_query);
+        $statement = sprintf(
+            'DELETE FROM %s.%s WHERE `usergroup`=%s',
+            Util::backquote($configurableMenusFeature->database),
+            Util::backquote($configurableMenusFeature->userGroups),
+            $dbi->quoteString($userGroupName, Connection::TYPE_CONTROL),
+        );
+        $dbi->queryAsControlUser($statement);
     }
 
     /**
@@ -194,10 +183,8 @@ class UserGroups
      */
     public static function getHtmlToEditUserGroup(
         ConfigurableMenusFeature $configurableMenusFeature,
-        ?string $userGroup = null
+        string|null $userGroup = null,
     ): string {
-        global $dbi;
-
         $urlParams = [];
 
         $editUserGroupSpecialChars = '';
@@ -212,18 +199,13 @@ class UserGroups
             $urlParams['addUserGroupSubmit'] = '1';
         }
 
-        $allowedTabs = [
-            'server' => [],
-            'db' => [],
-            'table' => [],
-        ];
+        $allowedTabs = ['server' => [], 'db' => [], 'table' => []];
         if ($userGroup !== null) {
             $groupTable = Util::backquote($configurableMenusFeature->database)
                 . '.' . Util::backquote($configurableMenusFeature->userGroups);
-            $sql_query = 'SELECT * FROM ' . $groupTable
-                . " WHERE `usergroup`='" . $dbi->escapeString($userGroup)
-                . "'";
-            $result = $dbi->tryQueryAsControlUser($sql_query);
+            $sqlQuery = 'SELECT * FROM ' . $groupTable
+                . ' WHERE `usergroup`=' . $GLOBALS['dbi']->quoteString($userGroup, Connection::TYPE_CONTROL);
+            $result = $GLOBALS['dbi']->tryQueryAsControlUser($sqlQuery);
             if ($result) {
                 foreach ($result as $row) {
                     $key = $row['tab'];
@@ -244,17 +226,17 @@ class UserGroups
         $tabList = self::getTabList(
             __('Server-level tabs'),
             'server',
-            $allowedTabs['server']
+            $allowedTabs['server'],
         );
         $tabList .= self::getTabList(
             __('Database-level tabs'),
             'db',
-            $allowedTabs['db']
+            $allowedTabs['db'],
         );
         $tabList .= self::getTabList(
             __('Table-level tabs'),
             'table',
-            $allowedTabs['table']
+            $allowedTabs['table'],
         );
 
         $template = new Template();
@@ -272,9 +254,9 @@ class UserGroups
      * Returns HTML for checkbox groups to choose
      * tabs of 'server', 'db' or 'table' levels.
      *
-     * @param string $title    title of the checkbox group
-     * @param string $level    'server', 'db' or 'table'
-     * @param array  $selected array of selected allowed tabs
+     * @param string  $title    title of the checkbox group
+     * @param string  $level    'server', 'db' or 'table'
+     * @param mixed[] $selected array of selected allowed tabs
      *
      * @return string HTML for checkbox groups
      */
@@ -308,22 +290,19 @@ class UserGroups
     public static function edit(
         ConfigurableMenusFeature $configurableMenusFeature,
         string $userGroup,
-        bool $new = false
+        bool $new = false,
     ): void {
-        global $dbi;
-
         $tabs = Util::getMenuTabList();
         $groupTable = Util::backquote($configurableMenusFeature->database)
             . '.' . Util::backquote($configurableMenusFeature->userGroups);
 
         if (! $new) {
-            $sql_query = 'DELETE FROM ' . $groupTable
-                . " WHERE `usergroup`='" . $dbi->escapeString($userGroup)
-                . "';";
-            $dbi->queryAsControlUser($sql_query);
+            $sqlQuery = 'DELETE FROM ' . $groupTable
+                . ' WHERE `usergroup`=' . $GLOBALS['dbi']->quoteString($userGroup, Connection::TYPE_CONTROL) . ';';
+            $GLOBALS['dbi']->queryAsControlUser($sqlQuery);
         }
 
-        $sql_query = 'INSERT INTO ' . $groupTable
+        $sqlQuery = 'INSERT INTO ' . $groupTable
             . '(`usergroup`, `tab`, `allowed`)'
             . ' VALUES ';
         $first = true;
@@ -331,18 +310,19 @@ class UserGroups
         foreach ($tabs as $tabGroupName => $tabGroup) {
             foreach (array_keys($tabGroup) as $tab) {
                 if (! $first) {
-                    $sql_query .= ', ';
+                    $sqlQuery .= ', ';
                 }
 
                 $tabName = $tabGroupName . '_' . $tab;
                 $allowed = isset($_POST[$tabName]) && $_POST[$tabName] === 'Y';
-                $sql_query .= "('" . $dbi->escapeString($userGroup) . "', '" . $tabName . "', '"
+                $sqlQuery .= '(' . $GLOBALS['dbi']->quoteString($userGroup, Connection::TYPE_CONTROL)
+                    . ', ' . $GLOBALS['dbi']->quoteString($tabName, Connection::TYPE_CONTROL) . ", '"
                     . ($allowed ? 'Y' : 'N') . "')";
                 $first = false;
             }
         }
 
-        $sql_query .= ';';
-        $dbi->queryAsControlUser($sql_query);
+        $sqlQuery .= ';';
+        $GLOBALS['dbi']->queryAsControlUser($sqlQuery);
     }
 }

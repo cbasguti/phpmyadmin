@@ -6,14 +6,12 @@ namespace PhpMyAdmin\Tests\Engines;
 
 use PhpMyAdmin\Engines\Ndbcluster;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Engines\Ndbcluster
- */
+#[CoversClass(Ndbcluster::class)]
 class NdbclusterTest extends AbstractTestCase
 {
-    /** @var Ndbcluster */
-    protected $object;
+    protected Ndbcluster $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -22,6 +20,8 @@ class NdbclusterTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 0;
         $this->object = new Ndbcluster('nbdcluster');
     }
@@ -33,6 +33,7 @@ class NdbclusterTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
@@ -43,9 +44,7 @@ class NdbclusterTest extends AbstractTestCase
     {
         $this->assertEquals(
             $this->object->getVariables(),
-            [
-                'ndb_connectstring' => [],
-            ]
+            ['ndb_connectstring' => []],
         );
     }
 
@@ -56,7 +55,7 @@ class NdbclusterTest extends AbstractTestCase
     {
         $this->assertEquals(
             $this->object->getVariablesLikePattern(),
-            'ndb\\_%'
+            'ndb\\_%',
         );
     }
 
@@ -67,7 +66,7 @@ class NdbclusterTest extends AbstractTestCase
     {
         $this->assertEquals(
             $this->object->getMysqlHelpPage(),
-            'ndbcluster'
+            'ndbcluster',
         );
     }
 }

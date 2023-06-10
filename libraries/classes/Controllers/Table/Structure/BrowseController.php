@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Controllers\Table\Structure;
 
-use PhpMyAdmin\Controllers\Table\AbstractController;
+use PhpMyAdmin\Controllers\AbstractController;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\ParseAnalyze;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Sql;
@@ -18,16 +19,12 @@ use function sprintf;
 
 final class BrowseController extends AbstractController
 {
-    /** @var Sql */
-    private $sql;
-
-    public function __construct(ResponseRenderer $response, Template $template, string $db, string $table, Sql $sql)
+    public function __construct(ResponseRenderer $response, Template $template, private Sql $sql)
     {
-        parent::__construct($response, $template, $db, $table);
-        $this->sql = $sql;
+        parent::__construct($response, $template);
     }
 
-    public function __invoke(): void
+    public function __invoke(ServerRequest $request): void
     {
         if (empty($_POST['selected_fld'])) {
             $this->response->setRequestStatus(false);
@@ -44,7 +41,7 @@ final class BrowseController extends AbstractController
      *
      * @param string $goto goto page url
      */
-    private function displayTableBrowseForSelectedColumns($goto): void
+    private function displayTableBrowseForSelectedColumns(string $goto): void
     {
         $GLOBALS['active_page'] = Url::getFromRoute('/sql');
         $fields = [];
@@ -52,22 +49,22 @@ final class BrowseController extends AbstractController
             $fields[] = Util::backquote($sval);
         }
 
-        $sql_query = sprintf(
+        $sqlQuery = sprintf(
             'SELECT %s FROM %s.%s',
             implode(', ', $fields),
-            Util::backquote($this->db),
-            Util::backquote($this->table)
+            Util::backquote($GLOBALS['db']),
+            Util::backquote($GLOBALS['table']),
         );
 
         // Parse and analyze the query
-        [$analyzed_sql_results, $this->db] = ParseAnalyze::sqlQuery($sql_query, $this->db);
+        [$statementInfo, $GLOBALS['db']] = ParseAnalyze::sqlQuery($sqlQuery, $GLOBALS['db']);
 
         $this->response->addHTML(
             $this->sql->executeQueryAndGetQueryResponse(
-                $analyzed_sql_results ?? '',
+                $statementInfo,
                 false, // is_gotofile
-                $this->db, // db
-                $this->table, // table
+                $GLOBALS['db'], // db
+                $GLOBALS['table'], // table
                 null, // find_real_end
                 null, // sql_query_for_bookmark
                 null, // extra_data
@@ -76,9 +73,9 @@ final class BrowseController extends AbstractController
                 $goto, // goto
                 null, // disp_query
                 null, // disp_message
-                $sql_query, // sql_query
-                null // complete_query
-            )
+                $sqlQuery, // sql_query
+                null, // complete_query
+            ),
         );
     }
 }

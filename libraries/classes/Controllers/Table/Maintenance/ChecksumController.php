@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Controllers\Table\Maintenance;
 
 use PhpMyAdmin\Config;
-use PhpMyAdmin\Controllers\Table\AbstractController;
-use PhpMyAdmin\Dbal\DatabaseName;
-use PhpMyAdmin\Dbal\TableName;
+use PhpMyAdmin\Controllers\AbstractController;
 use PhpMyAdmin\Html\Generator;
 use PhpMyAdmin\Http\ServerRequest;
+use PhpMyAdmin\Identifiers\DatabaseName;
+use PhpMyAdmin\Identifiers\InvalidIdentifier;
+use PhpMyAdmin\Identifiers\TableName;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Table\Maintenance;
@@ -22,23 +23,13 @@ use function count;
 
 final class ChecksumController extends AbstractController
 {
-    /** @var Maintenance */
-    private $model;
-
-    /** @var Config */
-    private $config;
-
     public function __construct(
         ResponseRenderer $response,
         Template $template,
-        string $db,
-        string $table,
-        Maintenance $model,
-        Config $config
+        private Maintenance $model,
+        private Config $config,
     ) {
-        parent::__construct($response, $template, $db, $table);
-        $this->model = $model;
-        $this->config = $config;
+        parent::__construct($response, $template);
     }
 
     public function __invoke(ServerRequest $request): void
@@ -49,7 +40,7 @@ final class ChecksumController extends AbstractController
             Assert::isArray($selectedTablesParam);
             Assert::notEmpty($selectedTablesParam);
             Assert::allStringNotEmpty($selectedTablesParam);
-        } catch (InvalidArgumentException $exception) {
+        } catch (InvalidArgumentException) {
             $this->response->setRequestStatus(false);
             $this->response->addJSON('message', __('No table selected.'));
 
@@ -57,12 +48,12 @@ final class ChecksumController extends AbstractController
         }
 
         try {
-            $database = DatabaseName::fromValue($request->getParam('db'));
+            $database = DatabaseName::from($request->getParam('db'));
             $selectedTables = [];
             foreach ($selectedTablesParam as $table) {
-                $selectedTables[] = TableName::fromValue($table);
+                $selectedTables[] = TableName::from($table);
             }
-        } catch (InvalidArgumentException $exception) {
+        } catch (InvalidIdentifier $exception) {
             $message = Message::error($exception->getMessage());
             $this->response->setRequestStatus(false);
             $this->response->addJSON('message', $message->getDisplay());
@@ -82,13 +73,9 @@ final class ChecksumController extends AbstractController
         $message = Generator::getMessage(
             __('Your SQL query has been executed successfully.'),
             $query,
-            'success'
+            'success',
         );
 
-        $this->render('table/maintenance/checksum', [
-            'message' => $message,
-            'rows' => $rows,
-            'warnings' => $warnings,
-        ]);
+        $this->render('table/maintenance/checksum', ['message' => $message, 'rows' => $rows, 'warnings' => $warnings]);
     }
 }

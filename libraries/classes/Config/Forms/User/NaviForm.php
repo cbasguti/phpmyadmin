@@ -13,10 +13,8 @@ use function __;
 
 class NaviForm extends BaseForm
 {
-    /**
-     * @return array
-     */
-    public static function getForms()
+    /** @return mixed[] */
+    public static function getForms(): array
     {
         return [
             'Navi_panel' => [
@@ -43,14 +41,8 @@ class NaviForm extends BaseForm
                 'NavigationTreeShowEvents',
                 'NavigationTreeAutoexpandSingleDb',
             ],
-            'Navi_servers' => [
-                'NavigationDisplayServers',
-                'DisplayServersList',
-            ],
-            'Navi_databases' => [
-                'NavigationTreeDisplayDbFilterMinimum',
-                'NavigationTreeDbSeparator',
-            ],
+            'Navi_servers' => ['NavigationDisplayServers', 'DisplayServersList'],
+            'Navi_databases' => ['NavigationTreeDisplayDbFilterMinimum', 'NavigationTreeDbSeparator'],
             'Navi_tables' => [
                 'NavigationTreeDefaultTabTable',
                 'NavigationTreeDefaultTabTable2',
@@ -60,10 +52,7 @@ class NaviForm extends BaseForm
         ];
     }
 
-    /**
-     * @return string
-     */
-    public static function getName()
+    public static function getName(): string
     {
         return __('Navigation panel');
     }

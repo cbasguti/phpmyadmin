@@ -29,54 +29,42 @@ use function sprintf;
  */
 class TableStatsPdf extends TableStats
 {
-    /** @var int */
-    public $height;
+    public int $height = 0;
 
-    /** @var string */
-    private $ff = PdfLib::PMA_PDF_FONT;
+    private string $ff = PdfLib::PMA_PDF_FONT;
 
     /**
      * @see PMA_Schema_PDF
      * @see TableStatsPdf::setWidthTable
      * @see PhpMyAdmin\Plugins\Schema\Pdf\TableStatsPdf::setHeightTable
      *
-     * @param Pdf    $diagram        The PDF diagram
-     * @param string $db             The database name
-     * @param string $tableName      The table name
-     * @param int    $fontSize       The font size
-     * @param int    $pageNumber     The current page number (from the
-     *                               $cfg['Servers'][$i]['table_coords'] table)
-     * @param int    $sameWideWidth  The max. width among tables
-     * @param bool   $showKeys       Whether to display keys or not
-     * @param bool   $tableDimension Whether to display table position or not
-     * @param bool   $offline        Whether the coordinates are sent
-     *                               from the browser
+     * @param Pdf      $diagram        The PDF diagram
+     * @param string   $db             The database name
+     * @param string   $tableName      The table name
+     * @param int|null $fontSize       The font size
+     * @param int      $pageNumber     The current page number (from the
+     *                                 $cfg['Servers'][$i]['table_coords'] table)
+     * @param bool     $showKeys       Whether to display keys or not
+     * @param bool     $tableDimension Whether to display table position or not
+     * @param bool     $offline        Whether the coordinates are sent
+     *                                 from the browser
      */
     public function __construct(
-        $diagram,
-        $db,
-        $tableName,
-        $fontSize,
-        $pageNumber,
-        &$sameWideWidth,
-        $showKeys = false,
-        $tableDimension = false,
-        $offline = false
+        Pdf $diagram,
+        string $db,
+        string $tableName,
+        int|null $fontSize,
+        int $pageNumber,
+        bool $showKeys = false,
+        bool $tableDimension = false,
+        bool $offline = false,
     ) {
         parent::__construct($diagram, $db, $pageNumber, $tableName, $showKeys, $tableDimension, $offline);
 
         $this->heightCell = 6;
         $this->setHeight();
-        /*
-         * setWidth must me after setHeight, because title
-        * can include table height which changes table width
-        */
+        // setWidth must be after setHeight, because title can include table height which changes table width
         $this->setWidth($fontSize);
-        if ($sameWideWidth >= $this->width) {
-            return;
-        }
-
-        $sameWideWidth = $this->width;
     }
 
     /**
@@ -87,17 +75,15 @@ class TableStatsPdf extends TableStats
         ExportRelationSchema::dieSchema(
             $this->pageNumber,
             'PDF',
-            sprintf(__('The %s table doesn\'t exist!'), $this->tableName)
+            sprintf(__('The %s table doesn\'t exist!'), $this->tableName),
         );
     }
 
     /**
      * Returns title of the current table,
      * title can have the dimensions of the table
-     *
-     * @return string
      */
-    protected function getTitle()
+    protected function getTitle(): string
     {
         $ret = '';
         if ($this->tableDimension) {
@@ -112,9 +98,9 @@ class TableStatsPdf extends TableStats
      *
      * @see    PMA_Schema_PDF
      *
-     * @param int $fontSize The font size
+     * @param int|null $fontSize The font size
      */
-    private function setWidth($fontSize): void
+    private function setWidth(int|null $fontSize): void
     {
         foreach ($this->fields as $field) {
             $this->width = max($this->width, $this->diagram->GetStringWidth($field));
@@ -122,10 +108,7 @@ class TableStatsPdf extends TableStats
 
         $this->width += $this->diagram->GetStringWidth('      ');
         $this->diagram->setFont($this->ff, 'B', $fontSize);
-        /*
-         * it is unknown what value must be added, because
-         * table title is affected by the table width value
-         */
+        // it is unknown what value must be added, because table title is affected by the table width value
         while ($this->width < $this->diagram->GetStringWidth($this->getTitle())) {
             $this->width += 5;
         }
@@ -150,7 +133,7 @@ class TableStatsPdf extends TableStats
      * @param bool     $withDoc  Whether to include links to documentation
      * @param bool     $setColor Whether to display color
      */
-    public function tableDraw(?int $fontSize, bool $withDoc, bool $setColor = false): void
+    public function tableDraw(int|null $fontSize, bool $withDoc, bool $setColor = false): void
     {
         $this->diagram->setXyScale($this->x, $this->y);
         $this->diagram->setFont($this->ff, 'B', $fontSize);
@@ -173,7 +156,7 @@ class TableStatsPdf extends TableStats
             1,
             'C',
             $setColor,
-            $this->diagram->customLinks['doc'][$this->tableName]['-']
+            $this->diagram->customLinks['doc'][$this->tableName]['-'],
         );
         $this->diagram->setXScale($this->x);
         $this->diagram->setFont($this->ff, '', $fontSize);
@@ -205,7 +188,7 @@ class TableStatsPdf extends TableStats
                 1,
                 'L',
                 $setColor,
-                $this->diagram->customLinks['doc'][$this->tableName][$field]
+                $this->diagram->customLinks['doc'][$this->tableName][$field],
             );
             $this->diagram->setXScale($this->x);
             $this->diagram->setFillColor(255);

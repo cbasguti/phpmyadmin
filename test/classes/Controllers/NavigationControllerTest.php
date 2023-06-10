@@ -5,28 +5,45 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Controllers;
 
 use PhpMyAdmin\Controllers\NavigationController;
+use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
+use PHPUnit\Framework\Attributes\CoversClass;
 
 use function sprintf;
 
-/**
- * @covers \PhpMyAdmin\Controllers\NavigationController
- */
+#[CoversClass(NavigationController::class)]
 class NavigationControllerTest extends AbstractTestCase
 {
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
+    }
+
     public function testIndex(): void
     {
-        global $containerBuilder;
-
         parent::loadContainerBuilder();
+
         parent::loadDbiIntoContainerBuilder();
+
         parent::setLanguage();
 
+        $this->setTheme();
+
         $GLOBALS['server'] = 1;
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['db'] = 'air-balloon_burner_dev2';
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
         $GLOBALS['cfg']['Server']['auth_type'] = 'cookie';
+
         parent::loadResponseIntoContainerBuilder();
 
         // This example path data has nothing to do with the actual test
@@ -40,17 +57,17 @@ class NavigationControllerTest extends AbstractTestCase
         $this->dummyDbi->removeDefaultResults();
         $this->dummyDbi->addResult(
             'SELECT CURRENT_USER();',
-            [['pma_test@localhost']]
+            [['pma_test@localhost']],
         );
         $this->dummyDbi->addResult(
             'SHOW GRANTS',
-            []
+            [],
         );
         $this->dummyDbi->addResult(
             'SELECT (COUNT(DB_first_level) DIV 100) * 100 from ('
             . ' SELECT distinct SUBSTRING_INDEX(SCHEMA_NAME, \'_\', 1) DB_first_level '
             . 'FROM INFORMATION_SCHEMA.SCHEMATA WHERE `SCHEMA_NAME` < \'air-balloon_burner_dev2\' ) t',
-            []
+            [],
         );
         $this->dummyDbi->addResult(
             'SELECT `SCHEMA_NAME` FROM `INFORMATION_SCHEMA`.`SCHEMATA`, '
@@ -60,61 +77,58 @@ class NavigationControllerTest extends AbstractTestCase
                 . 'DB_first_level ASC LIMIT 0, 100) t2 WHERE TRUE AND 1 = LOCATE('
                 . "CONCAT(DB_first_level, '_'), CONCAT(SCHEMA_NAME, '_')) "
                 . 'ORDER BY SCHEMA_NAME ASC',
-            [
-                ['air-balloon_burner_dev2'],
-            ],
-            ['SCHEMA_NAME']
+            [['air-balloon_burner_dev2']],
+            ['SCHEMA_NAME'],
         );
         $sqlCount = 'SELECT COUNT(*) FROM ( SELECT DISTINCT SUBSTRING_INDEX(SCHEMA_NAME, \'_\', 1) '
         . 'DB_first_level FROM INFORMATION_SCHEMA.SCHEMATA WHERE TRUE ) t';
         $this->dummyDbi->addResult(
             $sqlCount,
-            [[179]]
+            [[179]],
         );
         $this->dummyDbi->addResult(
             $sqlCount,
-            [[179]]
+            [[179]],
         );
 
         $this->dummyDbi->addResult(
             'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA`=\'air-balloon_burner_dev2\''
             . ' AND `TABLE_TYPE` IN(\'BASE TABLE\', \'SYSTEM VERSIONED\')',
-            [[0]]
+            [[0]],
         );
 
         $this->dummyDbi->addResult(
             'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA`=\'air-balloon_burner_dev2\''
             . ' AND `TABLE_TYPE` NOT IN(\'BASE TABLE\', \'SYSTEM VERSIONED\')',
-            [[0]]
+            [[0]],
         );
 
-        $this->dummyDbi->addResult(
-            'SELECT @@lower_case_table_names',
-            []
-        );
+        $this->dummyDbi->addResult('SELECT @@lower_case_table_names', [['0']]);
 
         $this->dummyDbi->addResult(
             'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`ROUTINES` WHERE '
-            . '`ROUTINE_SCHEMA` =\'air-balloon_burner_dev2\' AND `ROUTINE_TYPE`=\'FUNCTION\'',
-            [[0]]
+            . '`ROUTINE_SCHEMA` COLLATE utf8_bin=\'air-balloon_burner_dev2\' AND `ROUTINE_TYPE`=\'FUNCTION\'',
+            [[0]],
         );
 
         $this->dummyDbi->addResult(
-            'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`ROUTINES` WHERE `ROUTINE_SCHEMA` =\'air-balloon_burner_dev2\''
+            'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`ROUTINES`'
+            . ' WHERE `ROUTINE_SCHEMA` COLLATE utf8_bin=\'air-balloon_burner_dev2\''
             . 'AND `ROUTINE_TYPE`=\'PROCEDURE\'',
-            [[0]]
+            [[0]],
         );
 
         $this->dummyDbi->addResult(
-            'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`EVENTS` WHERE `EVENT_SCHEMA` =\'air-balloon_burner_dev2\'',
-            [[0]]
+            'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`EVENTS`'
+            . ' WHERE `EVENT_SCHEMA` COLLATE utf8_bin=\'air-balloon_burner_dev2\'',
+            [[0]],
         );
 
         /** @var NavigationController $navigationController */
-        $navigationController = $containerBuilder->get(NavigationController::class);
+        $navigationController = $GLOBALS['containerBuilder']->get(NavigationController::class);
         $_POST['full'] = '1';
         $this->setResponseIsAjax();
-        $navigationController();
+        $navigationController($this->createStub(ServerRequest::class));
         $this->assertResponseWasSuccessfull();
 
         $responseMessage = $this->getResponseJsonResult()['message'];
@@ -160,24 +174,24 @@ class NavigationControllerTest extends AbstractTestCase
             . "\n"
             . '  </ul>' . "\n"
             . '</div>',
-            $responseMessage
+            $responseMessage,
         );
-        $this->assertAllQueriesConsumed();
+        $this->dummyDbi->assertAllQueriesConsumed();
     }
 
     public function testIndexWithPosAndValue(): void
     {
-        global $containerBuilder;
-
         parent::loadContainerBuilder();
+
         parent::loadDbiIntoContainerBuilder();
+
         parent::setLanguage();
 
         $GLOBALS['server'] = 1;
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['db'] = 'air-balloon_burner_dev2';
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
         $GLOBALS['cfg']['Server']['auth_type'] = 'cookie';
+
         parent::loadResponseIntoContainerBuilder();
 
         // root.air-balloon_burner_dev2
@@ -193,17 +207,17 @@ class NavigationControllerTest extends AbstractTestCase
         $this->dummyDbi->removeDefaultResults();
         $this->dummyDbi->addResult(
             'SELECT CURRENT_USER();',
-            [['pma_test@localhost']]
+            [['pma_test@localhost']],
         );
         $this->dummyDbi->addResult(
             'SHOW GRANTS',
-            []
+            [],
         );
         $this->dummyDbi->addResult(
             'SELECT (COUNT(DB_first_level) DIV 100) * 100 from ('
             . ' SELECT distinct SUBSTRING_INDEX(SCHEMA_NAME, \'_\', 1) DB_first_level '
             . 'FROM INFORMATION_SCHEMA.SCHEMATA WHERE `SCHEMA_NAME` < \'air-balloon_burner_dev2\' ) t',
-            []
+            [],
         );
         $this->dummyDbi->addResult(
             'SELECT `SCHEMA_NAME` FROM `INFORMATION_SCHEMA`.`SCHEMATA`, '
@@ -213,72 +227,65 @@ class NavigationControllerTest extends AbstractTestCase
                 . 'DB_first_level ASC LIMIT 0, 100) t2 WHERE TRUE AND 1 = LOCATE('
                 . "CONCAT(DB_first_level, '_'), CONCAT(SCHEMA_NAME, '_')) "
                 . 'ORDER BY SCHEMA_NAME ASC',
-            [
-                ['air-balloon_burner_dev'],
-                ['air-balloon_burner_dev2'],
-                ['air-balloon_dev'],
-            ],
-            ['SCHEMA_NAME']
+            [['air-balloon_burner_dev'], ['air-balloon_burner_dev2'], ['air-balloon_dev']],
+            ['SCHEMA_NAME'],
         );
 
         $sqlCount = 'SELECT COUNT(*) FROM ( SELECT DISTINCT SUBSTRING_INDEX(SCHEMA_NAME, \'_\', 1) '
         . 'DB_first_level FROM INFORMATION_SCHEMA.SCHEMATA WHERE TRUE ) t';
         $this->dummyDbi->addResult(
             $sqlCount,
-            [[179]]
+            [[179]],
         );
         $this->dummyDbi->addResult(
             $sqlCount,
-            [[179]]
+            [[179]],
         );
 
         $this->dummyDbi->addResult(
             'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA`=\'air-balloon_burner_dev2\''
             . ' AND `TABLE_TYPE` IN(\'BASE TABLE\', \'SYSTEM VERSIONED\')',
-            [[0]]
+            [[0]],
         );
 
         $this->dummyDbi->addResult(
             'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`TABLES` WHERE `TABLE_SCHEMA`=\'air-balloon_burner_dev2\''
             . ' AND `TABLE_TYPE` NOT IN(\'BASE TABLE\', \'SYSTEM VERSIONED\')',
-            [[0]]
+            [[0]],
+        );
+
+        $this->dummyDbi->addResult('SELECT @@lower_case_table_names', [['0']]);
+
+        $this->dummyDbi->addResult(
+            'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`ROUTINES` WHERE '
+            . '`ROUTINE_SCHEMA` COLLATE utf8_bin=\'air-balloon_burner_dev2\' AND `ROUTINE_TYPE`=\'FUNCTION\'',
+            [[0]],
         );
 
         $this->dummyDbi->addResult(
-            'SELECT @@lower_case_table_names',
-            []
+            'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`EVENTS` WHERE'
+            . ' `EVENT_SCHEMA` COLLATE utf8_bin=\'air-balloon_burner_dev2\'',
+            [[0]],
         );
 
         $this->dummyDbi->addResult(
             'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`ROUTINES` WHERE '
-            . '`ROUTINE_SCHEMA` =\'air-balloon_burner_dev2\' AND `ROUTINE_TYPE`=\'FUNCTION\'',
-            [[0]]
-        );
-
-        $this->dummyDbi->addResult(
-            'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`EVENTS` WHERE `EVENT_SCHEMA` =\'air-balloon_burner_dev2\'',
-            [[0]]
-        );
-
-        $this->dummyDbi->addResult(
-            'SELECT COUNT(*) FROM `INFORMATION_SCHEMA`.`ROUTINES` WHERE '
-            . '`ROUTINE_SCHEMA` =\'air-balloon_burner_dev2\'AND `ROUTINE_TYPE`=\'PROCEDURE\'',
-            [[0]]
+            . '`ROUTINE_SCHEMA` COLLATE utf8_bin=\'air-balloon_burner_dev2\'AND `ROUTINE_TYPE`=\'PROCEDURE\'',
+            [[0]],
         );
 
         /** @var NavigationController $navigationController */
-        $navigationController = $containerBuilder->get(NavigationController::class);
+        $navigationController = $GLOBALS['containerBuilder']->get(NavigationController::class);
         $_POST['full'] = '1';
         $this->setResponseIsAjax();
-        $navigationController();
+        $navigationController($this->createStub(ServerRequest::class));
         $this->assertResponseWasSuccessfull();
 
         $responseMessage = $this->getResponseJsonResult()['message'];
 
         $this->assertStringContainsString('<div id=\'pma_navigation_tree_content\'>', $responseMessage);
 
-        $dbTemplate =
-            '  <li class="database database">' . "\n"
+        $dbTemplate = '  <li class="database database">' . "\n"
             . '    <div class="block">' . "\n"
             . '      <i></i>' . "\n"
             . '              <b></b>' . "\n"
@@ -307,8 +314,7 @@ class NavigationControllerTest extends AbstractTestCase
             . "\n"
             . '  </li>';
 
-        $dbTemplateLast =
-            '  <li class="database last database">' . "\n"// "last" class added
+        $dbTemplateLast = '  <li class="database last database">' . "\n"// "last" class added
             . '    <div class="block">' . "\n"
             . '      <i></i>' . "\n"
             . '              ' . "\n"// <b> node is removed
@@ -336,8 +342,7 @@ class NavigationControllerTest extends AbstractTestCase
             . "\n"
             . "\n"
             . '  </li>';
-        $dbTemplateExpanded =
-            '  <li class="database database">' . "\n"
+        $dbTemplateExpanded = '  <li class="database database">' . "\n"
             . '    <div class="block">' . "\n"
             . '      <i></i>' . "\n"
             . '              <b></b>' . "\n"
@@ -403,7 +408,7 @@ class NavigationControllerTest extends AbstractTestCase
                         'cm9vdA==.YWlyLWJhbGxvb24=.YnVybmVyX2Rldg==',
                         'air-balloon_burner_dev',
                         'air-balloon_burner_dev',
-                        'air-balloon_burner_dev'
+                        'air-balloon_burner_dev',
                     ) . "\n"
                     . sprintf(
                         $dbTemplateExpanded,
@@ -411,7 +416,7 @@ class NavigationControllerTest extends AbstractTestCase
                         'cm9vdA==.YWlyLWJhbGxvb24=.YnVybmVyX2RldjI=',
                         'air-balloon_burner_dev2',
                         'air-balloon_burner_dev2',
-                        'air-balloon_burner_dev2'
+                        'air-balloon_burner_dev2',
                     ) . "\n"
                     . sprintf(
                         $dbTemplateLast,
@@ -419,7 +424,7 @@ class NavigationControllerTest extends AbstractTestCase
                         'cm9vdA==.YWlyLWJhbGxvb24=.ZGV2',
                         'air-balloon_dev',
                         'air-balloon_dev',
-                        'air-balloon_dev'
+                        'air-balloon_dev',
                     ) . "\n"
             . "\n"
             . '    </ul>' . "\n"
@@ -428,8 +433,8 @@ class NavigationControllerTest extends AbstractTestCase
             . "\n"
             . '  </ul>' . "\n"
             . '</div>' . "\n",
-            $responseMessage
+            $responseMessage,
         );
-        $this->assertAllQueriesConsumed();
+        $this->dummyDbi->assertAllQueriesConsumed();
     }
 }

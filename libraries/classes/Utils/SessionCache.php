@@ -8,12 +8,11 @@ final class SessionCache
 {
     private static function key(): string
     {
-        global $cfg, $server;
+        $GLOBALS['server'] ??= null;
+        $key = 'server_' . $GLOBALS['server'];
 
-        $key = 'server_' . $server;
-
-        if (isset($cfg['Server']['user'])) {
-            return $key . '_' . $cfg['Server']['user'];
+        if (isset($GLOBALS['cfg']['Server']['user'])) {
+            return $key . '_' . $GLOBALS['cfg']['Server']['user'];
         }
 
         return $key;
@@ -24,10 +23,7 @@ final class SessionCache
         return isset($_SESSION['cache'][self::key()][$name]);
     }
 
-    /**
-     * @return mixed|null
-     */
-    public static function get(string $name, ?callable $defaultValueCallback = null)
+    public static function get(string $name, callable|null $defaultValueCallback = null): mixed
     {
         if (self::has($name)) {
             return $_SESSION['cache'][self::key()][$name];
@@ -43,10 +39,7 @@ final class SessionCache
         return null;
     }
 
-    /**
-     * @param mixed $value
-     */
-    public static function set(string $name, $value): void
+    public static function set(string $name, mixed $value): void
     {
         $_SESSION['cache'][self::key()][$name] = $value;
     }

@@ -8,15 +8,12 @@ use Stringable;
 
 use function __;
 use function _ngettext;
-use function array_unshift;
-use function count;
 use function htmlspecialchars;
 use function is_array;
 use function is_float;
 use function is_int;
 use function md5;
 use function sprintf;
-use function strlen;
 
 use const ENT_COMPAT;
 
@@ -63,82 +60,66 @@ class Message implements Stringable
     /**
      * message levels
      *
-     * @var array
+     * @var mixed[]
      */
-    public static $level = [
-        self::SUCCESS => 'success',
-        self::NOTICE => 'notice',
-        self::ERROR => 'error',
-    ];
+    public static array $level = [self::SUCCESS => 'success', self::NOTICE => 'notice', self::ERROR => 'error'];
 
     /**
      * The message number
-     *
-     * @var int
      */
-    protected $number = self::NOTICE;
+    protected int $number = self::NOTICE;
 
     /**
      * The locale string identifier
-     *
-     * @var    string
      */
-    protected $string = '';
+    protected string $string = '';
 
     /**
      * The formatted message
-     *
-     * @var    string
      */
-    protected $message = '';
+    protected string $message = '';
 
     /**
      * Whether the message was already displayed
-     *
-     * @var bool
      */
-    protected $isDisplayed = false;
+    protected bool $isDisplayed = false;
 
     /**
      * Whether to use BB code when displaying.
-     *
-     * @var bool
      */
-    protected $useBBCode = true;
+    protected bool $useBBCode = true;
 
     /**
      * Unique id
-     *
-     * @var string
      */
-    protected $hash = null;
+    protected string|null $hash = null;
 
     /**
      * holds parameters
      *
-     * @var    array
+     * @var    mixed[]
      */
-    protected $params = [];
+    protected array $params = [];
 
     /**
      * holds additional messages
      *
-     * @var    array
+     * @var    (string|Message)[]
      */
-    protected $addedMessages = [];
+    protected array $addedMessages = [];
 
     /**
-     * @param string $string   The message to be displayed
-     * @param int    $number   A numeric representation of the type of message
-     * @param array  $params   An array of parameters to use in the message
-     * @param int    $sanitize A flag to indicate what to sanitize, see
-     *                         constant definitions above
+     * @param string  $string   The message to be displayed
+     * @param int     $number   A numeric representation of the type of message
+     * @param mixed[] $params   An array of parameters to use in the message
+     * @param int     $sanitize A flag to indicate what to sanitize, see
+     *                          constant definitions above
      */
     public function __construct(
         string $string = '',
         int $number = self::NOTICE,
         array $params = [],
-        int $sanitize = self::SANITIZE_NONE
+        int $sanitize = self::SANITIZE_NONE,
     ) {
         $this->setString($string, $sanitize & self::SANITIZE_STRING);
         $this->setNumber($number);
@@ -163,8 +144,6 @@ class Message implements Stringable
      *                       executed successfully')
      *
      * @return Message
-     *
-     * @static
      */
     public static function success(string $string = ''): self
     {
@@ -183,8 +162,6 @@ class Message implements Stringable
      * @param string $string A localized string e.g. __('Error')
      *
      * @return Message
-     *
-     * @static
      */
     public static function error(string $string = ''): self
     {
@@ -206,8 +183,6 @@ class Message implements Stringable
      *                       why click %shere%s.')
      *
      * @return Message
-     *
-     * @static
      */
     public static function notice(string $string): self
     {
@@ -223,8 +198,6 @@ class Message implements Stringable
      * @param int    $type    A numeric representation of the type of message
      *
      * @return Message
-     *
-     * @static
      */
     public static function raw(string $message, int $type = self::NOTICE): self
     {
@@ -243,13 +216,11 @@ class Message implements Stringable
      * @param int $rows Number of rows
      *
      * @return Message
-     *
-     * @static
      */
     public static function getMessageForAffectedRows(int $rows): self
     {
         $message = self::success(
-            _ngettext('%1$d row affected.', '%1$d rows affected.', $rows)
+            _ngettext('%1$d row affected.', '%1$d rows affected.', $rows),
         );
         $message->addParam($rows);
 
@@ -264,13 +235,11 @@ class Message implements Stringable
      * @param int $rows Number of rows
      *
      * @return Message
-     *
-     * @static
      */
     public static function getMessageForDeletedRows(int $rows): self
     {
         $message = self::success(
-            _ngettext('%1$d row deleted.', '%1$d rows deleted.', $rows)
+            _ngettext('%1$d row deleted.', '%1$d rows deleted.', $rows),
         );
         $message->addParam($rows);
 
@@ -285,13 +254,11 @@ class Message implements Stringable
      * @param int $rows Number of rows
      *
      * @return Message
-     *
-     * @static
      */
     public static function getMessageForInsertedRows(int $rows): self
     {
         $message = self::success(
-            _ngettext('%1$d row inserted.', '%1$d rows inserted.', $rows)
+            _ngettext('%1$d row inserted.', '%1$d rows inserted.', $rows),
         );
         $message->addParam($rows);
 
@@ -306,8 +273,6 @@ class Message implements Stringable
      * @param string $message A localized string
      *
      * @return Message
-     *
-     * @static
      */
     public static function rawError(string $message): self
     {
@@ -322,8 +287,6 @@ class Message implements Stringable
      * @param string $message A localized string
      *
      * @return Message
-     *
-     * @static
      */
     public static function rawNotice(string $message): self
     {
@@ -338,8 +301,6 @@ class Message implements Stringable
      * @param string $message A localized string
      *
      * @return Message
-     *
-     * @static
      */
     public static function rawSuccess(string $message): self
     {
@@ -422,7 +383,7 @@ class Message implements Stringable
      * @param string   $string   string to set
      * @param bool|int $sanitize whether to sanitize $string or not
      */
-    public function setString(string $string, $sanitize = true): void
+    public function setString(string $string, bool|int $sanitize = true): void
     {
         if ($sanitize) {
             $string = self::sanitize($string);
@@ -451,7 +412,7 @@ class Message implements Stringable
      *
      * @param mixed $param parameter to add
      */
-    public function addParam($param): void
+    public function addParam(mixed $param): void
     {
         if ($param instanceof self || is_float($param) || is_int($param)) {
             $this->params[] = $param;
@@ -552,10 +513,10 @@ class Message implements Stringable
     /**
      * set all params at once, usually used in conjunction with string
      *
-     * @param array    $params   parameters to set
+     * @param mixed[]  $params   parameters to set
      * @param bool|int $sanitize whether to sanitize params
      */
-    public function setParams(array $params, $sanitize = false): void
+    public function setParams(array $params, bool|int $sanitize = false): void
     {
         if ($sanitize) {
             $params = self::sanitize($params);
@@ -567,7 +528,7 @@ class Message implements Stringable
     /**
      * return all parameters
      *
-     * @return array
+     * @return mixed[]
      */
     public function getParams(): array
     {
@@ -577,7 +538,7 @@ class Message implements Stringable
     /**
      * return all added messages
      *
-     * @return array
+     * @return (string|Message)[]
      */
     public function getAddedMessages(): array
     {
@@ -587,13 +548,14 @@ class Message implements Stringable
     /**
      * Sanitizes $message
      *
-     * @param mixed $message the message(s)
+     * @param T $message the message(s)
      *
-     * @return mixed  the sanitized message(s)
+     * @return string|mixed[]  the sanitized message(s)
+     * @psalm-return (T is array ? array : string)
      *
-     * @static
+     * @template T of array|mixed
      */
-    public static function sanitize($message)
+    public static function sanitize(mixed $message): string|array
     {
         if (is_array($message)) {
             foreach ($message as $key => $val) {
@@ -613,29 +575,10 @@ class Message implements Stringable
      * @param string $message the message
      *
      * @return string  the decoded message
-     *
-     * @static
      */
     public static function decodeBB(string $message): string
     {
         return Sanitize::sanitizeMessage($message, false, true);
-    }
-
-    /**
-     * wrapper for sprintf()
-     *
-     * @param mixed[] ...$params Params
-     *
-     * @return string formatted
-     */
-    public static function format(...$params): string
-    {
-        if (isset($params[1]) && is_array($params[1])) {
-            array_unshift($params[1], $params[0]);
-            $params = $params[1];
-        }
-
-        return sprintf(...$params);
     }
 
     /**
@@ -649,7 +592,7 @@ class Message implements Stringable
             $this->hash = md5(
                 $this->getNumber() .
                 $this->string .
-                $this->message
+                $this->message,
             );
         }
 
@@ -665,29 +608,24 @@ class Message implements Stringable
     {
         $message = $this->message;
 
-        if (strlen($message) === 0) {
-            $string = $this->getString();
-            if (strlen($string) === 0) {
-                $message = '';
-            } else {
-                $message = $string;
-            }
+        if ($message === '') {
+            $message = $this->getString();
         }
 
         if ($this->isDisplayed()) {
             $message = $this->getMessageWithIcon($message);
         }
 
-        if (count($this->getParams()) > 0) {
-            $message = self::format($message, $this->getParams());
+        if ($this->params !== []) {
+            $message = sprintf($message, ...$this->params);
         }
 
         if ($this->useBBCode) {
             $message = self::decodeBB($message);
         }
 
-        foreach ($this->getAddedMessages() as $add_message) {
-            $message .= $add_message;
+        foreach ($this->getAddedMessages() as $addMessage) {
+            $message .= $addMessage;
         }
 
         return $message;
@@ -750,10 +688,7 @@ class Message implements Stringable
 
         $template = new Template();
 
-        return $template->render('message', [
-            'context' => $context,
-            'message' => $this->getMessage(),
-        ]);
+        return $template->render('message', ['context' => $context, 'message' => $this->getMessage()]);
     }
 
     /**
@@ -787,8 +722,6 @@ class Message implements Stringable
             $image = 's_notice';
         }
 
-        $message = self::notice(Html\Generator::getImage($image)) . ' ' . $message;
-
-        return $message;
+        return self::notice(Html\Generator::getImage($image)) . ' ' . $message;
     }
 }

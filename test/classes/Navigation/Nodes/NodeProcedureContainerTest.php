@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Navigation\Nodes;
 
-use PhpMyAdmin\Navigation\NodeFactory;
+use PhpMyAdmin\Navigation\Nodes\NodeProcedureContainer;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Navigation\Nodes\NodeProcedureContainer
- */
+#[CoversClass(NodeProcedureContainer::class)]
 class NodeProcedureContainerTest extends AbstractTestCase
 {
     /**
@@ -18,6 +17,8 @@ class NodeProcedureContainerTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 0;
     }
 
@@ -26,14 +27,13 @@ class NodeProcedureContainerTest extends AbstractTestCase
      */
     public function testConstructor(): void
     {
-        $parent = NodeFactory::getInstance('NodeProcedureContainer');
-        $this->assertIsArray($parent->links);
+        $parent = new NodeProcedureContainer();
         $this->assertEquals(
             [
                 'text' => ['route' => '/database/routines', 'params' => ['type' => 'PROCEDURE', 'db' => null]],
                 'icon' => ['route' => '/database/routines', 'params' => ['type' => 'PROCEDURE', 'db' => null]],
             ],
-            $parent->links
+            $parent->links,
         );
         $this->assertEquals('procedures', $parent->realName);
     }

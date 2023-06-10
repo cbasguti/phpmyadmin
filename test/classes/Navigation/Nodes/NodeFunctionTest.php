@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Navigation\Nodes;
 
-use PhpMyAdmin\Navigation\NodeFactory;
+use PhpMyAdmin\Navigation\Nodes\NodeFunction;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Navigation\Nodes\NodeFunction
- */
+#[CoversClass(NodeFunction::class)]
 class NodeFunctionTest extends AbstractTestCase
 {
     /**
@@ -18,6 +17,8 @@ class NodeFunctionTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 0;
     }
 
@@ -26,8 +27,7 @@ class NodeFunctionTest extends AbstractTestCase
      */
     public function testConstructor(): void
     {
-        $parent = NodeFactory::getInstance('NodeFunction');
-        $this->assertIsArray($parent->links);
+        $parent = new NodeFunction('default');
         $this->assertEquals(
             [
                 'text' => [
@@ -39,7 +39,7 @@ class NodeFunctionTest extends AbstractTestCase
                     'params' => ['item_type' => 'FUNCTION', 'execute_dialog' => 1, 'db' => null, 'item_name' => null],
                 ],
             ],
-            $parent->links
+            $parent->links,
         );
     }
 }

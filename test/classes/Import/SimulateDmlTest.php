@@ -5,26 +5,42 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Import;
 
 use PhpMyAdmin\Core;
+use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Html\Generator;
 use PhpMyAdmin\Import\SimulateDml;
 use PhpMyAdmin\SqlParser\Parser;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Url;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * @covers \PhpMyAdmin\Import\SimulateDml
- */
+#[CoversClass(SimulateDml::class)]
 class SimulateDmlTest extends AbstractTestCase
 {
-    /**
-     * @dataProvider providerForTestGetMatchedRows
-     */
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
+    }
+
+    #[DataProvider('providerForTestGetMatchedRows')]
     public function testGetMatchedRows(string $sqlQuery, string $simulatedQuery): void
     {
         $GLOBALS['db'] = 'PMA';
-        $object = new SimulateDml($this->dbi);
+        $dummyDbi = $this->createDbiDummy();
+        $dummyDbi->addSelectDb('PMA');
+        $dbi = $this->createDatabaseInterface($dummyDbi);
+
+        $object = new SimulateDml($dbi);
         $parser = new Parser($sqlQuery);
-        $this->dummyDbi->addSelectDb('PMA');
 
         $simulatedData = $object->getMatchedRows($sqlQuery, $parser, $parser->statements[0]);
 
@@ -34,7 +50,7 @@ class SimulateDmlTest extends AbstractTestCase
             'sql_signature' => Core::signSqlQuery($simulatedQuery),
         ]);
 
-        $this->assertAllSelectsConsumed();
+        $this->dummyDbi->assertAllSelectsConsumed();
         $this->assertEquals([
             'sql_query' => Generator::formatSql($sqlQuery),
             'matched_rows' => 2,
@@ -42,20 +58,15 @@ class SimulateDmlTest extends AbstractTestCase
         ], $simulatedData);
     }
 
-    /**
-     * @return string[][]
-     */
-    public function providerForTestGetMatchedRows(): array
+    /** @return string[][] */
+    public static function providerForTestGetMatchedRows(): array
     {
         return [
             'update statement' => [
                 'UPDATE `table_1` SET `id` = 20 WHERE `id` > 10',
                 'SELECT `id` FROM `table_1` WHERE `id` > 10 AND (`id` <> 20)',
             ],
-            'delete statement' => [
-                'DELETE FROM `table_1` WHERE `id` > 10',
-                'SELECT * FROM `table_1` WHERE `id` > 10',
-            ],
+            'delete statement' => ['DELETE FROM `table_1` WHERE `id` > 10', 'SELECT * FROM `table_1` WHERE `id` > 10'],
         ];
     }
 }

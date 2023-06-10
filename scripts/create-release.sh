@@ -20,7 +20,7 @@ set -e
 KITS="all-languages english source"
 COMPRESSIONS="zip-7z txz tgz"
 # The version series this script is allowed to handle
-VERSION_SERIES="5.2"
+VERSION_SERIES="6.0"
 
 # Process parameters
 
@@ -169,6 +169,7 @@ cleanup_composer_vendors() {
         vendor/tecnickcom/tcpdf/.github/ \
         vendor/bacon/bacon-qr-code/phpunit.xml.dist \
         vendor/bacon/bacon-qr-code/test/ \
+        vendor/dasprid/enum/.github/ \
         vendor/dasprid/enum/phpunit.xml.dist \
         vendor/dasprid/enum/test/ \
         vendor/williamdes/mariadb-mysql-kbs/phpunit.xml \
@@ -200,6 +201,7 @@ cleanup_composer_vendors() {
         vendor/webmozart/assert/.php_cs \
         vendor/webmozart/assert/psalm.xml \
         vendor/twig/twig/src/Test/ \
+        vendor/psr/http-message/docs/ \
         vendor/psr/log/Psr/Log/Test/ \
         vendor/psr/http-factory/.pullapprove.yml \
         vendor/slim/psr7/MAINTAINERS.md \
@@ -207,28 +209,6 @@ cleanup_composer_vendors() {
         vendor/paragonie/constant_time_encoding/psalm.xml \
         vendor/paragonie/constant_time_encoding/phpunit.xml.dist \
         vendor/paragonie/constant_time_encoding/.travis.yml \
-        vendor/paragonie/random_compat/other/build_phar.php \
-        vendor/paragonie/random_compat/other \
-        vendor/paragonie/random_compat/build-phar.sh \
-        vendor/paragonie/random_compat/dist/random_compat.phar.pubkey \
-        vendor/paragonie/random_compat/dist/random_compat.phar.pubkey.asc \
-        vendor/paragonie/random_compat/dist \
-        vendor/paragonie/random_compat/psalm-autoload.php \
-        vendor/paragonie/random_compat/psalm.xml \
-        vendor/paragonie/sodium_compat/.github/ \
-        vendor/paragonie/sodium_compat/dist/ \
-        vendor/paragonie/sodium_compat/phpunit.xml.dist \
-        vendor/paragonie/sodium_compat/.gitignore \
-        vendor/paragonie/sodium_compat/psalm-above-3.xml \
-        vendor/paragonie/sodium_compat/psalm-below-3.xml \
-        vendor/paragonie/sodium_compat/build-phar.sh \
-        vendor/paragonie/sodium_compat/appveyor.yml \
-        vendor/paragonie/sodium_compat/autoload-phpunit.php \
-        vendor/paragonie/sodium_compat/autoload-pedantic.php \
-        vendor/paragonie/sodium_compat/autoload-fast.php \
-        vendor/paragonie/sodium_compat/composer-php52.json \
-        vendor/paragonie/sodium_compat/src/PHP52/SplFixedArray.php \
-        vendor/paragonie/sodium_compat/src/PHP52 \
         vendor/pragmarx/google2fa/phpstan.neon \
         vendor/pragmarx/google2fa-qrcode/.scrutinizer.yml \
         vendor/pragmarx/google2fa-qrcode/.travis.yml \
@@ -255,6 +235,7 @@ cleanup_composer_vendors() {
         vendor/brick/math/SECURITY.md \
         vendor/brick/math/psalm-baseline.xml \
         vendor/brick/math/psalm.xml \
+        vendor/ramsey/collection/conventional-commits.json \
         vendor/ramsey/collection/SECURITY.md \
         vendor/spomky-labs/base64url/.github/ \
         vendor/spomky-labs/cbor-php/.php_cs.dist \
@@ -515,7 +496,7 @@ if [ -f ./scripts/console ]; then
     ./scripts/console cache:warmup --routing
 fi
 
-PHP_REQ=$(sed -n '/"php"/ s/.*"\^\([0-9]\.[0-9]\.[0-9]\).*/\1/p' composer.json)
+PHP_REQ=$(sed -n '/"php"/ s/.*"\^\([0-9]\.[0-9]\.[0-9]\|[0-9]\.[0-9]\).*/\1/p' composer.json)
 
 if [ -z "$PHP_REQ" ] ; then
     echo "Failed to figure out required PHP version from composer.json"
@@ -636,8 +617,8 @@ for kit in $KITS ; do
         # Template test files
         rm -r templates/test/
         rm phpunit.xml.* build.xml
-        rm .editorconfig .browserslistrc .eslintignore .jshintrc .eslintrc.json .stylelintrc.json psalm.xml psalm-baseline.xml phpstan.neon.dist phpstan-baseline.neon phpcs.xml.dist jest.config.js infection.json.dist
-        # Gettext po files (if they where not removed by ./scripts/lang-cleanup.sh)
+        rm .editorconfig .browserslistrc .eslintignore .jshintrc .eslintrc.json .stylelintrc.json psalm.xml psalm-baseline.xml phpstan.neon.dist phpstan-baseline.neon phpcs.xml.dist jest.config.cjs infection.json.dist
+        # Gettext po files (if they were not removed by ./scripts/lang-cleanup.sh)
         rm -rf po
         # Documentation source code
         mv doc/html htmldoc

@@ -13,7 +13,7 @@
 
   <td name="col_type" class="text-nowrap">
     <select class="column_type" name="field_type[{{ row_num }}]" id="field_{{ row_num }}_1">
-      {{ get_supported_datatypes(true, row['col_type']|upper) }}
+      {{ get_supported_datatypes(row['col_type']|upper) }}
     </select>
   </td>
 
@@ -40,9 +40,9 @@
       </option>
     </select>
     {% if char_editing == 'textarea' %}
-      <textarea name="field_default_value[{{ row_num }}]" cols="15" class="textfield default_value"></textarea>
+      <textarea name="field_default_value[{{ row_num }}]" cols="15" class="textfield default_value">{{ row['col_default'] }}</textarea>
     {% else %}
-      <input type="text" name="field_default_value[{{ row_num }}]" size="12" value="" class="textfield default_value">
+      <input type="text" name="field_default_value[{{ row_num }}]" size="12" value="{{ row['col_default'] }}" class="textfield default_value">
     {% endif %}
   </td>
 

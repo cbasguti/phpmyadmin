@@ -12,10 +12,9 @@ use PhpMyAdmin\Properties\Options\Items\RadioPropertyItem;
 use PhpMyAdmin\Properties\Options\Items\SelectPropertyItem;
 use PhpMyAdmin\Properties\Options\Items\TextPropertyItem;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversNothing;
 
-/**
- * @coversNothing
- */
+#[CoversNothing]
 class PropertyItemsTest extends AbstractTestCase
 {
     public function testBoolText(): void
@@ -24,14 +23,14 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'Text',
-            $object->getText()
+            $object->getText(),
         );
 
         $object->setText('xtext2');
 
         $this->assertEquals(
             'xtext2',
-            $object->getText()
+            $object->getText(),
         );
     }
 
@@ -41,14 +40,14 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'xname',
-            $object->getName()
+            $object->getName(),
         );
 
         $object->setName('xname2');
 
         $this->assertEquals(
             'xname2',
-            $object->getName()
+            $object->getName(),
         );
     }
 
@@ -58,7 +57,7 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'bool',
-            $object->getItemType()
+            $object->getItemType(),
         );
     }
 
@@ -68,7 +67,7 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'doc',
-            $object->getItemType()
+            $object->getItemType(),
         );
     }
 
@@ -78,7 +77,7 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'hidden',
-            $object->getItemType()
+            $object->getItemType(),
         );
     }
 
@@ -88,7 +87,7 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'messageOnly',
-            $object->getItemType()
+            $object->getItemType(),
         );
     }
 
@@ -98,7 +97,7 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'radio',
-            $object->getItemType()
+            $object->getItemType(),
         );
     }
 
@@ -108,7 +107,7 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'select',
-            $object->getItemType()
+            $object->getItemType(),
         );
     }
 
@@ -118,7 +117,7 @@ class PropertyItemsTest extends AbstractTestCase
 
         $this->assertEquals(
             'text',
-            $object->getItemType()
+            $object->getItemType(),
         );
     }
 }

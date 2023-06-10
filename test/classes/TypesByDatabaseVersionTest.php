@@ -6,18 +6,17 @@ namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Types;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\MockObject\Stub;
 
-/**
- * @covers \PhpMyAdmin\Types
- */
+#[CoversClass(Types::class)]
 class TypesByDatabaseVersionTest extends AbstractTestCase
 {
     /** @var DatabaseInterface&Stub */
-    private $dbiStub;
+    private DatabaseInterface $dbiStub;
 
-    /** @var Types */
-    protected $object;
+    protected Types $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -50,15 +49,14 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
      * @param array  $excludes  Expected elements should not contain in result
      * @phpstan-param array<string> $includes
      * @phpstan-param array<string> $excludes
-     *
-     * @dataProvider providerFortTestGetFunctionsClass
      */
+    #[DataProvider('providerFortTestGetFunctionsClass')]
     public function testGetFunctionsClass(
         string $database,
         int $dbVersion,
         string $class,
         array $includes,
-        array $excludes
+        array $excludes,
     ): void {
         $this->createObject($database, $dbVersion);
 
@@ -84,7 +82,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
      *
      * @psalm-return array<string, array{string, int, string, array<string>, array<string>}>
      */
-    public function providerFortTestGetFunctionsClass(): array
+    public static function providerFortTestGetFunctionsClass(): array
     {
         return [
             'mysql 5.1.0 - CHAR - not support INET6 Converter' => [
@@ -275,9 +273,8 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
      * @param array  $excludes  Expected elements should not contain in result
      * @phpstan-param array<string> $includes
      * @phpstan-param array<string> $excludes
-     *
-     * @dataProvider providerFortTestGetFunctions
      */
+    #[DataProvider('providerFortTestGetFunctions')]
     public function testGetFunctions(string $database, int $dbVersion, array $includes, array $excludes): void
     {
         $this->createObject($database, $dbVersion);
@@ -304,7 +301,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
      *
      * @psalm-return array<string, array{string, int, array<string>, array<string>}>
      */
-    public function providerFortTestGetFunctions(): array
+    public static function providerFortTestGetFunctions(): array
     {
         return [
             'mysql 5.1.0 - not support INET6 Converter' => [
@@ -351,9 +348,8 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
      * @param array  $excludes  Expected elements should not contain in result
      * @phpstan-param array<string> $includes
      * @phpstan-param array<string> $excludes
-     *
-     * @dataProvider providerFortTestGetAllFunctions
      */
+    #[DataProvider('providerFortTestGetAllFunctions')]
     public function testGetAllFunctions(string $database, int $dbVersion, array $includes, array $excludes): void
     {
         $this->createObject($database, $dbVersion);
@@ -380,7 +376,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
      *
      * @psalm-return array<string, array{string, int, array<string>, array<string>}>
      */
-    public function providerFortTestGetAllFunctions(): array
+    public static function providerFortTestGetAllFunctions(): array
     {
         return [
             'mysql 5.1.0 - not support INET6_ATON, ST_Geometry' => [
@@ -611,9 +607,8 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
      * @param int    $dbVersion Database Version
      * @param array  $expected  Expected Result
      * @phpstan-param array<int|string, array<int, string>|string> $expected
-     *
-     * @dataProvider providerFortTestGetColumns
      */
+    #[DataProvider('providerFortTestGetColumns')]
     public function testGetColumns(string $database, int $dbVersion, array $expected): void
     {
         $this->createObject($database, $dbVersion);
@@ -626,7 +621,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
      *
      * @psalm-return array<string, array{string, int, array<int|string, array<int, string>|string>}>
      */
-    public function providerFortTestGetColumns(): array
+    public static function providerFortTestGetColumns(): array
     {
         return [
             'mysql 5.1.0 - not support INET6, JSON and UUID' => [
@@ -653,13 +648,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
                         'BOOLEAN',
                         'SERIAL',
                     ],
-                    'Date and time' => [
-                        'DATE',
-                        'DATETIME',
-                        'TIMESTAMP',
-                        'TIME',
-                        'YEAR',
-                    ],
+                    'Date and time' => ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR'],
                     'String' => [
                         'CHAR',
                         'VARCHAR',
@@ -716,13 +705,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
                         'BOOLEAN',
                         'SERIAL',
                     ],
-                    'Date and time' => [
-                        'DATE',
-                        'DATETIME',
-                        'TIMESTAMP',
-                        'TIME',
-                        'YEAR',
-                    ],
+                    'Date and time' => ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR'],
                     'String' => [
                         'CHAR',
                         'VARCHAR',
@@ -780,13 +763,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
                         'BOOLEAN',
                         'SERIAL',
                     ],
-                    'Date and time' => [
-                        'DATE',
-                        'DATETIME',
-                        'TIMESTAMP',
-                        'TIME',
-                        'YEAR',
-                    ],
+                    'Date and time' => ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR'],
                     'String' => [
                         'CHAR',
                         'VARCHAR',
@@ -843,13 +820,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
                         'BOOLEAN',
                         'SERIAL',
                     ],
-                    'Date and time' => [
-                        'DATE',
-                        'DATETIME',
-                        'TIMESTAMP',
-                        'TIME',
-                        'YEAR',
-                    ],
+                    'Date and time' => ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR'],
                     'String' => [
                         'CHAR',
                         'VARCHAR',
@@ -907,13 +878,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
                         'BOOLEAN',
                         'SERIAL',
                     ],
-                    'Date and time' => [
-                        'DATE',
-                        'DATETIME',
-                        'TIMESTAMP',
-                        'TIME',
-                        'YEAR',
-                    ],
+                    'Date and time' => ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR'],
                     'String' => [
                         'CHAR',
                         'VARCHAR',
@@ -974,13 +939,7 @@ class TypesByDatabaseVersionTest extends AbstractTestCase
                         'BOOLEAN',
                         'SERIAL',
                     ],
-                    'Date and time' => [
-                        'DATE',
-                        'DATETIME',
-                        'TIMESTAMP',
-                        'TIME',
-                        'YEAR',
-                    ],
+                    'Date and time' => ['DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR'],
                     'String' => [
                         'CHAR',
                         'VARCHAR',

@@ -4,22 +4,24 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests;
 
+use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\ConfigStorage\RelationParameters;
 use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\SystemColumn;
 use PhpMyAdmin\SystemDatabase;
 use PhpMyAdmin\Tests\Stubs\DummyResult;
+use PHPUnit\Framework\Attributes\CoversClass;
+use ReflectionClass;
 
-/**
- * @covers \PhpMyAdmin\SystemDatabase
- */
+use const MYSQLI_TYPE_STRING;
+
+#[CoversClass(SystemDatabase::class)]
 class SystemDatabaseTest extends AbstractTestCase
 {
     /**
      * SystemDatabase instance
-     *
-     * @var SystemDatabase
      */
-    private $sysDb;
+    private SystemDatabase $sysDb;
 
     /**
      * Setup function for test cases
@@ -27,6 +29,7 @@ class SystemDatabaseTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         /**
          * SET these to avoid undefine d index error
          */
@@ -43,8 +46,11 @@ class SystemDatabaseTest extends AbstractTestCase
             ->method('tryQuery')
             ->will($this->returnValue($resultStub));
 
-        $_SESSION['relation'] = [];
-        $_SESSION['relation'][$GLOBALS['server']] = RelationParameters::fromArray([
+        $dbi->expects($this->any())
+            ->method('quoteString')
+            ->will($this->returnCallback(static fn (string $string): string => "'" . $string . "'"));
+
+        $relationParameters = RelationParameters::fromArray([
             'table_coords' => 'table_name',
             'displaywork' => true,
             'db' => 'information_schema',
@@ -55,7 +61,10 @@ class SystemDatabaseTest extends AbstractTestCase
             'mimework' => true,
             'column_info' => 'column_info',
             'relation' => 'relation',
-        ])->toArray();
+        ]);
+        (new ReflectionClass(Relation::class))->getProperty('cache')->setValue(
+            [$GLOBALS['server'] => $relationParameters],
+        );
 
         $this->sysDb = new SystemDatabase($dbi);
     }
@@ -90,25 +99,15 @@ class SystemDatabaseTest extends AbstractTestCase
                         'mimetype' => 'mimetype',
                         'transformation' => 'transformation',
                         'transformation_options' => 'transformation_options',
-                    ]
-                )
+                    ],
+                ),
             );
 
         $db = 'PMA_db';
-        $column_map = [
-            [
-                'table_name' => 'table_name',
-                'refering_column' => 'column_name',
-            ],
-        ];
-        $view_name = 'view_name';
+        $columnMap = [new SystemColumn('table_name', 'column_name', null)];
+        $viewName = 'view_name';
 
-        $ret = $this->sysDb->getNewTransformationDataSql(
-            $resultStub,
-            $column_map,
-            $view_name,
-            $db
-        );
+        $ret = $this->sysDb->getNewTransformationDataSql($resultStub, $columnMap, $viewName, $db);
 
         $sql = 'INSERT INTO `information_schema`.`column_info` '
             . '(`db_name`, `table_name`, `column_name`, `comment`, `mimetype`, '
@@ -117,5 +116,46 @@ class SystemDatabaseTest extends AbstractTestCase
             . "'transformation', 'transformation_options')";
 
         $this->assertEquals($sql, $ret);
+    }
+
+    public function testGetColumnMapFromSql(): void
+    {
+        $dummyDbi = $this->createDbiDummy();
+        $dbi = $this->createDatabaseInterface($dummyDbi);
+
+        $dummyDbi->addResult(
+            'PMA_sql_query',
+            true,
+            [],
+            [
+                FieldHelper::fromArray([
+                    'type' => MYSQLI_TYPE_STRING,
+                    'table' => 'meta1_table',
+                    'name' => 'meta1_name',
+                ]),
+                FieldHelper::fromArray([
+                    'type' => MYSQLI_TYPE_STRING,
+                    'table' => 'meta2_table',
+                    'name' => 'meta2_name',
+                ]),
+            ],
+        );
+
+        $sqlQuery = 'PMA_sql_query';
+        $viewColumns = ['view_columns1', 'view_columns2'];
+
+        $systemDatabase = new SystemDatabase($dbi);
+        $columnMap = $systemDatabase->getColumnMapFromSql($sqlQuery, $viewColumns);
+
+        $this->assertEquals(
+            new SystemColumn('meta1_table', 'meta1_name', 'view_columns1'),
+            $columnMap[0],
+        );
+        $this->assertEquals(
+            new SystemColumn('meta2_table', 'meta2_name', 'view_columns2'),
+            $columnMap[1],
+        );
+
+        $dummyDbi->assertAllQueriesConsumed();
     }
 }

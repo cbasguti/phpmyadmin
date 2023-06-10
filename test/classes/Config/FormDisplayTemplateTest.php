@@ -7,17 +7,14 @@ namespace PhpMyAdmin\Tests\Config;
 use PhpMyAdmin\Config;
 use PhpMyAdmin\Config\FormDisplayTemplate;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Config\FormDisplayTemplate
- */
+#[CoversClass(FormDisplayTemplate::class)]
 class FormDisplayTemplateTest extends AbstractTestCase
 {
-    /** @var FormDisplayTemplate */
-    protected $formDisplayTemplate;
+    protected FormDisplayTemplate $formDisplayTemplate;
 
-    /** @var Config */
-    protected $config;
+    protected Config $config;
 
     /**
      * Setup tests
@@ -25,8 +22,10 @@ class FormDisplayTemplateTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
-        $this->config = new Config();
+
+        $this->config = $this->createConfig();
         $this->formDisplayTemplate = new FormDisplayTemplate($this->config);
     }
 
@@ -50,7 +49,7 @@ class FormDisplayTemplateTest extends AbstractTestCase
             'val',
             'desc',
             false,
-            $opts
+            $opts,
         );
 
         $this->assertStringContainsString('<tr class="group-header-field group-header-1 disabled-field">', $result);
@@ -61,7 +60,7 @@ class FormDisplayTemplateTest extends AbstractTestCase
 
         $this->assertStringContainsString(
             '<img src="themes/dot.gif" title="Documentation" alt="Documentation" class="icon ic_b_help"',
-            $result
+            $result,
         );
 
         $this->assertStringContainsString('<span class="disabled-notice"', $result);
@@ -70,7 +69,7 @@ class FormDisplayTemplateTest extends AbstractTestCase
 
         $this->assertStringContainsString(
             '<input type="text" name="test/path" id="test/path" value="val" class="w-75 custom field-error">',
-            $result
+            $result,
         );
 
         $this->assertStringContainsString('<a class="restore-default hide" href="#test/path"', $result);
@@ -97,7 +96,7 @@ class FormDisplayTemplateTest extends AbstractTestCase
             'val',
             '',
             false,
-            $opts
+            $opts,
         );
 
         $this->assertStringContainsString('<tr class="group-field group-field-1">', $result);
@@ -108,12 +107,12 @@ class FormDisplayTemplateTest extends AbstractTestCase
 
         $this->assertStringContainsString(
             '<td class="userprefs-allow" title="Allow users to customize this value">',
-            $result
+            $result,
         );
 
         $this->assertStringContainsString(
             '<a class="set-value hide" href="#test/path=setVal" title="Set value: setVal">',
-            $result
+            $result,
         );
 
         // short_text
@@ -127,12 +126,12 @@ class FormDisplayTemplateTest extends AbstractTestCase
             'val',
             '',
             true,
-            $opts
+            $opts,
         );
 
         $this->assertStringContainsString(
             '<input type="text" size="25" name="test/path" id="test/path" value="val" class="">',
-            $result
+            $result,
         );
 
         // number_text
@@ -143,25 +142,18 @@ class FormDisplayTemplateTest extends AbstractTestCase
             'val',
             '',
             true,
-            $opts
+            $opts,
         );
 
         $this->assertStringContainsString(
             '<input type="number" name="test/path" id="test/path" value="val" class="">',
-            $result
+            $result,
         );
 
         // select case 1
         $opts['values_escaped'] = true;
-        $opts['values_disabled'] = [
-            1,
-            2,
-        ];
-        $opts['values'] = [
-            1 => 'test',
-            'key1' => true,
-            'key2' => false,
-        ];
+        $opts['values_disabled'] = [1, 2];
+        $opts['values'] = [1 => 'test', 'key1' => true, 'key2' => false];
         $result = $this->formDisplayTemplate->displayInput('test/path', 'testName', 'select', true, '', true, $opts);
         $this->assertStringContainsString('<select name="test/path" id="test/path" class="w-75">', $result);
 
@@ -173,15 +165,8 @@ class FormDisplayTemplateTest extends AbstractTestCase
 
         // select case 2
         $opts['values_escaped'] = false;
-        $opts['values_disabled'] = [
-            1,
-            2,
-        ];
-        $opts['values'] = [
-            'a<b' => 'c&d',
-            'key1' => true,
-            'key2' => false,
-        ];
+        $opts['values_disabled'] = [1, 2];
+        $opts['values'] = ['a<b' => 'c&d', 'key1' => true, 'key2' => false];
         $result = $this->formDisplayTemplate->displayInput('test/path', 'testName', 'select', false, '', true, $opts);
 
         $this->assertStringContainsString('<select name="test/path" id="test/path" class="w-75">', $result);
@@ -194,18 +179,15 @@ class FormDisplayTemplateTest extends AbstractTestCase
             'test/path',
             'testName',
             'list',
-            [
-                'foo',
-                'bar',
-            ],
+            ['foo', 'bar'],
             '',
             true,
-            $opts
+            $opts,
         );
 
         $this->assertStringContainsString(
             '<textarea cols="35" rows="5" name="test/path" id="test/path" class="">',
-            $result
+            $result,
         );
     }
 
@@ -216,7 +198,7 @@ class FormDisplayTemplateTest extends AbstractTestCase
     {
         $this->assertEquals(
             '',
-            $this->formDisplayTemplate->displayGroupHeader('')
+            $this->formDisplayTemplate->displayGroupHeader(''),
         );
 
         $this->formDisplayTemplate->group = 3;
@@ -252,13 +234,7 @@ class FormDisplayTemplateTest extends AbstractTestCase
      */
     public function testAddJsValidate(): void
     {
-        $validators = [
-            'one' => [
-                '\\\';',
-                '\r\n\\\'<scrIpt></\' + \'script>',
-            ],
-            'two' => [],
-        ];
+        $validators = ['one' => ['\\\';', '\r\n\\\'<scrIpt></\' + \'script>'], 'two' => []];
 
         $js = [];
 
@@ -266,12 +242,12 @@ class FormDisplayTemplateTest extends AbstractTestCase
 
         $this->assertEquals(
             [
-                'registerFieldValidator(\'testID\', \'\\\';\', true, '
-                . '[\'\\\\r\\\\n\\\\\\\''
-                . '<scrIpt></\\\' + \\\'script>\'])',
-                'registerFieldValidator(\'testID\', \'\', true)',
+                'window.Config.registerFieldValidator(\'testID\', \'\\\';\', true, '
+                . '["\\\\r\\\\n\\\\\''
+                . '\u003CscrIpt\u003E\u003C\/\' + \'script\u003E"])',
+                'window.Config.registerFieldValidator(\'testID\', \'\', true)',
             ],
-            $js
+            $js,
         );
     }
 }

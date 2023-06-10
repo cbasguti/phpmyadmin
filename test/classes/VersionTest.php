@@ -5,12 +5,11 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\Version;
+use PHPUnit\Framework\Attributes\CoversClass;
 
 use function defined;
 
-/**
- * @covers \PhpMyAdmin\Version
- */
+#[CoversClass(Version::class)]
 class VersionTest extends AbstractTestCase
 {
     /**
@@ -19,7 +18,7 @@ class VersionTest extends AbstractTestCase
     public function testValidateVersion(): void
     {
         $this->assertIsString(Version::VERSION);
-        $this->assertNotEmpty(Version::VERSION);
+        $this->assertNotEmpty(Version::VERSION); // @phpstan-ignore-line
         $this->assertStringContainsString(Version::SERIES, Version::VERSION, 'x.y must be found in x.y.z');
         $this->assertIsInt(Version::MAJOR);
         $this->assertIsInt(Version::MINOR);

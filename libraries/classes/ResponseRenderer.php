@@ -7,7 +7,10 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin;
 
+use PhpMyAdmin\Exceptions\ExitException;
+
 use function defined;
+use function header;
 use function headers_sent;
 use function http_response_code;
 use function is_array;
@@ -16,6 +19,7 @@ use function json_encode;
 use function json_last_error_msg;
 use function mb_strlen;
 use function register_shutdown_function;
+use function sprintf;
 use function strlen;
 
 use const PHP_SAPI;
@@ -25,64 +29,47 @@ use const PHP_SAPI;
  */
 class ResponseRenderer
 {
-    /**
-     * Response instance
-     *
-     * @static
-     * @var ResponseRenderer
-     */
-    private static $instance;
+    private static ResponseRenderer|null $instance = null;
+
     /**
      * Header instance
-     *
-     * @var Header
      */
-    protected $header;
+    protected Header $header;
     /**
      * HTML data to be used in the response
-     *
-     * @var string
      */
-    private $HTML;
+    private string $HTML = '';
     /**
      * An array of JSON key-value pairs
      * to be sent back for ajax requests
      *
-     * @var array
+     * @var mixed[]
      */
-    private $JSON;
+    private array $JSON = [];
     /**
      * PhpMyAdmin\Footer instance
-     *
-     * @var Footer
      */
-    protected $footer;
+    protected Footer $footer;
     /**
      * Whether we are servicing an ajax request.
-     *
-     * @var bool
      */
-    protected $isAjax = false;
+    protected bool $isAjax = false;
     /**
      * Whether response object is disabled
-     *
-     * @var bool
      */
-    private $isDisabled;
+    protected bool $isDisabled = false;
     /**
      * Whether there were any errors during the processing of the request
      * Only used for ajax responses
-     *
-     * @var bool
      */
-    protected $isSuccess;
+    protected bool $isSuccess = true;
 
     /**
      * @see http://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
      *
      * @var array<int, string>
      */
-    protected static $httpStatusMessages = [
+    protected static array $httpStatusMessages = [
         // Informational
         100 => 'Continue',
         101 => 'Switching Protocols',
@@ -154,24 +141,19 @@ class ResponseRenderer
         511 => 'Network Authentication Required',
     ];
 
-    /**
-     * Creates a new class instance
-     */
+    private OutputBuffering $buffer;
+
     private function __construct()
     {
-        if (! defined('TESTSUITE')) {
-            $buffer = OutputBuffering::getInstance();
-            $buffer->start();
-            register_shutdown_function([$this, 'response']);
-        }
-
+        $this->buffer = new OutputBuffering();
+        $this->buffer->start();
         $this->header = new Header();
-        $this->HTML = '';
-        $this->JSON = [];
         $this->footer = new Footer();
 
-        $this->isSuccess = true;
-        $this->isDisabled = false;
+        if (! defined('TESTSUITE')) {
+            register_shutdown_function($this->response(...));
+        }
+
         $this->setAjax(! empty($_REQUEST['ajax_request']));
     }
 
@@ -189,13 +171,11 @@ class ResponseRenderer
     }
 
     /**
-     * Returns the singleton Response object
-     *
-     * @return ResponseRenderer object
+     * Returns the singleton object
      */
-    public static function getInstance()
+    public static function getInstance(): ResponseRenderer
     {
-        if (empty(self::$instance)) {
+        if (self::$instance === null) {
             self::$instance = new ResponseRenderer();
         }
 
@@ -210,7 +190,7 @@ class ResponseRenderer
      */
     public function setRequestStatus(bool $state): void
     {
-        $this->isSuccess = ($state === true);
+        $this->isSuccess = $state;
     }
 
     /**
@@ -235,22 +215,10 @@ class ResponseRenderer
 
     /**
      * Returns a PhpMyAdmin\Header object
-     *
-     * @return Header
      */
-    public function getHeader()
+    public function getHeader(): Header
     {
         return $this->header;
-    }
-
-    /**
-     * Returns a PhpMyAdmin\Footer object
-     *
-     * @return Footer
-     */
-    public function getFooter()
-    {
-        return $this->footer;
     }
 
     /**
@@ -264,11 +232,11 @@ class ResponseRenderer
     /**
      * Add JSON code to the response
      *
-     * @param string|int|array $json  Either a key (string) or an array or key-value pairs
-     * @param mixed|null       $value Null, if passing an array in $json otherwise
-     *                                it's a string value to the key
+     * @param string|int|mixed[] $json  Either a key (string) or an array or key-value pairs
+     * @param mixed|null         $value Null, if passing an array in $json otherwise
+     *                                  it's a string value to the key
      */
-    public function addJSON($json, $value = null): void
+    public function addJSON(string|int|array $json, mixed $value = null): void
     {
         if (is_array($json)) {
             foreach ($json as $key => $value) {
@@ -290,18 +258,11 @@ class ResponseRenderer
         // if its content was already rendered
         // and, in this case, the header will be
         // in the content part of the request
-        $retval = '';
-        if ($this->header !== null) {
-            $retval .= $this->header->getDisplay();
-        }
-
-        $retval .= $this->HTML;
-
-        if ($this->footer !== null) {
-            $retval .= $this->footer->getDisplay();
-        }
-
-        return $retval;
+        return (new Template())->render('base', [
+            'header' => $this->header?->getDisplay() ?? '',
+            'content' => $this->HTML,
+            'footer' => $this->footer?->getDisplay() ?? '',
+        ]);
     }
 
     /**
@@ -309,8 +270,6 @@ class ResponseRenderer
      */
     private function ajaxResponse(): string
     {
-        global $dbi;
-
         /* Avoid wrapping in case we're disabled */
         if ($this->isDisabled) {
             return $this->getDisplay();
@@ -335,12 +294,12 @@ class ResponseRenderer
                 $this->addJSON('title', '<title>' . $this->getHeader()->getPageTitle() . '</title>');
             }
 
-            if (isset($dbi)) {
+            if (isset($GLOBALS['dbi'])) {
                 $this->addJSON('menu', $this->getHeader()->getMenu()->getDisplay());
             }
 
             $this->addJSON('scripts', $this->getHeader()->getScripts()->getFiles());
-            $this->addJSON('selflink', $this->getFooter()->getSelfUrl());
+            $this->addJSON('selflink', $this->footer->getSelfUrl());
             $this->addJSON('displayMessage', $this->getHeader()->getMessage());
 
             $debug = $this->footer->getDebugMessage();
@@ -373,7 +332,7 @@ class ResponseRenderer
                         'table' => isset($GLOBALS['table']) && is_scalar($GLOBALS['table'])
                             ? (string) $GLOBALS['table'] : '',
                         'sql_query' => $query,
-                    ]
+                    ],
                 );
                 if (! empty($GLOBALS['focus_querywindow'])) {
                     $this->addJSON('_focusQuerywindow', $query);
@@ -389,7 +348,9 @@ class ResponseRenderer
 
         // Set the Content-Type header to JSON so that jQuery parses the
         // response correctly.
-        Core::headerJSON();
+        foreach (Core::headerJSON() as $name => $value) {
+            header(sprintf('%s: %s', $name, $value));
+        }
 
         $result = json_encode($this->JSON);
         if ($result === false) {
@@ -405,11 +366,11 @@ class ResponseRenderer
     /**
      * Sends an HTML response to the browser
      */
-    public function response(): void
+    public function response(): never
     {
-        $buffer = OutputBuffering::getInstance();
-        if (empty($this->HTML)) {
-            $this->HTML = $buffer->getContents();
+        $this->buffer->stop();
+        if ($this->HTML === '') {
+            $this->HTML = $this->buffer->getContents();
         }
 
         if ($this->isAjax()) {
@@ -418,8 +379,8 @@ class ResponseRenderer
             echo $this->getDisplay();
         }
 
-        $buffer->flush();
-        exit;
+        $this->buffer->flush();
+        $this->callExit();
     }
 
     /**
@@ -427,7 +388,7 @@ class ResponseRenderer
      *
      * @param string $text header string
      */
-    public function header($text): void
+    public function header(string $text): void
     {
         // phpcs:ignore SlevomatCodingStandard.Namespaces.ReferenceUsedNamesOnly
         \header($text);
@@ -444,11 +405,11 @@ class ResponseRenderer
     /**
      * Wrapper around PHP's http_response_code() function.
      *
-     * @param int $response_code will set the response code.
+     * @param int $responseCode will set the response code.
      */
-    public function httpResponseCode($response_code): void
+    public function httpResponseCode(int $responseCode): void
     {
-        http_response_code($response_code);
+        http_response_code($responseCode);
     }
 
     /**
@@ -478,13 +439,11 @@ class ResponseRenderer
      *
      * @param string $location will set location to redirect.
      */
-    public function generateHeader303($location): void
+    public function generateHeader303(string $location): never
     {
         $this->setHttpResponseCode(303);
         $this->header('Location: ' . $location);
-        if (! defined('TESTSUITE')) {
-            exit;
-        }
+        $this->callExit();
     }
 
     /**
@@ -503,7 +462,7 @@ class ResponseRenderer
             return true;
         }
 
-        $this->getFooter()->setMinimal();
+        $this->setMinimalFooter();
         $header = $this->getHeader();
         $header->setBodyId('loginform');
         $header->setTitle('phpMyAdmin');
@@ -511,5 +470,33 @@ class ResponseRenderer
         $header->disableWarnings();
 
         return false;
+    }
+
+    public function setMinimalFooter(): void
+    {
+        $this->footer->setMinimal();
+    }
+
+    public function getSelfUrl(): string
+    {
+        return $this->footer->getSelfUrl();
+    }
+
+    public function getFooterScripts(): Scripts
+    {
+        return $this->footer->getScripts();
+    }
+
+    public function callExit(string $message = ''): never
+    {
+        if (defined('TESTSUITE')) {
+            throw new ExitException($message);
+        }
+
+        if ($message !== '') {
+            exit($message);
+        }
+
+        exit;
     }
 }

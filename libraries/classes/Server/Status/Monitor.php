@@ -15,7 +15,6 @@ use PhpMyAdmin\Util;
 use function array_sum;
 use function count;
 use function implode;
-use function is_numeric;
 use function json_decode;
 use function mb_strlen;
 use function mb_strpos;
@@ -31,15 +30,8 @@ use function strlen;
  */
 class Monitor
 {
-    /** @var DatabaseInterface */
-    private $dbi;
-
-    /**
-     * @param DatabaseInterface $dbi DatabaseInterface instance
-     */
-    public function __construct($dbi)
+    public function __construct(private DatabaseInterface $dbi)
     {
-        $this->dbi = $dbi;
     }
 
     /**
@@ -47,7 +39,7 @@ class Monitor
      *
      * @param string $requiredData Required data
      *
-     * @return array JSON
+     * @return mixed[] JSON
      */
     public function getJsonForChartingData(string $requiredData): array
     {
@@ -63,7 +55,7 @@ class Monitor
             $statusVars,
             $sysinfo,
             $cpuload,
-            $memory
+            $memory,
         );
 
         // Retrieve all required status variables
@@ -73,7 +65,7 @@ class Monitor
                 "SHOW GLOBAL STATUS WHERE Variable_name='"
                 . implode("' OR Variable_name='", $statusVars) . "'",
                 0,
-                1
+                1,
             );
         }
 
@@ -84,7 +76,7 @@ class Monitor
                 "SHOW GLOBAL VARIABLES WHERE Variable_name='"
                 . implode("' OR Variable_name='", $serverVars) . "'",
                 0,
-                1
+                1,
             );
         }
 
@@ -99,26 +91,26 @@ class Monitor
     /**
      * Assign the variables for real-time charting data
      *
-     * @param array $ret             Real-time charting data
-     * @param array $statusVarValues Status variable values
-     * @param array $serverVarValues Server variable values
+     * @param mixed[] $ret             Real-time charting data
+     * @param mixed[] $statusVarValues Status variable values
+     * @param mixed[] $serverVarValues Server variable values
      *
-     * @return array
+     * @return mixed[]
      */
     private function getJsonForChartingDataSet(
         array $ret,
         array $statusVarValues,
-        array $serverVarValues
+        array $serverVarValues,
     ): array {
-        foreach ($ret as $chart_id => $chartNodes) {
-            foreach ($chartNodes as $node_id => $nodeDataPoints) {
-                foreach ($nodeDataPoints as $point_id => $dataPoint) {
+        foreach ($ret as $chartId => $chartNodes) {
+            foreach ($chartNodes as $nodeId => $nodeDataPoints) {
+                foreach ($nodeDataPoints as $pointId => $dataPoint) {
                     switch ($dataPoint['type']) {
                         case 'statusvar':
-                            $ret[$chart_id][$node_id][$point_id]['value'] = $statusVarValues[$dataPoint['name']];
+                            $ret[$chartId][$nodeId][$pointId]['value'] = $statusVarValues[$dataPoint['name']];
                             break;
                         case 'servervar':
-                            $ret[$chart_id][$node_id][$point_id]['value'] = $serverVarValues[$dataPoint['name']];
+                            $ret[$chartId][$nodeId][$pointId]['value'] = $serverVarValues[$dataPoint['name']];
                             break;
                     }
                 }
@@ -131,23 +123,23 @@ class Monitor
     /**
      * Get called to get JSON for charting data
      *
-     * @param array $ret        Real-time charting data
-     * @param array $serverVars Server variable values
-     * @param array $statusVars Status variable values
-     * @param mixed $sysinfo    System info
-     * @param mixed $cpuload    CPU load
-     * @param mixed $memory     Memory
+     * @param mixed[] $ret        Real-time charting data
+     * @param mixed[] $serverVars Server variable values
+     * @param mixed[] $statusVars Status variable values
+     * @param mixed   $sysinfo    System info
+     * @param mixed   $cpuload    CPU load
+     * @param mixed   $memory     Memory
      *
-     * @return array
+     * @return mixed[]
      */
     private function getJsonForChartingDataGet(
         array $ret,
         array $serverVars,
         array $statusVars,
-        $sysinfo,
-        $cpuload,
-        $memory
-    ) {
+        mixed $sysinfo,
+        mixed $cpuload,
+        mixed $memory,
+    ): array {
         // For each chart
         foreach ($ret as $chartId => $chartNodes) {
             // For each data series
@@ -162,43 +154,39 @@ class Monitor
                         $ret[$chartId][$nodeId][$pointId],
                         $sysinfo,
                         $cpuload,
-                        $memory
+                        $memory,
                     );
                 } /* foreach */
             } /* foreach */
         }
 
-        return [
-            $serverVars,
-            $statusVars,
-            $ret,
-        ];
+        return [$serverVars, $statusVars, $ret];
     }
 
     /**
      * Switch called to get JSON for charting data
      *
-     * @param string $type       Type
-     * @param string $pName      Name
-     * @param array  $serverVars Server variable values
-     * @param array  $statusVars Status variable values
-     * @param array  $ret        Real-time charting data
-     * @param mixed  $sysinfo    System info
-     * @param mixed  $cpuload    CPU load
-     * @param mixed  $memory     Memory
+     * @param string  $type       Type
+     * @param string  $pName      Name
+     * @param mixed[] $serverVars Server variable values
+     * @param mixed[] $statusVars Status variable values
+     * @param mixed[] $ret        Real-time charting data
+     * @param mixed   $sysinfo    System info
+     * @param mixed   $cpuload    CPU load
+     * @param mixed   $memory     Memory
      *
-     * @return array
+     * @return mixed[]
      */
     private function getJsonForChartingDataSwitch(
-        $type,
-        $pName,
+        string $type,
+        string $pName,
         array $serverVars,
         array $statusVars,
         array $ret,
-        $sysinfo,
-        $cpuload,
-        $memory
-    ) {
+        mixed $sysinfo,
+        mixed $cpuload,
+        mixed $memory,
+    ): array {
         /**
          * We only collect the status and server variables here to read them all in one query,
          * and only afterwards assign them. Also do some allow list filtering on the names
@@ -254,11 +242,7 @@ class Monitor
                 break;
         }
 
-        return [
-            $serverVars,
-            $statusVars,
-            $ret,
-        ];
+        return [$serverVars, $statusVars, $ret];
     }
 
     /**
@@ -267,7 +251,7 @@ class Monitor
      * @param int $start Unix Time: Start time for query
      * @param int $end   Unix Time: End time for query
      */
-    public function getJsonForLogDataTypeSlow(int $start, int $end): ?array
+    public function getJsonForLogDataTypeSlow(int $start, int $end): array|null
     {
         $query = 'SELECT start_time, user_host, ';
         $query .= 'Sec_to_Time(Sum(Time_to_Sec(query_time))) as query_time, ';
@@ -285,18 +269,15 @@ class Monitor
             return null;
         }
 
-        $return = [
-            'rows' => [],
-            'sum' => [],
-        ];
+        $return = ['rows' => [], 'sum' => []];
 
         while ($row = $result->fetchAssoc()) {
             $type = mb_strtolower(
                 mb_substr(
                     $row['sql_text'],
                     0,
-                    (int) mb_strpos($row['sql_text'], ' ')
-                )
+                    (int) mb_strpos($row['sql_text'], ' '),
+                ),
             );
 
             switch ($type) {
@@ -309,8 +290,8 @@ class Monitor
                             (array) Util::formatByteDown(
                                 mb_strlen($row['sql_text']),
                                 2,
-                                2
-                            )
+                                2,
+                            ),
                         );
                         $row['sql_text'] = mb_substr($row['sql_text'], 0, 200)
                             . '... [' . $implodeSqlText . ']';
@@ -347,8 +328,8 @@ class Monitor
         int $start,
         int $end,
         bool $isTypesLimited,
-        bool $removeVariables
-    ): ?array {
+        bool $removeVariables,
+    ): array|null {
         $limitTypes = '';
         if ($isTypesLimited) {
             $limitTypes = 'AND argument REGEXP \'^(INSERT|SELECT|UPDATE|DELETE)\' ';
@@ -368,10 +349,7 @@ class Monitor
             return null;
         }
 
-        $return = [
-            'rows' => [],
-            'sum' => [],
-        ];
+        $return = ['rows' => [], 'sum' => []];
         $insertTables = [];
         $insertTablesFirst = -1;
         $i = 0;
@@ -394,7 +372,7 @@ class Monitor
                         $removeVariables && preg_match(
                             '/^INSERT INTO (`|\'|"|)([^\s\\1]+)\\1/i',
                             $row['argument'],
-                            $matches
+                            $matches,
                         )
                     ) {
                         if (! isset($insertTables[$matches[2]])) {
@@ -409,7 +387,7 @@ class Monitor
                             // there's been other queries
                             $temp = $return['rows'][$insertTablesFirst]['argument'];
                             $return['rows'][$insertTablesFirst]['argument'] .= $this->getSuspensionPoints(
-                                $temp[strlen($temp) - 1]
+                                $temp[strlen($temp) - 1],
                             );
 
                             // Group this value, thus do not add to the result list
@@ -433,8 +411,8 @@ class Monitor
                             (array) Util::formatByteDown(
                                 mb_strlen($row['argument']),
                                 2,
-                                2
-                            )
+                                2,
+                            ),
                         )
                             . ']';
                     }
@@ -477,18 +455,13 @@ class Monitor
      * @param string|null $name  Variable name
      * @param string|null $value Variable value
      *
-     * @return array JSON
+     * @return mixed[] JSON
      */
-    public function getJsonForLoggingVars(?string $name, ?string $value): array
+    public function getJsonForLoggingVars(string|null $name, string|null $value): array
     {
         if (isset($name, $value)) {
-            $escapedValue = $this->dbi->escapeString($value);
-            if (! is_numeric($escapedValue)) {
-                $escapedValue = "'" . $escapedValue . "'";
-            }
-
             if (! preg_match('/[^a-zA-Z0-9_]+/', $name)) {
-                $this->dbi->query('SET GLOBAL ' . $name . ' = ' . $escapedValue);
+                $this->dbi->query('SET GLOBAL ' . $name . ' = ' . $this->dbi->quoteString($value));
             }
         }
 
@@ -496,7 +469,7 @@ class Monitor
             'SHOW GLOBAL VARIABLES WHERE Variable_name IN'
             . ' ("general_log","slow_query_log","long_query_time","log_output")',
             0,
-            1
+            1,
         );
     }
 
@@ -506,13 +479,13 @@ class Monitor
      * @param string $database Database name
      * @param string $query    SQL query
      *
-     * @return array JSON
+     * @return mixed[] JSON
      */
     public function getJsonForQueryAnalyzer(
         string $database,
-        string $query
+        string $query,
     ): array {
-        global $cached_affected_rows;
+        $GLOBALS['cached_affected_rows'] ??= null;
 
         $return = [];
 
@@ -530,7 +503,7 @@ class Monitor
         $sqlQuery = preg_replace('/^(\s*SELECT)/i', '\\1 SQL_NO_CACHE', $query);
 
         $this->dbi->tryQuery($sqlQuery);
-        $return['affectedRows'] = $cached_affected_rows;
+        $return['affectedRows'] = $GLOBALS['cached_affected_rows'];
 
         $result = $this->dbi->tryQuery('EXPLAIN ' . $sqlQuery);
         if ($result !== false) {
@@ -543,7 +516,7 @@ class Monitor
         if ($profiling) {
             $return['profiling'] = [];
             $result = $this->dbi->tryQuery(
-                'SELECT seq,state,duration FROM INFORMATION_SCHEMA.PROFILING WHERE QUERY_ID=1 ORDER BY seq'
+                'SELECT seq,state,duration FROM INFORMATION_SCHEMA.PROFILING WHERE QUERY_ID=1 ORDER BY seq',
             );
             if ($result !== false) {
                 $return['profiling'] = $result->fetchAllAssoc();

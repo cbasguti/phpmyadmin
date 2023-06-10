@@ -8,11 +8,12 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Server\Status;
 
-use PhpMyAdmin\ReplicationInfo;
+use PhpMyAdmin\Config;
+use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Replication\ReplicationInfo;
 use PhpMyAdmin\Url;
 
 use function __;
-use function basename;
 use function mb_strtolower;
 use function str_contains;
 
@@ -27,41 +28,32 @@ use function str_contains;
  */
 class Data
 {
-    /** @var array */
-    public $status;
+    /** @var mixed[] */
+    public array $status;
 
-    /** @var array */
-    public $sections;
+    /** @var mixed[] */
+    public array $sections;
 
-    /** @var array */
-    public $variables;
+    /** @var mixed[] */
+    public array $variables;
 
-    /** @var array */
-    public $usedQueries;
+    /** @var mixed[] */
+    public array $usedQueries;
 
-    /** @var array */
-    public $allocationMap;
+    /** @var mixed[] */
+    public array $allocationMap;
 
-    /** @var array */
-    public $links;
+    /** @var mixed[] */
+    public array $links;
 
-    /** @var bool */
-    public $dbIsLocal;
+    public bool $dbIsLocal;
 
-    /** @var mixed */
-    public $section;
+    /** @var mixed[] */
+    public array $sectionUsed;
 
-    /** @var array */
-    public $sectionUsed;
+    public bool $dataLoaded;
 
-    /** @var string */
-    public $selfUrl;
-
-    /** @var bool */
-    public $dataLoaded;
-
-    /** @var ReplicationInfo */
-    private $replicationInfo;
+    private ReplicationInfo $replicationInfo;
 
     public function getReplicationInfo(): ReplicationInfo
     {
@@ -74,7 +66,7 @@ class Data
      * @param string $a key
      * @param mixed  $b value
      */
-    public function __set($a, $b): void
+    public function __set(string $a, mixed $b): void
     {
         // Discard everything
     }
@@ -82,9 +74,9 @@ class Data
     /**
      * Gets the allocations for constructor
      *
-     * @return array
+     * @return mixed[]
      */
-    private function getAllocations()
+    private function getAllocations(): array
     {
         return [
             // variable name => section
@@ -136,9 +128,9 @@ class Data
     /**
      * Gets the sections for constructor
      *
-     * @return array
+     * @return mixed[]
      */
-    private function getSections()
+    private function getSections(): array
     {
         return [
             // section => section name (description)
@@ -167,53 +159,43 @@ class Data
     /**
      * Gets the links for constructor
      *
-     * @return array
+     * @return mixed[]
      */
-    private function getLinks()
+    private function getLinks(): array
     {
         $primaryInfo = $this->replicationInfo->getPrimaryInfo();
         $replicaInfo = $this->replicationInfo->getReplicaInfo();
+
+        $selfUrl = $this->config->getRootPath();
 
         $links = [];
         // variable or section name => (name => url)
 
         $links['table'][__('Flush (close) all tables')] = [
-            'url' => $this->selfUrl,
+            'url' => $selfUrl,
             'params' => Url::getCommon(['flush' => 'TABLES'], ''),
         ];
         $links['table'][__('Show open tables')] = [
             'url' => Url::getFromRoute('/sql'),
-            'params' => Url::getCommon([
-                'sql_query' => 'SHOW OPEN TABLES',
-                'goto' => $this->selfUrl,
-            ], ''),
+            'params' => Url::getCommon(['sql_query' => 'SHOW OPEN TABLES', 'goto' => $selfUrl], ''),
         ];
 
         if ($primaryInfo['status']) {
             $links['repl'][__('Show replica hosts')] = [
                 'url' => Url::getFromRoute('/sql'),
-                'params' => Url::getCommon([
-                    'sql_query' => 'SHOW SLAVE HOSTS',
-                    'goto' => $this->selfUrl,
-                ], ''),
+                'params' => Url::getCommon(['sql_query' => 'SHOW SLAVE HOSTS', 'goto' => $selfUrl], ''),
             ];
-            $links['repl'][__('Show primary status')] = [
-                'url' => '#replication_primary',
-                'params' => '',
-            ];
+            $links['repl'][__('Show primary status')] = ['url' => '#replication_primary', 'params' => ''];
         }
 
         if ($replicaInfo['status']) {
-            $links['repl'][__('Show replica status')] = [
-                'url' => '#replication_replica',
-                'params' => '',
-            ];
+            $links['repl'][__('Show replica status')] = ['url' => '#replication_replica', 'params' => ''];
         }
 
         $links['repl']['doc'] = 'replication';
 
         $links['qcache'][__('Flush query cache')] = [
-            'url' => $this->selfUrl,
+            'url' => $selfUrl,
             'params' => Url::getCommon(['flush' => 'QUERY CACHE'], ''),
         ];
         $links['qcache']['doc'] = 'query_cache';
@@ -226,10 +208,7 @@ class Data
 
         $links['Slow_queries']['doc'] = 'slow_query_log';
 
-        $links['innodb'][__('Variables')] = [
-            'url' => Url::getFromRoute('/server/engines/InnoDB'),
-            'params' => '',
-        ];
+        $links['innodb'][__('Variables')] = ['url' => Url::getFromRoute('/server/engines/InnoDB'), 'params' => ''];
         $links['innodb'][__('InnoDB Status')] = [
             'url' => Url::getFromRoute('/server/engines/InnoDB/Status'),
             'params' => '',
@@ -242,84 +221,84 @@ class Data
     /**
      * Calculate some values
      *
-     * @param array $server_status    contains results of SHOW GLOBAL STATUS
-     * @param array $server_variables contains results of SHOW GLOBAL VARIABLES
+     * @param mixed[] $serverStatus    contains results of SHOW GLOBAL STATUS
+     * @param mixed[] $serverVariables contains results of SHOW GLOBAL VARIABLES
      *
-     * @return array
+     * @return mixed[]
      */
-    private function calculateValues(array $server_status, array $server_variables)
+    private function calculateValues(array $serverStatus, array $serverVariables): array
     {
         // Key_buffer_fraction
         if (
-            isset($server_status['Key_blocks_unused'], $server_variables['key_cache_block_size'])
-            && isset($server_variables['key_buffer_size'])
-            && $server_variables['key_buffer_size'] != 0
+            isset($serverStatus['Key_blocks_unused'], $serverVariables['key_cache_block_size'])
+            && isset($serverVariables['key_buffer_size'])
+            && $serverVariables['key_buffer_size'] != 0
         ) {
-            $server_status['Key_buffer_fraction_%'] = 100
-                - $server_status['Key_blocks_unused']
-                * $server_variables['key_cache_block_size']
-                / $server_variables['key_buffer_size']
+            $serverStatus['Key_buffer_fraction_%'] = 100
+                - $serverStatus['Key_blocks_unused']
+                * $serverVariables['key_cache_block_size']
+                / $serverVariables['key_buffer_size']
                 * 100;
         } elseif (
-            isset($server_status['Key_blocks_used'], $server_variables['key_buffer_size'])
-            && $server_variables['key_buffer_size'] != 0
+            isset($serverStatus['Key_blocks_used'], $serverVariables['key_buffer_size'])
+            && $serverVariables['key_buffer_size'] != 0
         ) {
-            $server_status['Key_buffer_fraction_%'] = $server_status['Key_blocks_used']
+            $serverStatus['Key_buffer_fraction_%'] = $serverStatus['Key_blocks_used']
                 * 1024
-                / $server_variables['key_buffer_size'];
+                / $serverVariables['key_buffer_size'];
         }
 
         // Ratio for key read/write
         if (
-            isset($server_status['Key_writes'], $server_status['Key_write_requests'])
-            && $server_status['Key_write_requests'] > 0
+            isset($serverStatus['Key_writes'], $serverStatus['Key_write_requests'])
+            && $serverStatus['Key_write_requests'] > 0
         ) {
-            $key_writes = $server_status['Key_writes'];
-            $key_write_requests = $server_status['Key_write_requests'];
-            $server_status['Key_write_ratio_%'] = 100 * $key_writes / $key_write_requests;
+            $keyWrites = $serverStatus['Key_writes'];
+            $keyWriteRequests = $serverStatus['Key_write_requests'];
+            $serverStatus['Key_write_ratio_%'] = 100 * $keyWrites / $keyWriteRequests;
         }
 
         if (
-            isset($server_status['Key_reads'], $server_status['Key_read_requests'])
-            && $server_status['Key_read_requests'] > 0
+            isset($serverStatus['Key_reads'], $serverStatus['Key_read_requests'])
+            && $serverStatus['Key_read_requests'] > 0
         ) {
-            $key_reads = $server_status['Key_reads'];
-            $key_read_requests = $server_status['Key_read_requests'];
-            $server_status['Key_read_ratio_%'] = 100 * $key_reads / $key_read_requests;
+            $keyReads = $serverStatus['Key_reads'];
+            $keyReadRequests = $serverStatus['Key_read_requests'];
+            $serverStatus['Key_read_ratio_%'] = 100 * $keyReads / $keyReadRequests;
         }
 
         // Threads_cache_hitrate
         if (
-            isset($server_status['Threads_created'], $server_status['Connections'])
-            && $server_status['Connections'] > 0
+            isset($serverStatus['Threads_created'], $serverStatus['Connections'])
+            && $serverStatus['Connections'] > 0
         ) {
-            $server_status['Threads_cache_hitrate_%'] = 100 - $server_status['Threads_created']
-                / $server_status['Connections'] * 100;
+            $serverStatus['Threads_cache_hitrate_%'] = 100 - $serverStatus['Threads_created']
+                / $serverStatus['Connections'] * 100;
         }
 
-        return $server_status;
+        return $serverStatus;
     }
 
     /**
      * Sort variables into arrays
      *
-     * @param array $server_status contains results of SHOW GLOBAL STATUS
-     * @param array $allocations   allocations for sections
-     * @param array $allocationMap map variables to their section
-     * @param array $sectionUsed   is a section used?
-     * @param array $used_queries  used queries
+     * @param mixed[] $serverStatus  contains results of SHOW GLOBAL STATUS
+     * @param mixed[] $allocations   allocations for sections
+     * @param mixed[] $allocationMap map variables to their section
+     * @param mixed[] $sectionUsed   is a section used?
+     * @param mixed[] $usedQueries   used queries
      *
-     * @return array ($allocationMap, $sectionUsed, $used_queries)
+     * @return mixed[] ($allocationMap, $sectionUsed, $used_queries)
      */
     private function sortVariables(
-        array $server_status,
+        array $serverStatus,
         array $allocations,
         array $allocationMap,
         array $sectionUsed,
-        array $used_queries
-    ) {
-        foreach ($server_status as $name => $value) {
-            $section_found = false;
+        array $usedQueries,
+    ): array {
+        foreach ($serverStatus as $name => $value) {
+            $sectionFound = false;
             foreach ($allocations as $filter => $section) {
                 if (! str_contains($name, $filter)) {
                     continue;
@@ -327,15 +306,15 @@ class Data
 
                 $allocationMap[$name] = $section;
                 $sectionUsed[$section] = true;
-                $section_found = true;
+                $sectionFound = true;
                 if ($section === 'com' && $value > 0) {
-                    $used_queries[$name] = $value;
+                    $usedQueries[$name] = $value;
                 }
 
                 break; // Only exits inner loop
             }
 
-            if ($section_found) {
+            if ($sectionFound) {
                 continue;
             }
 
@@ -343,41 +322,33 @@ class Data
             $sectionUsed['other'] = true;
         }
 
-        return [
-            $allocationMap,
-            $sectionUsed,
-            $used_queries,
-        ];
+        return [$allocationMap, $sectionUsed, $usedQueries];
     }
 
-    public function __construct()
+    public function __construct(private DatabaseInterface $dbi, private Config $config)
     {
-        global $dbi;
-
-        $this->replicationInfo = new ReplicationInfo($dbi);
+        $this->replicationInfo = new ReplicationInfo($this->dbi);
         $this->replicationInfo->load($_POST['primary_connection'] ?? null);
 
-        $this->selfUrl = basename($GLOBALS['PMA_PHP_SELF']);
-
         // get status from server
-        $server_status_result = $dbi->tryQuery('SHOW GLOBAL STATUS');
-        if ($server_status_result === false) {
-            $server_status = [];
+        $serverStatusResult = $this->dbi->tryQuery('SHOW GLOBAL STATUS');
+        if ($serverStatusResult === false) {
+            $serverStatus = [];
             $this->dataLoaded = false;
         } else {
             $this->dataLoaded = true;
-            $server_status = $server_status_result->fetchAllKeyPair();
-            unset($server_status_result);
+            $serverStatus = $serverStatusResult->fetchAllKeyPair();
+            unset($serverStatusResult);
         }
 
         // for some calculations we require also some server settings
-        $server_variables = $dbi->fetchResult('SHOW GLOBAL VARIABLES', 0, 1);
+        $serverVariables = $this->dbi->fetchResult('SHOW GLOBAL VARIABLES', 0, 1);
 
         // cleanup of some deprecated values
-        $server_status = self::cleanDeprecated($server_status);
+        $serverStatus = self::cleanDeprecated($serverStatus);
 
         // calculate some values
-        $server_status = $this->calculateValues($server_status, $server_variables);
+        $serverStatus = $this->calculateValues($serverStatus, $serverVariables);
 
         // split variables in sections
         $allocations = $this->getAllocations();
@@ -388,7 +359,7 @@ class Data
         $links = $this->getLinks();
 
         // Variable to contain all com_ variables (query statistics)
-        $used_queries = [];
+        $usedQueries = [];
 
         // Variable to map variable names to their respective section name
         // (used for js category filtering)
@@ -401,12 +372,12 @@ class Data
         [
             $allocationMap,
             $sectionUsed,
-            $used_queries,
-        ] = $this->sortVariables($server_status, $allocations, $allocationMap, $sectionUsed, $used_queries);
+            $usedQueries,
+        ] = $this->sortVariables($serverStatus, $allocations, $allocationMap, $sectionUsed, $usedQueries);
 
         // admin commands are not queries (e.g. they include COM_PING,
         // which is excluded from $server_status['Questions'])
-        unset($used_queries['Com_admin_commands']);
+        unset($usedQueries['Com_admin_commands']);
 
         // Set all class properties
         $this->dbIsLocal = false;
@@ -420,10 +391,10 @@ class Data
             $this->dbIsLocal = true;
         }
 
-        $this->status = $server_status;
+        $this->status = $serverStatus;
         $this->sections = $sections;
-        $this->variables = $server_variables;
-        $this->usedQueries = $used_queries;
+        $this->variables = $serverVariables;
+        $this->usedQueries = $usedQueries;
         $this->allocationMap = $allocationMap;
         $this->links = $links;
         $this->sectionUsed = $sectionUsed;
@@ -432,11 +403,11 @@ class Data
     /**
      * cleanup of some deprecated values
      *
-     * @param array $server_status status array to process
+     * @param mixed[] $serverStatus status array to process
      *
-     * @return array
+     * @return mixed[]
      */
-    public static function cleanDeprecated(array $server_status)
+    public static function cleanDeprecated(array $serverStatus): array
     {
         $deprecated = [
             'Com_prepare_sql' => 'Com_stmt_prepare',
@@ -444,13 +415,13 @@ class Data
             'Com_dealloc_sql' => 'Com_stmt_close',
         ];
         foreach ($deprecated as $old => $new) {
-            if (! isset($server_status[$old], $server_status[$new])) {
+            if (! isset($serverStatus[$old], $serverStatus[$new])) {
                 continue;
             }
 
-            unset($server_status[$old]);
+            unset($serverStatus[$old]);
         }
 
-        return $server_status;
+        return $serverStatus;
     }
 }

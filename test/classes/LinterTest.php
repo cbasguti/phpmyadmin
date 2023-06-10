@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\Linter;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 use function str_repeat;
 
-/**
- * @covers \PhpMyAdmin\Linter
- */
+#[CoversClass(Linter::class)]
 class LinterTest extends AbstractTestCase
 {
     /**
@@ -20,6 +20,7 @@ class LinterTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
     }
 
@@ -50,43 +51,30 @@ class LinterTest extends AbstractTestCase
         //      ( d, 4), ( e, 5), (\n, 6),
         //      (\n, 7).
         $this->assertEquals(
-            [
-                1,
-                0,
-            ],
-            Linter::findLineNumberAndColumn([0, 4, 7], 4)
+            [1, 0],
+            Linter::findLineNumberAndColumn([0, 4, 7], 4),
         );
         $this->assertEquals(
-            [
-                1,
-                1,
-            ],
-            Linter::findLineNumberAndColumn([0, 4, 7], 5)
+            [1, 1],
+            Linter::findLineNumberAndColumn([0, 4, 7], 5),
         );
         $this->assertEquals(
-            [
-                1,
-                2,
-            ],
-            Linter::findLineNumberAndColumn([0, 4, 7], 6)
+            [1, 2],
+            Linter::findLineNumberAndColumn([0, 4, 7], 6),
         );
         $this->assertEquals(
-            [
-                2,
-                0,
-            ],
-            Linter::findLineNumberAndColumn([0, 4, 7], 7)
+            [2, 0],
+            Linter::findLineNumberAndColumn([0, 4, 7], 7),
         );
     }
 
     /**
      * Test for Linter::lint
      *
-     * @param array  $expected The expected result.
-     * @param string $query    The query to be analyzed.
-     *
-     * @dataProvider lintProvider
+     * @param mixed[] $expected The expected result.
+     * @param string  $query    The query to be analyzed.
      */
+    #[DataProvider('lintProvider')]
     public function testLint(array $expected, string $query): void
     {
         $this->assertEquals($expected, Linter::lint($query));
@@ -95,19 +83,13 @@ class LinterTest extends AbstractTestCase
     /**
      * Provides data for `testLint`.
      *
-     * @return array
+     * @return array<array{mixed[], string}>
      */
     public static function lintProvider(): array
     {
         return [
-            [
-                [],
-                '',
-            ],
-            [
-                [],
-                'SELECT * FROM tbl',
-            ],
+            [[], ''],
+            [[], 'SELECT * FROM tbl'],
             [
                 [
                     [

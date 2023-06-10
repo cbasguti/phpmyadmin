@@ -6,14 +6,12 @@ namespace PhpMyAdmin\Tests\Properties\Options\Groups;
 
 use PhpMyAdmin\Properties\Options\Groups\OptionsPropertySubgroup;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Properties\Options\Groups\OptionsPropertySubgroup
- */
+#[CoversClass(OptionsPropertySubgroup::class)]
 class OptionsPropertySubgroupTest extends AbstractTestCase
 {
-    /** @var OptionsPropertySubgroup */
-    protected $object;
+    protected OptionsPropertySubgroup $object;
 
     /**
      * Configures global environment.
@@ -21,6 +19,7 @@ class OptionsPropertySubgroupTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->object = new OptionsPropertySubgroup();
     }
 
@@ -30,6 +29,7 @@ class OptionsPropertySubgroupTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
@@ -37,7 +37,7 @@ class OptionsPropertySubgroupTest extends AbstractTestCase
     {
         $this->assertEquals(
             'subgroup',
-            $this->object->getItemType()
+            $this->object->getItemType(),
         );
     }
 
@@ -48,11 +48,12 @@ class OptionsPropertySubgroupTest extends AbstractTestCase
      */
     public function testGetSetSubgroupHeader(): void
     {
-        $this->object->setSubgroupHeader('subGroupHeader123');
+        $propertyItem = new OptionsPropertySubgroup();
+        $this->object->setSubgroupHeader($propertyItem);
 
         $this->assertEquals(
-            'subGroupHeader123',
-            $this->object->getSubgroupHeader()
+            $propertyItem,
+            $this->object->getSubgroupHeader(),
         );
     }
 }

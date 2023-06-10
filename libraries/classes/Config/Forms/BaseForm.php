@@ -21,9 +21,10 @@ abstract class BaseForm extends FormDisplay
      * @param ConfigFile $cf       Config file instance
      * @param int|null   $serverId 0 if new server, validation; >= 1 if editing a server
      */
-    final public function __construct(ConfigFile $cf, $serverId = null)
+    final public function __construct(ConfigFile $cf, int|null $serverId = null)
     {
         parent::__construct($cf);
+
         foreach (static::getForms() as $formName => $form) {
             $this->registerForm($formName, $form, $serverId);
         }
@@ -46,11 +47,11 @@ abstract class BaseForm extends FormDisplay
      * End group blocks with:
      * ':group:end'
      *
-     * @return array
+     * @return mixed[]
      *
      * @todo This should be abstract, but that does not work in PHP 5
      */
-    public static function getForms()
+    public static function getForms(): array
     {
         return [];
     }
@@ -60,7 +61,7 @@ abstract class BaseForm extends FormDisplay
      *
      * @return string[]
      */
-    public static function getFields()
+    public static function getFields(): array
     {
         $names = [];
         foreach (static::getForms() as $form) {
@@ -75,11 +76,9 @@ abstract class BaseForm extends FormDisplay
     /**
      * Returns name of the form
      *
-     * @return string
-     *
      * @todo This should be abstract, but that does not work in PHP 5
      */
-    public static function getName()
+    public static function getName(): string
     {
         return '';
     }

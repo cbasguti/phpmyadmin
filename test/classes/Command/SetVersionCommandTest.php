@@ -6,19 +6,18 @@ namespace PhpMyAdmin\Tests\Command;
 
 use PhpMyAdmin\Command\SetVersionCommand;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RangeException;
 use Symfony\Component\Console\Command\Command;
 
 use function class_exists;
 use function sprintf;
 
-/**
- * @covers \PhpMyAdmin\Command\SetVersionCommand
- */
+#[CoversClass(SetVersionCommand::class)]
 class SetVersionCommandTest extends AbstractTestCase
 {
-    /** @var SetVersionCommand */
-    private $command;
+    private SetVersionCommand $command;
 
     public function setUp(): void
     {
@@ -29,10 +28,8 @@ class SetVersionCommandTest extends AbstractTestCase
         $this->command = new SetVersionCommand();
     }
 
-    /**
-     * @return array[]
-     */
-    public function dataProviderBadVersions(): array
+    /** @return mixed[][] */
+    public static function dataProviderBadVersions(): array
     {
         return [
             [''],
@@ -54,9 +51,7 @@ class SetVersionCommandTest extends AbstractTestCase
         ];
     }
 
-    /**
-     * @dataProvider dataProviderBadVersions
-     */
+    #[DataProvider('dataProviderBadVersions')]
     public function testGetGeneratedClassInvalidVersion(string $version): void
     {
         if (! class_exists(Command::class)) {
@@ -69,14 +64,12 @@ class SetVersionCommandTest extends AbstractTestCase
             $this->command,
             SetVersionCommand::class,
             'getGeneratedClass',
-            [$version]
+            [$version],
         );
     }
 
-    /**
-     * @return array[]
-     */
-    public function dataProviderGoodVersions(): array
+    /** @return mixed[][] */
+    public static function dataProviderGoodVersions(): array
     {
         return [
             [
@@ -170,9 +163,7 @@ class SetVersionCommandTest extends AbstractTestCase
         ];
     }
 
-    /**
-     * @dataProvider dataProviderGoodVersions
-     */
+    #[DataProvider('dataProviderGoodVersions')]
     public function testGetGeneratedClassValidVersion(string $version, string $content): void
     {
         if (! class_exists(Command::class)) {
@@ -183,7 +174,7 @@ class SetVersionCommandTest extends AbstractTestCase
             $this->command,
             SetVersionCommand::class,
             'getGeneratedClass',
-            [$version]
+            [$version],
         );
         $template = <<<'PHP'
 <?php
@@ -208,7 +199,7 @@ final class Version
 PHP;
         $this->assertSame(
             sprintf($template, $content),
-            $output
+            $output,
         );
     }
 }

@@ -6,7 +6,6 @@ namespace PhpMyAdmin;
 
 use function define;
 use function defined;
-use function property_exists;
 
 use const MYSQLI_BLOB_FLAG;
 use const MYSQLI_ENUM_FLAG;
@@ -45,6 +44,11 @@ use const MYSQLI_UNIQUE_KEY_FLAG;
 use const MYSQLI_UNSIGNED_FLAG;
 use const MYSQLI_ZEROFILL_FLAG;
 
+// Issue #16043 - client API mysqlnd seem not to have MYSQLI_TYPE_JSON defined
+if (! defined('MYSQLI_TYPE_JSON')) {
+    define('MYSQLI_TYPE_JSON', 245);
+}
+
 /**
  * Handles fields Metadata
  *
@@ -67,255 +71,205 @@ final class FieldMetadata
     public const TYPE_DATETIME = 12;
     public const TYPE_YEAR = 13;
 
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isMultipleKey;
+    /** @readonly */
+    public bool $isMultipleKey;
 
+    /** @readonly */
+    public bool $isPrimaryKey;
 
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isPrimaryKey;
+    /** @readonly */
+    public bool $isUniqueKey;
 
+    /** @readonly */
+    public bool $isNotNull;
 
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isUniqueKey;
+    /** @readonly */
+    public bool $isUnsigned;
 
+    /** @readonly */
+    public bool $isZerofill;
 
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isNotNull;
+    /** @readonly */
+    public bool $isNumeric;
 
+    /** @readonly */
+    public bool $isBlob;
 
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isUnsigned;
+    /** @readonly */
+    public bool $isBinary;
 
+    /** @readonly */
+    public bool $isEnum;
 
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isZerofill;
+    /** @readonly */
+    public bool $isSet;
 
+    private int|null $mappedType = null;
 
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isNumeric;
+    /** @readonly */
+    public bool $isMappedTypeBit;
 
+    /** @readonly */
+    public bool $isMappedTypeGeometry;
 
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isBlob;
-
-
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isBinary;
-
-
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isEnum;
-
-
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isSet;
-
-    /** @var int|null */
-    private $mappedType;
-
-
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isMappedTypeBit;
-
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isMappedTypeGeometry;
-
-    /**
-     * @var bool
-     * @readonly
-     */
-    public $isMappedTypeTimestamp;
+    /** @readonly */
+    public bool $isMappedTypeTimestamp;
 
     /**
      * The column name
      *
-     * @var string
+     * @psalm-var non-empty-string
      */
-    public $name;
+    public string $name;
 
     /**
      * The original column name if an alias did exist
-     *
-     * @var string
      */
-    public $orgname;
+    public string $orgname;
 
     /**
      * The table name
-     *
-     * @var string
      */
-    public $table;
+    public string $table;
 
     /**
      * The original table name
-     *
-     * @var string
      */
-    public $orgtable;
+    public string $orgtable;
 
     /**
      * The charset number
      *
      * @readonly
-     * @var int
      */
-    public $charsetnr;
+    public int $charsetnr;
 
     /**
      * The number of decimals used (for integer fields)
      *
      * @readonly
-     * @var int
      */
-    public $decimals;
+    public int $decimals;
 
     /**
      * The width of the field, as specified in the table definition.
      *
      * @readonly
-     * @var int
      */
-    public $length;
+    public int $length;
 
     /**
      * A field only used by the Results class
-     *
-     * @var string
      */
-    public $internalMediaType;
+    public string|null $internalMediaType = null;
 
-    public function __construct(int $fieldType, int $fieldFlags, object $field)
+    /**
+     * @psalm-param object{
+     *     name: non-empty-string,
+     *     orgname: string,
+     *     table: string,
+     *     orgtable: string,
+     *     max_length: int,
+     *     length: int,
+     *     charsetnr: int,
+     *     flags: int,
+     *     type: int,
+     *     decimals: int,
+     *     db: string,
+     *     def: string,
+     *     catalog: string,
+     * } $field
+     */
+    public function __construct(object $field)
     {
-        $this->mappedType = $this->getTypeMap()[$fieldType] ?? null;
+        $type = $field->type;
+        $this->mappedType = $this->getMappedInternalType($type);
 
-        $this->isMultipleKey = (bool) ($fieldFlags & MYSQLI_MULTIPLE_KEY_FLAG);
-        $this->isPrimaryKey = (bool) ($fieldFlags & MYSQLI_PRI_KEY_FLAG);
-        $this->isUniqueKey = (bool) ($fieldFlags & MYSQLI_UNIQUE_KEY_FLAG);
-        $this->isNotNull = (bool) ($fieldFlags & MYSQLI_NOT_NULL_FLAG);
-        $this->isUnsigned = (bool) ($fieldFlags & MYSQLI_UNSIGNED_FLAG);
-        $this->isZerofill = (bool) ($fieldFlags & MYSQLI_ZEROFILL_FLAG);
-        $this->isBlob = (bool) ($fieldFlags & MYSQLI_BLOB_FLAG);
-        $this->isEnum = (bool) ($fieldFlags & MYSQLI_ENUM_FLAG);
-        $this->isSet = (bool) ($fieldFlags & MYSQLI_SET_FLAG);
+        $flags = $field->flags;
+        $this->isMultipleKey = (bool) ($flags & MYSQLI_MULTIPLE_KEY_FLAG);
+        $this->isPrimaryKey = (bool) ($flags & MYSQLI_PRI_KEY_FLAG);
+        $this->isUniqueKey = (bool) ($flags & MYSQLI_UNIQUE_KEY_FLAG);
+        $this->isNotNull = (bool) ($flags & MYSQLI_NOT_NULL_FLAG);
+        $this->isUnsigned = (bool) ($flags & MYSQLI_UNSIGNED_FLAG);
+        $this->isZerofill = (bool) ($flags & MYSQLI_ZEROFILL_FLAG);
+        $this->isBlob = (bool) ($flags & MYSQLI_BLOB_FLAG);
+        $this->isEnum = (bool) ($flags & MYSQLI_ENUM_FLAG);
+        $this->isSet = (bool) ($flags & MYSQLI_SET_FLAG);
 
         // as flags 32768 can be NUM_FLAG or GROUP_FLAG
         // reference: https://www.php.net/manual/en/mysqli-result.fetch-fields.php
         // so check field type instead of flags
         $this->isNumeric = $this->isType(self::TYPE_INT) || $this->isType(self::TYPE_REAL);
 
-        /*
-            MYSQLI_PART_KEY_FLAG => 'part_key',
-            MYSQLI_TIMESTAMP_FLAG => 'timestamp',
-            MYSQLI_AUTO_INCREMENT_FLAG => 'auto_increment',
-        */
+        // MYSQLI_PART_KEY_FLAG => 'part_key',
+        // MYSQLI_TIMESTAMP_FLAG => 'timestamp',
+        // MYSQLI_AUTO_INCREMENT_FLAG => 'auto_increment',
 
         $this->isMappedTypeBit = $this->isType(self::TYPE_BIT);
         $this->isMappedTypeGeometry = $this->isType(self::TYPE_GEOMETRY);
         $this->isMappedTypeTimestamp = $this->isType(self::TYPE_TIMESTAMP);
 
-        $this->name = property_exists($field, 'name') ? $field->name : '';
-        $this->orgname = property_exists($field, 'orgname') ? $field->orgname : '';
-        $this->table = property_exists($field, 'table') ? $field->table : '';
-        $this->orgtable = property_exists($field, 'orgtable') ? $field->orgtable : '';
-        $this->charsetnr = property_exists($field, 'charsetnr') ? $field->charsetnr : -1;
-        $this->decimals = property_exists($field, 'decimals') ? $field->decimals : 0;
-        $this->length = property_exists($field, 'length') ? $field->length : 0;
+        $this->name = $field->name;
+        $this->orgname = $field->orgname;
+        $this->table = $field->table;
+        $this->orgtable = $field->orgtable;
+        $this->charsetnr = $field->charsetnr;
+        $this->decimals = $field->decimals;
+        $this->length = $field->length;
 
         // 63 is the number for the MySQL charset "binary"
         $this->isBinary = (
-            $fieldType === MYSQLI_TYPE_TINY_BLOB || $fieldType === MYSQLI_TYPE_BLOB
-            || $fieldType === MYSQLI_TYPE_MEDIUM_BLOB || $fieldType === MYSQLI_TYPE_LONG_BLOB
-            || $fieldType === MYSQLI_TYPE_VAR_STRING || $fieldType === MYSQLI_TYPE_STRING
+            $type === MYSQLI_TYPE_TINY_BLOB ||
+            $type === MYSQLI_TYPE_BLOB ||
+            $type === MYSQLI_TYPE_MEDIUM_BLOB ||
+            $type === MYSQLI_TYPE_LONG_BLOB ||
+            $type === MYSQLI_TYPE_VAR_STRING ||
+            $type === MYSQLI_TYPE_STRING
         ) && $this->charsetnr == 63;
     }
 
     /**
      * @see https://dev.mysql.com/doc/connectors/en/apis-php-mysqli.constants.html
+     *
+     * @psalm-return self::TYPE_*|null
      */
-    private function getTypeMap(): array
+    private function getMappedInternalType(int $type): int|null
     {
-        // Issue #16043 - client API mysqlnd seem not to have MYSQLI_TYPE_JSON defined
-        if (! defined('MYSQLI_TYPE_JSON')) {
-            define('MYSQLI_TYPE_JSON', 245);
-        }
-
-        // Build an associative array for a type look up
-        $typeAr = [];
-        $typeAr[MYSQLI_TYPE_DECIMAL] = self::TYPE_REAL;
-        $typeAr[MYSQLI_TYPE_NEWDECIMAL] = self::TYPE_REAL;
-        $typeAr[MYSQLI_TYPE_BIT] = self::TYPE_INT;
-        $typeAr[MYSQLI_TYPE_TINY] = self::TYPE_INT;
-        $typeAr[MYSQLI_TYPE_SHORT] = self::TYPE_INT;
-        $typeAr[MYSQLI_TYPE_LONG] = self::TYPE_INT;
-        $typeAr[MYSQLI_TYPE_FLOAT] = self::TYPE_REAL;
-        $typeAr[MYSQLI_TYPE_DOUBLE] = self::TYPE_REAL;
-        $typeAr[MYSQLI_TYPE_NULL] = self::TYPE_NULL;
-        $typeAr[MYSQLI_TYPE_TIMESTAMP] = self::TYPE_TIMESTAMP;
-        $typeAr[MYSQLI_TYPE_LONGLONG] = self::TYPE_INT;
-        $typeAr[MYSQLI_TYPE_INT24] = self::TYPE_INT;
-        $typeAr[MYSQLI_TYPE_DATE] = self::TYPE_DATE;
-        $typeAr[MYSQLI_TYPE_TIME] = self::TYPE_TIME;
-        $typeAr[MYSQLI_TYPE_DATETIME] = self::TYPE_DATETIME;
-        $typeAr[MYSQLI_TYPE_YEAR] = self::TYPE_YEAR;
-        $typeAr[MYSQLI_TYPE_NEWDATE] = self::TYPE_DATE;
-        $typeAr[MYSQLI_TYPE_ENUM] = self::TYPE_UNKNOWN;
-        $typeAr[MYSQLI_TYPE_SET] = self::TYPE_UNKNOWN;
-        $typeAr[MYSQLI_TYPE_TINY_BLOB] = self::TYPE_BLOB;
-        $typeAr[MYSQLI_TYPE_MEDIUM_BLOB] = self::TYPE_BLOB;
-        $typeAr[MYSQLI_TYPE_LONG_BLOB] = self::TYPE_BLOB;
-        $typeAr[MYSQLI_TYPE_BLOB] = self::TYPE_BLOB;
-        $typeAr[MYSQLI_TYPE_VAR_STRING] = self::TYPE_STRING;
-        $typeAr[MYSQLI_TYPE_STRING] = self::TYPE_STRING;
-        // MySQL returns MYSQLI_TYPE_STRING for CHAR
-        // and MYSQLI_TYPE_CHAR === MYSQLI_TYPE_TINY
-        // so this would override TINYINT and mark all TINYINT as string
-        // see https://github.com/phpmyadmin/phpmyadmin/issues/8569
-        //$typeAr[MYSQLI_TYPE_CHAR]        = self::TYPE_STRING;
-        $typeAr[MYSQLI_TYPE_GEOMETRY] = self::TYPE_GEOMETRY;
-        $typeAr[MYSQLI_TYPE_BIT] = self::TYPE_BIT;
-        $typeAr[MYSQLI_TYPE_JSON] = self::TYPE_JSON;
-
-        return $typeAr;
+        return match ($type) {
+            MYSQLI_TYPE_DECIMAL => self::TYPE_REAL,
+            MYSQLI_TYPE_NEWDECIMAL => self::TYPE_REAL,
+            MYSQLI_TYPE_TINY => self::TYPE_INT,
+            MYSQLI_TYPE_SHORT => self::TYPE_INT,
+            MYSQLI_TYPE_LONG => self::TYPE_INT,
+            MYSQLI_TYPE_FLOAT => self::TYPE_REAL,
+            MYSQLI_TYPE_DOUBLE => self::TYPE_REAL,
+            MYSQLI_TYPE_NULL => self::TYPE_NULL,
+            MYSQLI_TYPE_TIMESTAMP => self::TYPE_TIMESTAMP,
+            MYSQLI_TYPE_LONGLONG => self::TYPE_INT,
+            MYSQLI_TYPE_INT24 => self::TYPE_INT,
+            MYSQLI_TYPE_DATE => self::TYPE_DATE,
+            MYSQLI_TYPE_TIME => self::TYPE_TIME,
+            MYSQLI_TYPE_DATETIME => self::TYPE_DATETIME,
+            MYSQLI_TYPE_YEAR => self::TYPE_YEAR,
+            MYSQLI_TYPE_NEWDATE => self::TYPE_DATE,
+            MYSQLI_TYPE_ENUM => self::TYPE_UNKNOWN,
+            MYSQLI_TYPE_SET => self::TYPE_UNKNOWN,
+            MYSQLI_TYPE_TINY_BLOB => self::TYPE_BLOB,
+            MYSQLI_TYPE_MEDIUM_BLOB => self::TYPE_BLOB,
+            MYSQLI_TYPE_LONG_BLOB => self::TYPE_BLOB,
+            MYSQLI_TYPE_BLOB => self::TYPE_BLOB,
+            MYSQLI_TYPE_VAR_STRING => self::TYPE_STRING,
+            MYSQLI_TYPE_STRING => self::TYPE_STRING,
+            // MySQL returns MYSQLI_TYPE_STRING for CHAR
+            // and MYSQLI_TYPE_CHAR === MYSQLI_TYPE_TINY
+            // so this would override TINYINT and mark all TINYINT as string
+            // see https://github.com/phpmyadmin/phpmyadmin/issues/8569
+            //$typeAr[MYSQLI_TYPE_CHAR]        = self::TYPE_STRING;
+            MYSQLI_TYPE_GEOMETRY => self::TYPE_GEOMETRY,
+            MYSQLI_TYPE_BIT => self::TYPE_BIT,
+            MYSQLI_TYPE_JSON => self::TYPE_JSON,
+            default => null,
+        };
     }
 
     public function isNotNull(): bool
@@ -401,7 +355,7 @@ final class FieldMetadata
      */
     public function getMappedType(): string
     {
-        $types = [
+        return match ($this->mappedType) {
             self::TYPE_GEOMETRY => 'geometry',
             self::TYPE_BIT => 'bit',
             self::TYPE_JSON => 'json',
@@ -416,9 +370,8 @@ final class FieldMetadata
             self::TYPE_TIMESTAMP => 'timestamp',
             self::TYPE_DATETIME => 'datetime',
             self::TYPE_YEAR => 'year',
-        ];
-
-        return $types[$this->mappedType] ?? '';
+            default => '',
+        };
     }
 
     /**

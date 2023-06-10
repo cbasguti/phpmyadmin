@@ -12,15 +12,15 @@ use PhpMyAdmin\Table\Indexes;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer as ResponseStub;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Table\Indexes
- */
+#[CoversClass(Indexes::class)]
 class IndexesTest extends AbstractTestCase
 {
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setTheme();
 
         /**
@@ -30,34 +30,18 @@ class IndexesTest extends AbstractTestCase
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
         $GLOBALS['text_dir'] = 'ltr';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['cfg']['Server']['pmadb'] = '';
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
-        $GLOBALS['urlParams'] = [
-            'db' => 'db',
-            'server' => 1,
-        ];
+        $GLOBALS['urlParams'] = ['db' => 'db', 'server' => 1];
 
         $dbi = $this->getMockBuilder(DatabaseInterface::class)
             ->disableOriginalConstructor()
             ->getMock();
 
         $indexs = [
-            [
-                'Schema' => 'Schema1',
-                'Key_name' => 'Key_name1',
-                'Column_name' => 'Column_name1',
-            ],
-            [
-                'Schema' => 'Schema2',
-                'Key_name' => 'Key_name2',
-                'Column_name' => 'Column_name2',
-            ],
-            [
-                'Schema' => 'Schema3',
-                'Key_name' => 'Key_name3',
-                'Column_name' => 'Column_name3',
-            ],
+            ['Schema' => 'Schema1', 'Key_name' => 'Key_name1', 'Column_name' => 'Column_name1'],
+            ['Schema' => 'Schema2', 'Key_name' => 'Key_name2', 'Column_name' => 'Column_name2'],
+            ['Schema' => 'Schema3', 'Key_name' => 'Key_name3', 'Column_name' => 'Column_name3'],
         ];
 
         $dbi->expects($this->any())->method('getTableIndexes')
@@ -70,13 +54,13 @@ class IndexesTest extends AbstractTestCase
 
     public function testDoSaveData(): void
     {
-        $sql_query = 'ALTER TABLE `db`.`table` DROP PRIMARY KEY, ADD UNIQUE ;';
+        $sqlQuery = 'ALTER TABLE `db`.`table` DROP PRIMARY KEY, ADD UNIQUE ;';
 
         $table = $this->getMockBuilder(Table::class)
             ->disableOriginalConstructor()
             ->getMock();
         $table->expects($this->any())->method('getSqlQueryForIndexCreateOrEdit')
-            ->will($this->returnValue($sql_query));
+            ->will($this->returnValue($sqlQuery));
 
         $GLOBALS['dbi']->expects($this->any())->method('getTable')
             ->will($this->returnValue($table));
@@ -91,7 +75,7 @@ class IndexesTest extends AbstractTestCase
         $indexes->doSaveData($index, false, $GLOBALS['db'], $GLOBALS['table']);
         $jsonArray = $response->getJSONResult();
         $this->assertArrayHasKey('sql_data', $jsonArray);
-        $this->assertStringContainsString($sql_query, $jsonArray['sql_data']);
+        $this->assertStringContainsString($sqlQuery, $jsonArray['sql_data']);
 
         // Alter success
         $response->clear();

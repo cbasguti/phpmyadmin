@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Selenium\Database;
 
 use PhpMyAdmin\Tests\Selenium\TestBase;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @coversNothing
- */
+#[CoversNothing]
 class OperationsTest extends TestBase
 {
     /**
@@ -17,6 +17,7 @@ class OperationsTest extends TestBase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->login();
     }
 
@@ -32,9 +33,8 @@ class OperationsTest extends TestBase
 
     /**
      * Test for adding database comment
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testDbComment(): void
     {
         $this->skipIfNotPMADB();
@@ -46,86 +46,80 @@ class OperationsTest extends TestBase
         $this->assertNotNull(
             $this->waitForElement(
                 'xpath',
-                "//span[@class='breadcrumb-comment' and contains(., 'comment_foobar')]"
-            )
+                "//span[@class='breadcrumb-comment' and contains(., 'comment_foobar')]",
+            ),
         );
     }
 
     /**
      * Test for renaming database
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testRenameDB(): void
     {
         $this->getToDBOperations();
 
-        $new_db_name = $this->databaseName . 'rename';
+        $newDbName = $this->databaseName . 'rename';
 
         $this->scrollIntoView('createTableMinimalForm');
         $this->byCssSelector('form#rename_db_form input[name=newname]')
-            ->sendKeys($new_db_name);
+            ->sendKeys($newDbName);
 
         $this->byCssSelector("form#rename_db_form input[type='submit']")->click();
 
-        $this->waitForElement('cssSelector', 'button.submitOK')->click();
+        $this->waitForElement('id', 'functionConfirmOkButton')->click();
 
-        $this->waitForElement(
-            'xpath',
-            "//a[contains(text(),'Database: ') and contains(text(),'" . $new_db_name . "')]"
-        );
+        $this->waitForElement('xpath', "//a[contains(text(),'Database: ') and contains(text(),'" . $newDbName . "')]");
 
         $this->dbQuery(
-            'SHOW DATABASES LIKE \'' . $new_db_name . '\'',
-            function () use ($new_db_name): void {
+            'SHOW DATABASES LIKE \'' . $newDbName . '\'',
+            function () use ($newDbName): void {
                 $this->assertTrue($this->isElementPresent('className', 'table_results'));
-                $this->assertEquals($new_db_name, $this->getCellByTableClass('table_results', 1, 1));
-            }
+                $this->assertEquals($newDbName, $this->getCellByTableClass('table_results', 1, 1));
+            },
         );
 
         $this->dbQuery(
             'SHOW DATABASES LIKE \'' . $this->databaseName . '\'',
             function (): void {
                 $this->assertFalse($this->isElementPresent('className', 'table_results'));
-            }
+            },
         );
 
-        $this->databaseName = $new_db_name;
+        $this->databaseName = $newDbName;
     }
 
     /**
      * Test for copying database
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testCopyDb(): void
     {
         $this->getToDBOperations();
 
         $this->reloadPage();// Reload or scrolling will not work ..
-        $new_db_name = $this->databaseName . 'copy';
+        $newDbName = $this->databaseName . 'copy';
         $this->scrollIntoView('renameDbNameInput');
         $this->byCssSelector('form#copy_db_form input[name=newname]')
-            ->sendKeys($new_db_name);
+            ->sendKeys($newDbName);
 
         $this->scrollIntoView('copy_db_form', -150);
         $this->byCssSelector('form#copy_db_form input[name="submit_copy"]')->click();
 
-        $this->waitForElement(
-            'xpath',
-            "//div[@class='alert alert-success' and contains(., 'Database "
-            . $this->databaseName
-            . ' has been copied to ' . $new_db_name . "')]"
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString(
+            'Database ' . $this->databaseName . ' has been copied to ' . $newDbName,
+            $success->getText(),
         );
 
         $this->dbQuery(
-            'SHOW DATABASES LIKE \'' . $new_db_name . '\'',
-            function () use ($new_db_name): void {
+            'SHOW DATABASES LIKE \'' . $newDbName . '\'',
+            function () use ($newDbName): void {
                 $this->assertTrue($this->isElementPresent('className', 'table_results'));
-                $this->assertEquals($new_db_name, $this->getCellByTableClass('table_results', 1, 1));
-            }
+                $this->assertEquals($newDbName, $this->getCellByTableClass('table_results', 1, 1));
+            },
         );
 
-        $this->dbQuery('DROP DATABASE `' . $new_db_name . '`;');
+        $this->dbQuery('DROP DATABASE `' . $newDbName . '`;');
     }
 }

@@ -13,17 +13,11 @@ use function __;
 
 class MainForm extends BaseForm
 {
-    /**
-     * @return array
-     */
-    public static function getForms()
+    /** @return mixed[] */
+    public static function getForms(): array
     {
         return [
-            'Startup' => [
-                'ShowCreateDb',
-                'ShowStats',
-                'ShowServerInfo',
-            ],
+            'Startup' => ['ShowCreateDb', 'ShowStats', 'ShowServerInfo'],
             'DbStructure' => [
                 'ShowDbStructureCharset',
                 'ShowDbStructureComment',
@@ -72,20 +66,12 @@ class MainForm extends BaseForm
                 'ForeignKeyDropdownOrder',
                 'ForeignKeyMaxLimit',
             ],
-            'Tabs' => [
-                'TabsMode',
-                'DefaultTabServer',
-                'DefaultTabDatabase',
-                'DefaultTabTable',
-            ],
+            'Tabs' => ['TabsMode', 'DefaultTabServer', 'DefaultTabDatabase', 'DefaultTabTable'],
             'DisplayRelationalSchema' => ['PDFDefaultPageSize'],
         ];
     }
 
-    /**
-     * @return string
-     */
-    public static function getName()
+    public static function getName(): string
     {
         return __('Main panel');
     }

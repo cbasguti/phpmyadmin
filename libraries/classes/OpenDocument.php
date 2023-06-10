@@ -16,7 +16,7 @@ use const DATE_W3C;
  */
 class OpenDocument
 {
-    public const NS = <<<EOT
+    public const NS = <<<'EOT'
 xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
 xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
 xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
@@ -33,7 +33,7 @@ EOT;
      *
      * @return string  OASIS OpenDocument data
      */
-    public static function create($mime, $data)
+    public static function create(string $mime, string $data): string
     {
         // Use the same date method as other PHP libs
         // https://github.com/PHPOffice/PhpSpreadsheet/blob/1.22.0/src/PhpSpreadsheet/Writer/Ods/Meta.php#L49
@@ -163,16 +163,17 @@ EOT;
             . '</manifest:manifest>',
         ];
 
-        $name = [
-            'mimetype',
-            'content.xml',
-            'meta.xml',
-            'styles.xml',
-            'META-INF/manifest.xml',
-        ];
+        $name = ['mimetype', 'content.xml', 'meta.xml', 'styles.xml', 'META-INF/manifest.xml'];
 
         $zipExtension = new ZipExtension();
 
-        return $zipExtension->createFile($data, $name);
+        $fileContents = $zipExtension->createFile($data, $name);
+
+        if ($fileContents === false) {
+            // TODO: this needs to gracefully fail instead of returning false or empty string
+            return '';
+        }
+
+        return $fileContents;
     }
 }

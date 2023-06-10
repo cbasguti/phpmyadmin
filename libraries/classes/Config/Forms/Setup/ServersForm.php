@@ -13,25 +13,12 @@ use function __;
 
 class ServersForm extends BaseForm
 {
-    /**
-     * @return array
-     */
-    public static function getForms()
+    /** @return mixed[] */
+    public static function getForms(): array
     {
         // phpcs:disable Squiz.Arrays.ArrayDeclaration.KeySpecified,Squiz.Arrays.ArrayDeclaration.NoKeySpecified
         return [
-            'Server' => [
-                'Servers' => [
-                    1 => [
-                        'verbose',
-                        'host',
-                        'port',
-                        'socket',
-                        'ssl',
-                        'compress',
-                    ],
-                ],
-            ],
+            'Server' => ['Servers' => [1 => ['verbose', 'host', 'port', 'socket', 'ssl', 'compress']]],
             'Server_auth' => [
                 'Servers' => [
                     1 => [

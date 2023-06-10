@@ -38,7 +38,7 @@ class LanguageManager
      * @var array<string, string[]>
      * @psalm-var array<string, array{non-empty-string, non-empty-string, string, non-empty-string, string}>
      */
-    private static $languageData = [
+    private static array $languageData = [
         'af' => [
             'af',
             'Afrikaans',
@@ -708,30 +708,24 @@ class LanguageManager
         ],
     ];
 
-    /** @var array */
-    private $availableLocales;
+    /** @var mixed[] */
+    private array $availableLocales = [];
 
-    /** @var array */
-    private $availableLanguages = [];
+    /** @var Language[] */
+    private array $availableLanguages = [];
 
-    /** @var bool */
-    private $langFailedConfig = false;
+    private bool $langFailedConfig = false;
 
-    /** @var bool */
-    private $langFailedCookie = false;
+    private bool $langFailedCookie = false;
 
-    /** @var bool */
-    private $langFailedRequest = false;
+    private bool $langFailedRequest = false;
 
-    /** @var LanguageManager */
-    private static $instance;
+    private static LanguageManager|null $instance = null;
 
     /**
      * Returns LanguageManager singleton
-     *
-     * @return LanguageManager
      */
-    public static function getInstance()
+    public static function getInstance(): LanguageManager
     {
         if (self::$instance === null) {
             self::$instance = new LanguageManager();
@@ -743,9 +737,9 @@ class LanguageManager
     /**
      * Returns list of available locales
      *
-     * @return array
+     * @return mixed[]
      */
-    public function listLocaleDir()
+    public function listLocaleDir(): array
     {
         $result = ['en'];
 
@@ -782,9 +776,9 @@ class LanguageManager
     /**
      * Returns (cached) list of all available locales
      *
-     * @return array of strings
+     * @return mixed[] of strings
      */
-    public function availableLocales()
+    public function availableLocales(): array
     {
         if (! $this->availableLocales) {
             if (! isset($GLOBALS['config']) || empty($GLOBALS['config']->get('FilterLanguages'))) {
@@ -792,7 +786,7 @@ class LanguageManager
             } else {
                 $this->availableLocales = preg_grep(
                     '@' . $GLOBALS['config']->get('FilterLanguages') . '@',
-                    $this->listLocaleDir()
+                    $this->listLocaleDir(),
                 );
             }
         }
@@ -813,7 +807,7 @@ class LanguageManager
      *
      * @return Language[] array of Language objects
      */
-    public function availableLanguages()
+    public function availableLanguages(): array
     {
         if (! $this->availableLanguages) {
             $this->availableLanguages = [];
@@ -829,7 +823,7 @@ class LanguageManager
                         ucfirst($lang),
                         ucfirst($lang),
                         $lang,
-                        ''
+                        '',
                     );
                 }
             }
@@ -844,12 +838,10 @@ class LanguageManager
      *
      * @return Language[] array of Language objects
      */
-    public function sortedLanguages()
+    public function sortedLanguages(): array
     {
         $this->availableLanguages();
-        uasort($this->availableLanguages, static function (Language $a, Language $b) {
-            return $a->cmp($b);
-        });
+        uasort($this->availableLanguages, static fn (Language $a, Language $b) => $a->cmp($b));
 
         return $this->availableLanguages;
     }
@@ -861,7 +853,7 @@ class LanguageManager
      *
      * @return Language|false Language object or false on failure
      */
-    public function getLanguage($code)
+    public function getLanguage(string $code): Language|false
     {
         $code = strtolower($code);
         $langs = $this->availableLanguages();
@@ -877,7 +869,7 @@ class LanguageManager
      *
      * @return Language Language object
      */
-    public function getCurrentLanguage()
+    public function getCurrentLanguage(): Language
     {
         return $this->availableLanguages[strtolower($GLOBALS['lang'])];
     }
@@ -885,10 +877,8 @@ class LanguageManager
     /**
      * Activates language based on configuration, user preferences or
      * browser
-     *
-     * @return Language
      */
-    public function selectLanguage()
+    public function selectLanguage(): Language
     {
         // check forced language
         if (! empty($GLOBALS['config']->get('Lang'))) {
@@ -934,9 +924,9 @@ class LanguageManager
         $langs = $this->availableLanguages();
 
         // try to find out user's language by checking its HTTP_ACCEPT_LANGUAGE variable;
-        $accepted_languages = Core::getenv('HTTP_ACCEPT_LANGUAGE');
-        if ($accepted_languages) {
-            foreach (explode(',', $accepted_languages) as $header) {
+        $acceptedLanguages = Core::getenv('HTTP_ACCEPT_LANGUAGE');
+        if ($acceptedLanguages) {
+            foreach (explode(',', $acceptedLanguages) as $header) {
                 foreach ($langs as $language) {
                     if ($language->matchesAcceptLanguage($header)) {
                         return $language;
@@ -946,10 +936,10 @@ class LanguageManager
         }
 
         // try to find out user's language by checking its HTTP_USER_AGENT variable
-        $user_agent = Core::getenv('HTTP_USER_AGENT');
-        if (! empty($user_agent)) {
+        $userAgent = Core::getenv('HTTP_USER_AGENT');
+        if ($userAgent !== '') {
             foreach ($langs as $language) {
-                if ($language->matchesUserAgent($user_agent)) {
+                if ($language->matchesUserAgent($userAgent)) {
                     return $language;
                 }
             }
@@ -977,7 +967,7 @@ class LanguageManager
 
         trigger_error(
             __('Ignoring unsupported language code.'),
-            E_USER_ERROR
+            E_USER_ERROR,
         );
     }
 }

@@ -22,17 +22,18 @@ class NodeTrigger extends Node
      * @param bool   $isGroup Whether this object has been created
      *                        while grouping nodes
      */
-    public function __construct($name, $type = Node::OBJECT, $isGroup = false)
+    public function __construct(string $name, int $type = Node::OBJECT, bool $isGroup = false)
     {
         parent::__construct($name, $type, $isGroup);
+
         $this->icon = ['image' => 'b_triggers', 'title' => __('Trigger')];
         $this->links = [
             'text' => [
-                'route' => '/database/triggers',
+                'route' => '/triggers',
                 'params' => ['edit_item' => 1, 'db' => null, 'item_name' => null],
             ],
             'icon' => [
-                'route' => '/database/triggers',
+                'route' => '/triggers',
                 'params' => ['export_item' => 1, 'db' => null, 'item_name' => null],
             ],
         ];

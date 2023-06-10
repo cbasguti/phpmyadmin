@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Setup;
 
 use PhpMyAdmin\Config\FormDisplay;
+use PhpMyAdmin\Exceptions\ExitException;
 use PhpMyAdmin\Setup\FormProcessing;
 use PhpMyAdmin\Tests\AbstractNetworkTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
 use function ob_get_clean;
 use function ob_start;
 
-/**
- * @covers \PhpMyAdmin\Setup\FormProcessing
- */
+#[CoversClass(FormProcessing::class)]
 class FormProcessingTest extends AbstractNetworkTestCase
 {
     /**
@@ -22,11 +22,12 @@ class FormProcessingTest extends AbstractNetworkTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
+
         $GLOBALS['server'] = 1;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['cfg']['ServerDefault'] = 1;
     }
 
@@ -36,11 +37,7 @@ class FormProcessingTest extends AbstractNetworkTestCase
     public function testProcessFormSet(): void
     {
         $this->mockResponse(
-            [
-                ['status: 303 See Other'],
-                ['Location: index.php?lang=en'],
-                303,
-            ]
+            [['status: 303 See Other'], ['Location: ../setup/index.php?route=%2Fsetup&lang=en'], 303],
         );
 
         // case 1
@@ -85,7 +82,7 @@ class FormProcessingTest extends AbstractNetworkTestCase
 
         $this->assertStringContainsString('mode=revert', $result);
 
-        $this->assertStringContainsString('<a class="btn" href="index.php?', $result);
+        $this->assertStringContainsString('<a class="btn" href="../setup/index.php?route=/setup&', $result);
 
         $this->assertStringContainsString('mode=edit', $result);
 
@@ -105,6 +102,7 @@ class FormProcessingTest extends AbstractNetworkTestCase
             ->with()
             ->will($this->returnValue(false));
 
+        $this->expectException(ExitException::class);
         FormProcessing::process($formDisplay);
     }
 }

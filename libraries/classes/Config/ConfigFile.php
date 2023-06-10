@@ -9,9 +9,12 @@ namespace PhpMyAdmin\Config;
 
 use PhpMyAdmin\Core;
 
+use function __;
+use function _pgettext;
 use function array_diff;
 use function array_flip;
 use function array_keys;
+use function array_merge;
 use function count;
 use function is_array;
 use function preg_replace;
@@ -27,81 +30,68 @@ class ConfigFile
      *
      * @see Settings
      *
-     * @var array
+     * @var mixed[]
      */
-    private $defaultCfg;
+    private array $defaultCfg;
 
     /**
      * Stores allowed values for non-standard fields
      *
-     * @var array
+     * @var array<string, string|mixed[]>
      */
-    private $cfgDb;
+    private array $cfgDb;
 
     /**
      * Stores original PMA config, not modified by user preferences
      *
-     * @var array|null
+     * @var mixed[]|null
      */
-    private $baseCfg;
+    private array|null $baseCfg = null;
 
     /**
      * Whether we are currently working in PMA Setup context
-     *
-     * @var bool
      */
-    private $isInSetup;
+    private bool $isInSetup;
 
     /**
      * Keys which will be always written to config file
      *
-     * @var array
+     * @var mixed[]
      */
-    private $persistKeys = [];
+    private array $persistKeys = [];
 
     /**
      * Changes keys while updating config in {@link updateWithGlobalConfig()}
      * or reading by {@link getConfig()} or {@link getConfigArray()}
      *
-     * @var array
+     * @var mixed[]
      */
-    private $cfgUpdateReadMapping = [];
+    private array $cfgUpdateReadMapping = [];
 
     /**
      * Key filter for {@link set()}
-     *
-     * @var array|null
      */
-    private $setFilter;
+    private array|null $setFilter = null;
 
     /**
      * Instance id (key in $_SESSION array, separate for each server -
      * ConfigFile{server id})
-     *
-     * @var string
      */
-    private $id;
+    private string $id;
 
     /**
-     * @param array|null $baseConfig base configuration read from
+     * @param mixed[]|null $baseConfig base configuration read from
      *                               {@link PhpMyAdmin\Config::$base_config},
      *                               use only when not in PMA Setup
      */
-    public function __construct($baseConfig = null)
+    public function __construct(array|null $baseConfig = null)
     {
         // load default config values
         $settings = new Settings([]);
-        $this->defaultCfg = $settings->toArray();
+        $this->defaultCfg = $settings->asArray();
 
         // load additional config information
-        $this->cfgDb = include ROOT_PATH . 'libraries/config.values.php';
-
-        // apply default values overrides
-        if (count($this->cfgDb['_overrides'])) {
-            foreach ($this->cfgDb['_overrides'] as $path => $value) {
-                Core::arrayWrite($path, $this->defaultCfg, $value);
-            }
-        }
+        $this->cfgDb = $this->getAllowedValues();
 
         $this->baseCfg = $baseConfig;
         $this->isInSetup = $baseConfig === null;
@@ -117,7 +107,7 @@ class ConfigFile
      * Sets names of config options which will be placed in config file even if
      * they are set to their default values (use only full paths)
      *
-     * @param array $keys the names of the config options
+     * @param mixed[] $keys the names of the config options
      */
     public function setPersistKeys(array $keys): void
     {
@@ -129,9 +119,9 @@ class ConfigFile
     /**
      * Returns flipped array set by {@link setPersistKeys()}
      *
-     * @return array
+     * @return mixed[]
      */
-    public function getPersistKeysMap()
+    public function getPersistKeysMap(): array
     {
         return $this->persistKeys;
     }
@@ -140,9 +130,9 @@ class ConfigFile
      * By default ConfigFile allows setting of all configuration keys, use
      * this method to set up a filter on {@link set()} method
      *
-     * @param array|null $keys array of allowed keys or null to remove filter
+     * @param mixed[]|null $keys array of allowed keys or null to remove filter
      */
-    public function setAllowedKeys($keys): void
+    public function setAllowedKeys(array|null $keys): void
     {
         if ($keys === null) {
             $this->setFilter = null;
@@ -160,7 +150,7 @@ class ConfigFile
      * {@link updateWithGlobalConfig()} or reading
      * by {@link getConfig()} or {@link getConfigArray()}
      *
-     * @param array $mapping Contains the mapping of "Server/config options"
+     * @param mixed[] $mapping Contains the mapping of "Server/config options"
      *                       to "Server/1/config options"
      */
     public function setCfgUpdateReadMapping(array $mapping): void
@@ -179,7 +169,7 @@ class ConfigFile
     /**
      * Sets configuration data (overrides old data)
      *
-     * @param array $cfg Configuration options
+     * @param mixed[] $cfg Configuration options
      */
     public function setConfigData(array $cfg): void
     {
@@ -188,12 +178,8 @@ class ConfigFile
 
     /**
      * Sets config value
-     *
-     * @param string $path          Path
-     * @param mixed  $value         Value
-     * @param string $canonicalPath Canonical path
      */
-    public function set($path, $value, $canonicalPath = null): void
+    public function set(string $path, mixed $value, string|null $canonicalPath = null): void
     {
         if ($canonicalPath === null) {
             $canonicalPath = $this->getCanonicalPath($path);
@@ -240,8 +226,10 @@ class ConfigFile
      * Flattens multidimensional array, changes indices to paths
      * (eg. 'key/subkey').
      *
-     * @param array  $array  Multidimensional array
-     * @param string $prefix Prefix
+     * @param mixed[] $array  Multidimensional array
+     * @param string  $prefix Prefix
+     *
+     * @return mixed[]
      */
     private function getFlatArray(array $array, string $prefix = ''): array
     {
@@ -259,6 +247,8 @@ class ConfigFile
 
     /**
      * Returns default config in a flattened array
+     *
+     * @return mixed[]
      */
     public function getFlatDefaultConfig(): array
     {
@@ -269,7 +259,7 @@ class ConfigFile
      * Updates config with values read from given array
      * (config will contain differences to defaults from {@see \PhpMyAdmin\Config\Settings}).
      *
-     * @param array $cfg Configuration
+     * @param mixed[] $cfg Configuration
      */
     public function updateWithGlobalConfig(array $cfg): void
     {
@@ -293,25 +283,20 @@ class ConfigFile
      *
      * @param string $path    Path of config file
      * @param mixed  $default Default values
-     *
-     * @return mixed
      */
-    public function get($path, $default = null)
+    public function get(string $path, mixed $default = null): mixed
     {
         return Core::arrayRead($path, $_SESSION[$this->id], $default);
     }
 
     /**
      * Returns default config value or $default it it's not set ie. it doesn't
-     * exist in {@see \PhpMyAdmin\Config\Settings} ($cfg) and config.values.php
-     * ($_cfg_db['_overrides'])
+     * exist in {@see \PhpMyAdmin\Config\Settings} ($cfg).
      *
      * @param string $canonicalPath Canonical path
      * @param mixed  $default       Default value
-     *
-     * @return mixed
      */
-    public function getDefault($canonicalPath, $default = null)
+    public function getDefault(string $canonicalPath, mixed $default = null): mixed
     {
         return Core::arrayRead($canonicalPath, $this->defaultCfg, $default);
     }
@@ -322,10 +307,8 @@ class ConfigFile
      *
      * @param string $path    Path
      * @param mixed  $default Default value
-     *
-     * @return mixed
      */
-    public function getValue($path, $default = null)
+    public function getValue(string $path, mixed $default = null): mixed
     {
         $v = Core::arrayRead($path, $_SESSION[$this->id], null);
         if ($v !== null) {
@@ -341,10 +324,8 @@ class ConfigFile
      * Returns canonical path
      *
      * @param string $path Path
-     *
-     * @return string
      */
-    public function getCanonicalPath($path)
+    public function getCanonicalPath(string $path): string
     {
         return preg_replace('#^Servers/([\d]+)/#', 'Servers/1/', $path);
     }
@@ -354,20 +335,16 @@ class ConfigFile
      *
      * @param string $path    path of the variable in config db
      * @param mixed  $default default value
-     *
-     * @return mixed
      */
-    public function getDbEntry($path, $default = null)
+    public function getDbEntry(string $path, mixed $default = null): mixed
     {
         return Core::arrayRead($path, $this->cfgDb, $default);
     }
 
     /**
      * Returns server count
-     *
-     * @return int
      */
-    public function getServerCount()
+    public function getServerCount(): int
     {
         return isset($_SESSION[$this->id]['Servers'])
             ? count($_SESSION[$this->id]['Servers'])
@@ -377,7 +354,7 @@ class ConfigFile
     /**
      * Returns server list
      *
-     * @return array
+     * @return mixed[]
      */
     public function getServers(): array
     {
@@ -388,10 +365,8 @@ class ConfigFile
      * Returns DSN of given server
      *
      * @param int $server server index
-     *
-     * @return string
      */
-    public function getServerDSN($server)
+    public function getServerDSN(int $server): string
     {
         if (! isset($_SESSION[$this->id]['Servers'][$server])) {
             return '';
@@ -425,10 +400,8 @@ class ConfigFile
      * Returns server name
      *
      * @param int $id server index
-     *
-     * @return string
      */
-    public function getServerName($id)
+    public function getServerName(int $id): string
     {
         if (! isset($_SESSION[$this->id]['Servers'][$id])) {
             return '';
@@ -449,7 +422,7 @@ class ConfigFile
      *
      * @param int $server server index
      */
-    public function removeServer($server): void
+    public function removeServer(int $server): void
     {
         if (! isset($_SESSION[$this->id]['Servers'][$server])) {
             return;
@@ -473,9 +446,9 @@ class ConfigFile
     /**
      * Returns configuration array (full, multidimensional format)
      *
-     * @return array
+     * @return mixed[]
      */
-    public function getConfig()
+    public function getConfig(): array
     {
         $c = $_SESSION[$this->id];
         foreach ($this->cfgUpdateReadMapping as $mapTo => $mapFrom) {
@@ -494,15 +467,15 @@ class ConfigFile
     /**
      * Returns configuration array (flat format)
      *
-     * @return array
+     * @return mixed[]
      */
-    public function getConfigArray()
+    public function getConfigArray(): array
     {
         $c = $this->getFlatArray($_SESSION[$this->id]);
 
         $persistKeys = array_diff(
             array_keys($this->persistKeys),
-            array_keys($c)
+            array_keys($c),
         );
         foreach ($persistKeys as $k) {
             $c[$k] = $this->getDefault($this->getCanonicalPath($k));
@@ -518,5 +491,328 @@ class ConfigFile
         }
 
         return $c;
+    }
+
+    /**
+     * Database with allowed values for configuration stored in the $cfg array,
+     * used by setup script and user preferences to generate forms.
+     *
+     * Value meaning:
+     *   array - select field, array contains allowed values
+     *   string - type override
+     *
+     * @return array<string, string|mixed[]>
+     */
+    public function getAllowedValues(): array
+    {
+        return [
+            'Servers' => [
+                1 => [
+                    'port' => 'integer',
+                    'auth_type' => ['config', 'http', 'signon', 'cookie'],
+                    'AllowDeny' => ['order' => ['', 'deny,allow', 'allow,deny', 'explicit']],
+                    'only_db' => 'array',
+                ],
+            ],
+            'RecodingEngine' => ['auto', 'iconv', 'recode', 'mb', 'none'],
+            'OBGzip' => ['auto', true, false],
+            'MemoryLimit' => 'short_string',
+            'NavigationLogoLinkWindow' => ['main', 'new'],
+            'NavigationTreeDefaultTabTable' => [
+                // fields list
+                'structure' => __('Structure'),
+                // SQL form
+                'sql' => __('SQL'),
+                // search page
+                'search' => __('Search'),
+                // insert row page
+                'insert' => __('Insert'),
+                // browse page
+                'browse' => __('Browse'),
+            ],
+            'NavigationTreeDefaultTabTable2' => [
+                //don't display
+                '' => '',
+                // fields list
+                'structure' => __('Structure'),
+                // SQL form
+                'sql' => __('SQL'),
+                // search page
+                'search' => __('Search'),
+                // insert row page
+                'insert' => __('Insert'),
+                // browse page
+                'browse' => __('Browse'),
+            ],
+            'NavigationTreeDbSeparator' => 'short_string',
+            'NavigationTreeTableSeparator' => 'short_string',
+            'NavigationWidth' => 'integer',
+            'TableNavigationLinksMode' => ['icons' => __('Icons'), 'text' => __('Text'), 'both' => __('Both')],
+            'MaxRows' => [25, 50, 100, 250, 500],
+            'Order' => ['ASC', 'DESC', 'SMART'],
+            'RowActionLinks' => [
+                'none' => __('Nowhere'),
+                'left' => __('Left'),
+                'right' => __('Right'),
+                'both' => __('Both'),
+            ],
+            'TablePrimaryKeyOrder' => ['NONE' => __('None'), 'ASC' => __('Ascending'), 'DESC' => __('Descending')],
+            'ProtectBinary' => [false, 'blob', 'noblob', 'all'],
+            'CharEditing' => ['input', 'textarea'],
+            'TabsMode' => ['icons' => __('Icons'), 'text' => __('Text'), 'both' => __('Both')],
+            'PDFDefaultPageSize' => [
+                'A3' => 'A3',
+                'A4' => 'A4',
+                'A5' => 'A5',
+                'letter' => 'letter',
+                'legal' => 'legal',
+            ],
+            'ActionLinksMode' => ['icons' => __('Icons'), 'text' => __('Text'), 'both' => __('Both')],
+            'GridEditing' => [
+                'click' => __('Click'),
+                'double-click' => __('Double click'),
+                'disabled' => __('Disabled'),
+            ],
+            'RelationalDisplay' => ['K' => __('key'), 'D' => __('display column')],
+            'DefaultTabServer' => [
+                // the welcome page (recommended for multiuser setups)
+                'welcome' => __('Welcome'),
+                // list of databases
+                'databases' => __('Databases'),
+                // runtime information
+                'status' => __('Status'),
+                // MySQL server variables
+                'variables' => __('Variables'),
+                // user management
+                'privileges' => __('Privileges'),
+            ],
+            'DefaultTabDatabase' => [
+                // tables list
+                'structure' => __('Structure'),
+                // SQL form
+                'sql' => __('SQL'),
+                // search query
+                'search' => __('Search'),
+                // operations on database
+                'operations' => __('Operations'),
+            ],
+            'DefaultTabTable' => [
+                // fields list
+                'structure' => __('Structure'),
+                // SQL form
+                'sql' => __('SQL'),
+                // search page
+                'search' => __('Search'),
+                // insert row page
+                'insert' => __('Insert'),
+                // browse page
+                'browse' => __('Browse'),
+            ],
+            'InitialSlidersState' => ['open' => __('Open'), 'closed' => __('Closed'), 'disabled' => __('Disabled')],
+            'FirstDayOfCalendar' => [
+                '1' => _pgettext('Week day name', 'Monday'),
+                '2' => _pgettext('Week day name', 'Tuesday'),
+                '3' => _pgettext('Week day name', 'Wednesday'),
+                '4' => _pgettext('Week day name', 'Thursday'),
+                '5' => _pgettext('Week day name', 'Friday'),
+                '6' => _pgettext('Week day name', 'Saturday'),
+                '7' => _pgettext('Week day name', 'Sunday'),
+            ],
+            'SendErrorReports' => [
+                'ask' => __('Ask before sending error reports'),
+                'always' => __('Always send error reports'),
+                'never' => __('Never send error reports'),
+            ],
+            'DefaultForeignKeyChecks' => [
+                'default' => __('Server default'),
+                'enable' => __('Enable'),
+                'disable' => __('Disable'),
+            ],
+
+            'Import' => [
+                'format' => [
+                    // CSV
+                    'csv',
+                    // DocSQL
+                    'docsql',
+                    // CSV using LOAD DATA
+                    'ldi',
+                    // SQL
+                    'sql',
+                ],
+                'charset' => array_merge([''], $GLOBALS['cfg']['AvailableCharsets'] ?? []),
+                'sql_compatibility' => [
+                    'NONE',
+                    'ANSI',
+                    'DB2',
+                    'MAXDB',
+                    'MYSQL323',
+                    'MYSQL40',
+                    'MSSQL',
+                    'ORACLE',
+                    // removed; in MySQL 5.0.33, this produces exports that
+                    // can't be read by POSTGRESQL (see our bug #1596328)
+                    //'POSTGRESQL',
+                    'TRADITIONAL',
+                ],
+                'csv_terminated' => 'short_string',
+                'csv_enclosed' => 'short_string',
+                'csv_escaped' => 'short_string',
+                'ldi_terminated' => 'short_string',
+                'ldi_enclosed' => 'short_string',
+                'ldi_escaped' => 'short_string',
+                'ldi_local_option' => ['auto', true, false],
+            ],
+
+            'Export' => [
+                '_sod_select' => [
+                    'structure' => __('structure'),
+                    'data' => __('data'),
+                    'structure_and_data' => __('structure and data'),
+                ],
+                'method' => [
+                    'quick' => __('Quick - display only the minimal options to configure'),
+                    'custom' => __('Custom - display all possible options to configure'),
+                    'custom-no-form' => __('Custom - like above, but without the quick/custom choice'),
+                ],
+                'format' => [
+                    'codegen',
+                    'csv',
+                    'excel',
+                    'htmlexcel',
+                    'htmlword',
+                    'latex',
+                    'ods',
+                    'odt',
+                    'pdf',
+                    'sql',
+                    'texytext',
+                    'xml',
+                    'yaml',
+                ],
+                'compression' => ['none', 'zip', 'gzip'],
+                'charset' => array_merge([''], $GLOBALS['cfg']['AvailableCharsets'] ?? []),
+                'sql_compatibility' => [
+                    'NONE',
+                    'ANSI',
+                    'DB2',
+                    'MAXDB',
+                    'MYSQL323',
+                    'MYSQL40',
+                    'MSSQL',
+                    'ORACLE',
+                    // removed; in MySQL 5.0.33, this produces exports that
+                    // can't be read by POSTGRESQL (see our bug #1596328)
+                    //'POSTGRESQL',
+                    'TRADITIONAL',
+                ],
+                'codegen_format' => ['#', 'NHibernate C# DO', 'NHibernate XML'],
+                'csv_separator' => 'short_string',
+                'csv_terminated' => 'short_string',
+                'csv_enclosed' => 'short_string',
+                'csv_escaped' => 'short_string',
+                'csv_null' => 'short_string',
+                'excel_null' => 'short_string',
+                'excel_edition' => [
+                    'win' => 'Windows',
+                    'mac_excel2003' => 'Excel 2003 / Macintosh',
+                    'mac_excel2008' => 'Excel 2008 / Macintosh',
+                ],
+                'sql_structure_or_data' => [
+                    'structure' => __('structure'),
+                    'data' => __('data'),
+                    'structure_and_data' => __('structure and data'),
+                ],
+                'sql_type' => ['INSERT', 'UPDATE', 'REPLACE'],
+                'sql_insert_syntax' => [
+                    'complete' => __('complete inserts'),
+                    'extended' => __('extended inserts'),
+                    'both' => __('both of the above'),
+                    'none' => __('neither of the above'),
+                ],
+                'htmlword_structure_or_data' => [
+                    'structure' => __('structure'),
+                    'data' => __('data'),
+                    'structure_and_data' => __('structure and data'),
+                ],
+                'htmlword_null' => 'short_string',
+                'ods_null' => 'short_string',
+                'odt_null' => 'short_string',
+                'odt_structure_or_data' => [
+                    'structure' => __('structure'),
+                    'data' => __('data'),
+                    'structure_and_data' => __('structure and data'),
+                ],
+                'texytext_structure_or_data' => [
+                    'structure' => __('structure'),
+                    'data' => __('data'),
+                    'structure_and_data' => __('structure and data'),
+                ],
+                'texytext_null' => 'short_string',
+            ],
+
+            'Console' => [
+                'Mode' => ['info', 'show', 'collapse'],
+                'OrderBy' => ['exec', 'time', 'count'],
+                'Order' => ['asc', 'desc'],
+            ],
+
+            /**
+             * Basic validator assignments (functions from libraries/config/Validator.php
+             * and 'window.validators' object in js/config.js)
+             * Use only full paths and form ids
+             */
+            '_validators' => [
+                'Console/Height' => 'validateNonNegativeNumber',
+                'CharTextareaCols' => 'validatePositiveNumber',
+                'CharTextareaRows' => 'validatePositiveNumber',
+                'ExecTimeLimit' => 'validateNonNegativeNumber',
+                'Export/sql_max_query_size' => 'validatePositiveNumber',
+                'FirstLevelNavigationItems' => 'validatePositiveNumber',
+                'ForeignKeyMaxLimit' => 'validatePositiveNumber',
+                'Import/csv_enclosed' => [['validateByRegex', '/^.?$/']],
+                'Import/csv_escaped' => [['validateByRegex', '/^.$/']],
+                'Import/csv_terminated' => [['validateByRegex', '/^.$/']],
+                'Import/ldi_enclosed' => [['validateByRegex', '/^.?$/']],
+                'Import/ldi_escaped' => [['validateByRegex', '/^.$/']],
+                'Import/ldi_terminated' => [['validateByRegex', '/^.$/']],
+                'Import/skip_queries' => 'validateNonNegativeNumber',
+                'InsertRows' => 'validatePositiveNumber',
+                'NumRecentTables' => 'validateNonNegativeNumber',
+                'NumFavoriteTables' => 'validateNonNegativeNumber',
+                'LimitChars' => 'validatePositiveNumber',
+                'LoginCookieValidity' => 'validatePositiveNumber',
+                'LoginCookieStore' => 'validateNonNegativeNumber',
+                'MaxDbList' => 'validatePositiveNumber',
+                'MaxNavigationItems' => 'validatePositiveNumber',
+                'MaxCharactersInDisplayedSQL' => 'validatePositiveNumber',
+                'MaxRows' => 'validatePositiveNumber',
+                'MaxSizeForInputField' => 'validatePositiveNumber',
+                'MinSizeForInputField' => 'validateNonNegativeNumber',
+                'MaxTableList' => 'validatePositiveNumber',
+                'MemoryLimit' => [['validateByRegex', '/^(-1|(\d+(?:[kmg])?))$/i']],
+                'NavigationTreeDisplayItemFilterMinimum' => 'validatePositiveNumber',
+                'NavigationTreeTableLevel' => 'validatePositiveNumber',
+                'NavigationWidth' => 'validateNonNegativeNumber',
+                'QueryHistoryMax' => 'validatePositiveNumber',
+                'RepeatCells' => 'validateNonNegativeNumber',
+                'Server' => 'validateServer',
+                'Server_pmadb' => 'validatePMAStorage',
+                'Servers/1/port' => 'validatePortNumber',
+                'Servers/1/hide_db' => 'validateRegex',
+                'TextareaCols' => 'validatePositiveNumber',
+                'TextareaRows' => 'validatePositiveNumber',
+                'TrustedProxies' => 'validateTrustedProxies',
+            ],
+
+            /**
+             * Additional validators used for user preferences
+             */
+            '_userValidators' => [
+                'MaxDbList' => [['validateUpperBound', 'value:MaxDbList']],
+                'MaxTableList' => [['validateUpperBound', 'value:MaxTableList']],
+                'QueryHistoryMax' => [['validateUpperBound', 'value:QueryHistoryMax']],
+            ],
+        ];
     }
 }

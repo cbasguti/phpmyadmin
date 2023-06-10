@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Selenium\Table;
 
 use PhpMyAdmin\Tests\Selenium\TestBase;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @coversNothing
- */
+#[CoversNothing]
 class StructureTest extends TestBase
 {
     /**
@@ -17,6 +17,7 @@ class StructureTest extends TestBase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->dbQuery(
             'USE `' . $this->databaseName . '`;'
             . 'CREATE TABLE `test_table` ('
@@ -24,7 +25,7 @@ class StructureTest extends TestBase
             . ' `val` int(11) NOT NULL,'
             . ' `val2` int(11) NOT NULL,'
             . ' PRIMARY KEY (`id`)'
-            . ');'
+            . ');',
         );
 
         $this->login();
@@ -38,9 +39,8 @@ class StructureTest extends TestBase
 
     /**
      * Test for adding a new column
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testAddColumn(): void
     {
         $this->waitForElement('cssSelector', "#addColumns > input[value='Go']")->click();
@@ -59,20 +59,19 @@ class StructureTest extends TestBase
 
         $this->assertEquals(
             'val3',
-            $this->byCssSelector('label[for=checkbox_row_4]')->getText()
+            $this->byCssSelector('label[for=checkbox_row_4]')->getText(),
         );
 
         $this->assertEquals(
             'int(11)',
-            $this->getCellByTableId('tablestructure', 4, 4)
+            $this->getCellByTableId('tablestructure', 4, 4),
         );
     }
 
     /**
      * Test for changing a column
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testChangeColumn(): void
     {
         $this->byCssSelector('#tablestructure tbody tr:nth-child(2) td:nth-child(11)')->click();
@@ -92,15 +91,14 @@ class StructureTest extends TestBase
 
         $this->assertEquals(
             'val3',
-            $this->waitForElement('cssSelector', 'label[for=checkbox_row_2]')->getText()
+            $this->waitForElement('cssSelector', 'label[for=checkbox_row_2]')->getText(),
         );
     }
 
     /**
      * Test for dropping columns
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testDropColumns(): void
     {
         $this->waitForElement('cssSelector', 'label[for=checkbox_row_2]')->click();
@@ -109,17 +107,15 @@ class StructureTest extends TestBase
 
         $this->waitForElement('cssSelector', "input[id='buttonYes']")->click();
 
-        $this->waitForElement(
-            'xpath',
-            '//div[@class=\'alert alert-success\' and contains(., \'2 columns have been dropped successfully.\')]'
-        );
+        $success = $this->waitForElement('cssSelector', '.alert-success');
+        $this->assertStringContainsString('2 columns have been dropped successfully.', $success->getText());
         $this->waitAjax();
 
         $this->assertFalse(
             $this->isElementPresent(
                 'cssSelector',
-                'label[for=checkbox_row_2]'
-            )
+                'label[for=checkbox_row_2]',
+            ),
         );
     }
 }

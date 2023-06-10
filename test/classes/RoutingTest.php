@@ -7,17 +7,16 @@ namespace PhpMyAdmin\Tests;
 use FastRoute\Dispatcher;
 use PhpMyAdmin\Controllers\HomeController;
 use PhpMyAdmin\Routing;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 use function copy;
-use function method_exists;
 use function unlink;
 
 use const CACHE_DIR;
 use const TEST_PATH;
 
-/**
- * @covers \PhpMyAdmin\Routing
- */
+#[CoversClass(Routing::class)]
 class RoutingTest extends AbstractTestCase
 {
     /**
@@ -50,12 +49,7 @@ class RoutingTest extends AbstractTestCase
         // Create new cache file.
         $this->assertTrue(unlink($cacheFilename));
 
-        if (method_exists($this, 'assertFileDoesNotExist')) {
-            $this->assertFileDoesNotExist($cacheFilename);
-        } else {
-            /** @psalm-suppress DeprecatedMethod */
-            $this->assertFileNotExists($cacheFilename);
-        }
+        $this->assertFileDoesNotExist($cacheFilename);
 
         $dispatcher = Routing::getDispatcher();
         $this->assertInstanceOf(Dispatcher::class, $dispatcher);
@@ -70,60 +64,38 @@ class RoutingTest extends AbstractTestCase
     }
 
     /**
-     * Test for Routing::getCurrentRoute
+     * @param string $phpSelf  The PHP_SELF value
+     * @param string $request  The REQUEST_URI value
+     * @param string $pathInfo The PATH_INFO value
+     * @param string $expected Expected result
      */
-    public function testGetCurrentRouteNoParams(): void
+    #[DataProvider('providerForTestCleanupPathInfo')]
+    public function testCleanupPathInfo(string $phpSelf, string $request, string $pathInfo, string $expected): void
     {
-        $this->assertSame('/', Routing::getCurrentRoute());
+        $_SERVER['PHP_SELF'] = $phpSelf;
+        $_SERVER['REQUEST_URI'] = $request;
+        $_SERVER['PATH_INFO'] = $pathInfo;
+        $actual = Routing::getCleanPathInfo();
+        $this->assertEquals($expected, $actual);
     }
 
-    /**
-     * Test for Routing::getCurrentRoute
-     */
-    public function testGetCurrentRouteGet(): void
+    /** @return array<array{string, string, string, string}> */
+    public static function providerForTestCleanupPathInfo(): array
     {
-        $_GET['route'] = '/test';
-        $this->assertSame('/test', Routing::getCurrentRoute());
-    }
-
-    /**
-     * Test for Routing::getCurrentRoute
-     */
-    public function testGetCurrentRoutePost(): void
-    {
-        unset($_GET['route']);
-        $_POST['route'] = '/testpost';
-        $this->assertSame('/testpost', Routing::getCurrentRoute());
-    }
-
-    /**
-     * Test for Routing::getCurrentRoute
-     */
-    public function testGetCurrentRouteGetIsOverPost(): void
-    {
-        $_GET['route'] = '/testget';
-        $_POST['route'] = '/testpost';
-        $this->assertSame('/testget', Routing::getCurrentRoute());
-    }
-
-    /**
-     * Test for Routing::getCurrentRoute
-     */
-    public function testGetCurrentRouteRedirectDbStructure(): void
-    {
-        unset($_POST['route']);
-        unset($_GET['route']);
-        $_GET['db'] = 'testDB';
-        $this->assertSame('/database/structure', Routing::getCurrentRoute());
-    }
-
-    /**
-     * Test for Routing::getCurrentRoute
-     */
-    public function testGetCurrentRouteRedirectSql(): void
-    {
-        $_GET['db'] = 'testDB';
-        $_GET['table'] = 'tableTest';
-        $this->assertSame('/sql', Routing::getCurrentRoute());
+        return [
+            [
+                '/phpmyadmin/index.php/; cookieinj=value/',
+                '/phpmyadmin/index.php/;%20cookieinj=value///',
+                '/; cookieinj=value/',
+                '/phpmyadmin/index.php',
+            ],
+            ['', '/phpmyadmin/index.php/;%20cookieinj=value///', '/; cookieinj=value/', '/phpmyadmin/index.php'],
+            ['', '//example.com/../phpmyadmin/index.php', '', '/phpmyadmin/index.php'],
+            ['', '//example.com/../../.././phpmyadmin/index.php', '', '/phpmyadmin/index.php'],
+            ['', '/page.php/malicouspathinfo?malicouspathinfo', 'malicouspathinfo', '/page.php'],
+            ['/phpmyadmin/./index.php', '/phpmyadmin/./index.php', '', '/phpmyadmin/index.php'],
+            ['/phpmyadmin/index.php', '/phpmyadmin/index.php', '', '/phpmyadmin/index.php'],
+            ['', '/phpmyadmin/index.php', '', '/phpmyadmin/index.php'],
+        ];
     }
 }

@@ -7,16 +7,21 @@ namespace PhpMyAdmin\Tests\Server;
 use PhpMyAdmin\Server\Plugin;
 use PhpMyAdmin\Server\Plugins;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
 use function __;
 
-/**
- * @covers \PhpMyAdmin\Server\Plugins
- */
+#[CoversClass(Plugins::class)]
 class PluginsTest extends AbstractTestCase
 {
-    /** @var Plugins */
-    private $plugins;
+    private Plugins $plugins;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
+    }
 
     public function testGetAll(): void
     {
@@ -100,7 +105,7 @@ class PluginsTest extends AbstractTestCase
                 'auth_socket' => __('Unix Socket based authentication'),
                 'unknown_auth_plugin' => 'Unknown authentication',
             ],
-            $plugins
+            $plugins,
         );
     }
 }

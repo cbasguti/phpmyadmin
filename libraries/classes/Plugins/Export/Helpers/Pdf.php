@@ -9,10 +9,12 @@ namespace PhpMyAdmin\Plugins\Export\Helpers;
 
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Dbal\Connection;
 use PhpMyAdmin\Dbal\ResultInterface;
 use PhpMyAdmin\FieldMetadata;
 use PhpMyAdmin\Pdf as PdfLib;
 use PhpMyAdmin\Transformations;
+use PhpMyAdmin\Triggers\Triggers;
 use PhpMyAdmin\Util;
 use TCPDF_STATIC;
 
@@ -26,74 +28,45 @@ use function ksort;
  */
 class Pdf extends PdfLib
 {
-    /** @var array */
-    public $tablewidths;
+    /** @var mixed[] */
+    public array $tablewidths = [];
 
-    /** @var array */
-    public $headerset;
+    /** @var mixed[] */
+    public array $headerset = [];
 
-    /** @var int|float */
-    private $dataY;
+    private int|float $dataY = 0;
 
-    /** @var int|float */
-    private $cellFontSize;
+    private int $titleFontSize = 0;
 
-    /** @var int */
-    private $titleFontSize;
+    private string $titleText = '';
 
-    /** @var string */
-    private $titleText;
+    private string $dbAlias = '';
 
-    /** @var string */
-    private $dbAlias;
+    private string $tableAlias = '';
 
-    /** @var string */
-    private $tableAlias;
+    private string $purpose = '';
 
-    /** @var string */
-    private $purpose;
+    /** @var mixed[] */
+    private array $colTitles = [];
 
-    /** @var array */
-    private $colTitles;
+    private ResultInterface $results;
 
-    /** @var ResultInterface */
-    private $results;
+    /** @var mixed[] */
+    private array $colAlign = [];
 
-    /** @var array */
-    private $colAlign;
+    /** @var mixed[] */
+    private array $displayColumn = [];
 
-    /** @var mixed */
-    private $titleWidth;
+    private string $currentDb = '';
 
-    /** @var mixed */
-    private $colFits;
+    private string $currentTable = '';
 
-    /** @var array */
-    private $displayColumn;
+    /** @var mixed[] */
+    private array $aliases = [];
 
-    /** @var int */
-    private $numFields;
+    private Relation $relation;
 
-    /** @var FieldMetadata[] */
-    private $fields;
-
-    /** @var int|float */
-    private $sColWidth;
-
-    /** @var string */
-    private $currentDb;
-
-    /** @var string */
-    private $currentTable;
-
-    /** @var array */
-    private $aliases;
-
-    /** @var Relation */
-    private $relation;
-
-    /** @var Transformations */
-    private $transformations;
+    private Transformations $transformations;
 
     /**
      * Constructs PDF and configures standard parameters.
@@ -107,18 +80,17 @@ class Pdf extends PdfLib
      * @param false|int $pdfa        If not false, set the document to PDF/A mode and the good version (1 or 3)
      */
     public function __construct(
-        $orientation = 'P',
-        $unit = 'mm',
-        $format = 'A4',
-        $unicode = true,
-        $encoding = 'UTF-8',
-        $diskcache = false,
-        $pdfa = false
+        string $orientation = 'P',
+        string $unit = 'mm',
+        string $format = 'A4',
+        bool $unicode = true,
+        string $encoding = 'UTF-8',
+        bool $diskcache = false,
+        false|int $pdfa = false,
     ) {
-        global $dbi;
-
         parent::__construct($orientation, $unit, $format, $unicode, $encoding, $diskcache, $pdfa);
-        $this->relation = new Relation($dbi);
+
+        $this->relation = new Relation($GLOBALS['dbi']);
         $this->transformations = new Transformations();
     }
 
@@ -131,13 +103,13 @@ class Pdf extends PdfLib
      * @param bool      $addpage if true add a page, otherwise only return
      *                           the true/false state
      */
-    public function checkPageBreak($h = 0, $y = '', $addpage = true): bool
+    public function checkPageBreak(mixed $h = 0, mixed $y = '', mixed $addpage = true): bool
     {
         if (TCPDF_STATIC::empty_string($y)) {
             $y = $this->y;
         }
 
-        $current_page = $this->page;
+        $currentPage = $this->page;
         // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
         if ($y + $h > $this->PageBreakTrigger && ! $this->InFooter && $this->AcceptPageBreak()) {
             if ($addpage) {
@@ -148,22 +120,20 @@ class Pdf extends PdfLib
                 $this->y = $this->dataY;
                 $oldpage = $this->page - 1;
 
-                $this_page_orm = $this->pagedim[$this->page]['orm'];
-                $old_page_orm = $this->pagedim[$oldpage]['orm'];
-                $this_page_olm = $this->pagedim[$this->page]['olm'];
-                $old_page_olm = $this->pagedim[$oldpage]['olm'];
+                $thisPageOrm = $this->pagedim[$this->page]['orm'];
+                $oldPageOrm = $this->pagedim[$oldpage]['orm'];
+                $thisPageOlm = $this->pagedim[$this->page]['olm'];
+                $oldPageOlm = $this->pagedim[$oldpage]['olm'];
                 if ($this->rtl) {
-                    if ($this_page_orm != $old_page_orm) {
-                        $this->x = $x - ($this_page_orm - $old_page_orm);
+                    if ($thisPageOrm != $oldPageOrm) {
+                        $this->x = $x - ($thisPageOrm - $oldPageOrm);
                     } else {
                         $this->x = $x;
                     }
+                } elseif ($thisPageOlm != $oldPageOlm) {
+                    $this->x = $x + $thisPageOlm - $oldPageOlm;
                 } else {
-                    if ($this_page_olm != $old_page_olm) {
-                        $this->x = $x + $this_page_olm - $old_page_olm;
-                    } else {
-                        $this->x = $x;
-                    }
+                    $this->x = $x;
                 }
             }
 
@@ -171,7 +141,7 @@ class Pdf extends PdfLib
         }
 
         // account for columns mode
-        return $current_page != $this->page;
+        return $currentPage != $this->page;
     }
 
     /**
@@ -180,7 +150,8 @@ class Pdf extends PdfLib
     // phpcs:ignore PSR1.Methods.CamelCapsMethodName.NotCamelCaps
     public function Header(): void
     {
-        global $maxY;
+        $GLOBALS['maxY'] ??= null;
+
         // We don't want automatic page breaks while generating header
         // as this can lead to infinite recursion as auto generated page
         // will want header as well causing another page break
@@ -190,10 +161,10 @@ class Pdf extends PdfLib
         // phpcs:disable Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
         if (! isset($this->headerset[$this->page])) {
             $this->setY($this->tMargin - ($this->FontSizePt / $this->k) * 5);
-            $this->cellFontSize = $this->FontSizePt;
+            $cellFontSize = $this->FontSizePt;
             $this->setFont(PdfLib::PMA_PDF_FONT, '', ($this->titleFontSize ?: $this->FontSizePt));
             $this->Cell(0, $this->FontSizePt, $this->titleText, 0, 1, 'C');
-            $this->setFont(PdfLib::PMA_PDF_FONT, '', $this->cellFontSize);
+            $this->setFont(PdfLib::PMA_PDF_FONT, '', $cellFontSize);
             $this->setY($this->tMargin - ($this->FontSizePt / $this->k) * 2.5);
             $this->Cell(
                 0,
@@ -203,14 +174,14 @@ class Pdf extends PdfLib
                 . __('Purpose:') . ' ' . $this->purpose,
                 0,
                 1,
-                'L'
+                'L',
             );
             $l = $this->lMargin;
             foreach ($this->colTitles as $col => $txt) {
                 $this->setXY($l, $this->tMargin);
                 $this->MultiCell($this->tablewidths[$col], $this->FontSizePt, $txt);
                 $l += $this->tablewidths[$col];
-                $maxY = $maxY < $this->GetY() ? $this->GetY() : $maxY;
+                $GLOBALS['maxY'] = $GLOBALS['maxY'] < $this->GetY() ? $this->GetY() : $GLOBALS['maxY'];
             }
 
             $this->setXY($this->lMargin, $this->tMargin);
@@ -218,7 +189,7 @@ class Pdf extends PdfLib
             $l = $this->lMargin;
             foreach ($this->colTitles as $col => $txt) {
                 $this->setXY($l, $this->tMargin);
-                $this->Cell($this->tablewidths[$col], $maxY - $this->tMargin, '', 1, 0, 'L', true);
+                $this->Cell($this->tablewidths[$col], $GLOBALS['maxY'] - $this->tMargin, '', 1, 0, 'L', true);
                 $this->setXY($l, $this->tMargin);
                 $this->MultiCell($this->tablewidths[$col], $this->FontSizePt, $txt, 0, 'C');
                 $l += $this->tablewidths[$col];
@@ -231,7 +202,7 @@ class Pdf extends PdfLib
 
         // phpcs:enable
 
-        $this->dataY = $maxY;
+        $this->dataY = $GLOBALS['maxY'];
         $this->setAutoPageBreak(true);
     }
 
@@ -240,7 +211,7 @@ class Pdf extends PdfLib
      *
      * @param int $lineheight Height of line
      */
-    public function morepagestable($lineheight = 8): void
+    public function morepagestable(int $lineheight = 8): void
     {
         // some things to set and 'remember'
         $l = $this->lMargin;
@@ -323,7 +294,7 @@ class Pdf extends PdfLib
      *
      * @param float $topMargin the margin
      */
-    public function setTopMargin($topMargin): void
+    public function setTopMargin(mixed $topMargin): void
     {
         $this->tMargin = $topMargin;
     }
@@ -334,11 +305,9 @@ class Pdf extends PdfLib
      * @param string $db    database name
      * @param string $table table name
      */
-    public function getTriggers($db, $table): void
+    public function getTriggers(string $db, string $table): void
     {
-        global $dbi;
-
-        $triggers = $dbi->getTriggers($db, $table);
+        $triggers = Triggers::getDetails($GLOBALS['dbi'], $db, $table);
         if ($triggers === []) {
             return; //prevents printing blank trigger list for any table
         }
@@ -346,10 +315,8 @@ class Pdf extends PdfLib
         unset(
             $this->tablewidths,
             $this->colTitles,
-            $this->titleWidth,
-            $this->colFits,
             $this->displayColumn,
-            $this->colAlign
+            $this->colAlign,
         );
 
         /**
@@ -365,9 +332,9 @@ class Pdf extends PdfLib
         $this->colTitles[3] = __('Definition');
         $this->tablewidths[3] = 240;
 
-        for ($columns_cnt = 0; $columns_cnt < 4; $columns_cnt++) {
-            $this->colAlign[$columns_cnt] = 'L';
-            $this->displayColumn[$columns_cnt] = true;
+        for ($columnsCnt = 0; $columnsCnt < 4; $columnsCnt++) {
+            $this->colAlign[$columnsCnt] = 'L';
+            $this->displayColumn[$columnsCnt] = true;
         }
 
         // Starting to fill table with required info
@@ -410,7 +377,7 @@ class Pdf extends PdfLib
                         $this->FontSizePt,
                         $txt,
                         0,
-                        $this->colAlign[$col]
+                        $this->colAlign[$col],
                     );
                     $l += $this->tablewidths[$col];
                 }
@@ -464,45 +431,37 @@ class Pdf extends PdfLib
     /**
      * Print $table's CREATE definition
      *
-     * @param string $db          the database name
-     * @param string $table       the table name
-     * @param bool   $do_relation whether to include relation comments
-     * @param bool   $do_comments whether to include the pmadb-style column
+     * @param string $db         the database name
+     * @param string $table      the table name
+     * @param bool   $doRelation whether to include relation comments
+     * @param bool   $doComments whether to include the pmadb-style column
      *                            comments as comments in the structure;
      *                            this is deprecated but the parameter is
      *                            left here because /export calls
      *                            PMA_exportStructure() also for other
      *                            export types which use this parameter
-     * @param bool   $do_mime     whether to include mime comments
-     * @param bool   $view        whether we're handling a view
-     * @param array  $aliases     aliases of db/table/columns
+     * @param bool   $doMime     whether to include mime comments
      */
     public function getTableDef(
-        $db,
-        $table,
-        $do_relation,
-        $do_comments,
-        $do_mime,
-        $view = false,
-        array $aliases = []
+        string $db,
+        string $table,
+        bool $doRelation,
+        bool $doComments,
+        bool $doMime,
     ): void {
-        global $dbi;
-
         $relationParameters = $this->relation->getRelationParameters();
 
         unset(
             $this->tablewidths,
             $this->colTitles,
-            $this->titleWidth,
-            $this->colFits,
             $this->displayColumn,
-            $this->colAlign
+            $this->colAlign,
         );
 
         /**
          * Gets fields properties
          */
-        $dbi->selectDb($db);
+        $GLOBALS['dbi']->selectDb($db);
 
         /**
          * All these three checks do_relation, do_comment and do_mime is
@@ -511,13 +470,13 @@ class Pdf extends PdfLib
          * it will be of use
          */
         // Check if we can use Relations
-        if ($do_relation) {
+        if ($doRelation) {
             // Find which tables are related with the current one and write it in
             // an array
-            $res_rel = $this->relation->getForeigners($db, $table);
-            $have_rel = ! empty($res_rel);
+            $resRel = $this->relation->getForeigners($db, $table);
+            $haveRel = $resRel !== [];
         } else {
-            $have_rel = false;
+            $haveRel = false;
         }
 
         //column count and table heading
@@ -531,32 +490,32 @@ class Pdf extends PdfLib
         $this->colTitles[3] = __('Default');
         $this->tablewidths[3] = 120;
 
-        for ($columns_cnt = 0; $columns_cnt < 4; $columns_cnt++) {
-            $this->colAlign[$columns_cnt] = 'L';
-            $this->displayColumn[$columns_cnt] = true;
+        for ($columnsCnt = 0; $columnsCnt < 4; $columnsCnt++) {
+            $this->colAlign[$columnsCnt] = 'L';
+            $this->displayColumn[$columnsCnt] = true;
         }
 
-        if ($do_relation && $have_rel) {
-            $this->colTitles[$columns_cnt] = __('Links to');
-            $this->displayColumn[$columns_cnt] = true;
-            $this->colAlign[$columns_cnt] = 'L';
-            $this->tablewidths[$columns_cnt] = 120;
+        if ($doRelation && $haveRel) {
+            $this->colTitles[$columnsCnt] = __('Links to');
+            $this->displayColumn[$columnsCnt] = true;
+            $this->colAlign[$columnsCnt] = 'L';
+            $this->tablewidths[$columnsCnt] = 120;
         }
 
-        if ($do_comments) {
-            $columns_cnt++;
-            $this->colTitles[$columns_cnt] = __('Comments');
-            $this->displayColumn[$columns_cnt] = true;
-            $this->colAlign[$columns_cnt] = 'L';
-            $this->tablewidths[$columns_cnt] = 120;
+        if ($doComments) {
+            $columnsCnt++;
+            $this->colTitles[$columnsCnt] = __('Comments');
+            $this->displayColumn[$columnsCnt] = true;
+            $this->colAlign[$columnsCnt] = 'L';
+            $this->tablewidths[$columnsCnt] = 120;
         }
 
-        if ($do_mime && $relationParameters->browserTransformationFeature !== null) {
-            $columns_cnt++;
-            $this->colTitles[$columns_cnt] = __('Media type');
-            $this->displayColumn[$columns_cnt] = true;
-            $this->colAlign[$columns_cnt] = 'L';
-            $this->tablewidths[$columns_cnt] = 120;
+        if ($doMime && $relationParameters->browserTransformationFeature !== null) {
+            $columnsCnt++;
+            $this->colTitles[$columnsCnt] = __('Media type');
+            $this->displayColumn[$columnsCnt] = true;
+            $this->colAlign[$columnsCnt] = 'L';
+            $this->tablewidths[$columnsCnt] = 120;
         }
 
         // Starting to fill table with required info
@@ -567,15 +526,15 @@ class Pdf extends PdfLib
 
         // Now let's start to write the table structure
 
-        if ($do_comments) {
+        if ($doComments) {
             $comments = $this->relation->getComments($db, $table);
         }
 
-        if ($do_mime && $relationParameters->browserTransformationFeature !== null) {
-            $mime_map = $this->transformations->getMime($db, $table, true);
+        if ($doMime && $relationParameters->browserTransformationFeature !== null) {
+            $mimeMap = $this->transformations->getMime($db, $table, true);
         }
 
-        $columns = $dbi->getColumns($db, $table);
+        $columns = $GLOBALS['dbi']->getColumns($db, $table);
 
         // some things to set and 'remember'
         $l = $this->lMargin;
@@ -594,9 +553,9 @@ class Pdf extends PdfLib
 
         // fun begin
         foreach ($columns as $column) {
-            $extracted_columnspec = Util::extractColumnSpec($column['Type']);
+            $extractedColumnSpec = Util::extractColumnSpec($column['Type']);
 
-            $type = $extracted_columnspec['print_type'];
+            $type = $extractedColumnSpec['print_type'];
             if (empty($type)) {
                 $type = ' ';
             }
@@ -609,28 +568,28 @@ class Pdf extends PdfLib
 
             $data[] = $column['Field'];
             $data[] = $type;
-            $data[] = $column['Null'] == '' || $column['Null'] === 'NO'
+            $data[] = $column['Null'] === 'NO'
                 ? 'No'
                 : 'Yes';
             $data[] = $column['Default'] ?? '';
 
-            $field_name = $column['Field'];
+            $fieldName = $column['Field'];
 
-            if ($do_relation && $have_rel) {
-                $data[] = isset($res_rel[$field_name])
-                    ? $res_rel[$field_name]['foreign_table']
-                    . ' (' . $res_rel[$field_name]['foreign_field']
+            if ($doRelation && $haveRel) {
+                $data[] = isset($resRel[$fieldName])
+                    ? $resRel[$fieldName]['foreign_table']
+                    . ' (' . $resRel[$fieldName]['foreign_field']
                     . ')'
                     : '';
             }
 
-            if ($do_comments) {
-                $data[] = $comments[$field_name] ?? '';
+            if ($doComments) {
+                $data[] = $comments[$fieldName] ?? '';
             }
 
-            if ($do_mime) {
-                $data[] = isset($mime_map[$field_name])
-                    ? $mime_map[$field_name]['mimetype']
+            if ($doMime) {
+                $data[] = isset($mimeMap[$fieldName])
+                    ? $mimeMap[$fieldName]['mimetype']
                     : '';
             }
 
@@ -648,7 +607,7 @@ class Pdf extends PdfLib
                         $this->FontSizePt,
                         $txt,
                         0,
-                        $this->colAlign[$col]
+                        $this->colAlign[$col],
                     );
                     $l += $this->tablewidths[$col];
                 }
@@ -704,29 +663,25 @@ class Pdf extends PdfLib
      *
      * @param string $query Query to execute
      */
-    public function mysqlReport($query): void
+    public function mysqlReport(string $query): void
     {
-        global $dbi;
-
         unset(
             $this->tablewidths,
             $this->colTitles,
-            $this->titleWidth,
-            $this->colFits,
             $this->displayColumn,
-            $this->colAlign
+            $this->colAlign,
         );
 
         /**
          * Pass 1 for column widths
          */
-        $this->results = $dbi->query($query, DatabaseInterface::CONNECT_USER, DatabaseInterface::QUERY_UNBUFFERED);
-        $this->numFields = $this->results->numFields();
-        $this->fields = $dbi->getFieldsMeta($this->results);
+        $this->results = $GLOBALS['dbi']->query($query, Connection::TYPE_USER, DatabaseInterface::QUERY_UNBUFFERED);
+        $numFields = $this->results->numFields();
+        $fields = $GLOBALS['dbi']->getFieldsMeta($this->results);
 
         // sColWidth = starting col width (an average size width)
         $availableWidth = $this->w - $this->lMargin - $this->rMargin;
-        $this->sColWidth = $availableWidth / $this->numFields;
+        $sColWidth = $availableWidth / $numFields;
         $totalTitleWidth = 0;
 
         // loop through results header and set initial
@@ -735,16 +690,16 @@ class Pdf extends PdfLib
         // reduce that column size
         $colFits = [];
         $titleWidth = [];
-        for ($i = 0; $i < $this->numFields; $i++) {
-            $col_as = $this->fields[$i]->name;
+        for ($i = 0; $i < $numFields; $i++) {
+            $colAs = $fields[$i]->name;
             $db = $this->currentDb;
             $table = $this->currentTable;
-            if (! empty($this->aliases[$db]['tables'][$table]['columns'][$col_as])) {
-                $col_as = $this->aliases[$db]['tables'][$table]['columns'][$col_as];
+            if (! empty($this->aliases[$db]['tables'][$table]['columns'][$colAs])) {
+                $colAs = $this->aliases[$db]['tables'][$table]['columns'][$colAs];
             }
 
             /** @var float $stringWidth */
-            $stringWidth = $this->GetStringWidth($col_as);
+            $stringWidth = $this->GetStringWidth($colAs);
             $stringWidth += 6;
             // save the real title's width
             $titleWidth[$i] = $stringWidth;
@@ -752,20 +707,20 @@ class Pdf extends PdfLib
 
             // set any column titles less than the start width to
             // the column title width
-            if ($stringWidth < $this->sColWidth) {
+            if ($stringWidth < $sColWidth) {
                 $colFits[$i] = $stringWidth;
             }
 
-            $this->colTitles[$i] = $col_as;
+            $this->colTitles[$i] = $colAs;
             $this->displayColumn[$i] = true;
 
             $this->colAlign[$i] = 'L';
 
-            if ($this->fields[$i]->isType(FieldMetadata::TYPE_INT)) {
+            if ($fields[$i]->isType(FieldMetadata::TYPE_INT)) {
                 $this->colAlign[$i] = 'R';
             }
 
-            if (! $this->fields[$i]->isType(FieldMetadata::TYPE_BLOB)) {
+            if (! $fields[$i]->isType(FieldMetadata::TYPE_BLOB)) {
                 continue;
             }
 
@@ -773,7 +728,7 @@ class Pdf extends PdfLib
              * @todo do not deactivate completely the display
              * but show the field's name and [BLOB]
              */
-            if ($this->fields[$i]->isBinary()) {
+            if ($fields[$i]->isBinary()) {
                 $this->displayColumn[$i] = false;
                 unset($this->colTitles[$i]);
             }
@@ -795,25 +750,21 @@ class Pdf extends PdfLib
 
         // loop through the data; any column whose contents
         // is greater than the column size is resized
-        /**
-         * @todo force here a LIMIT to avoid reading all rows
-         */
+        /** @todo force here a LIMIT to avoid reading all rows */
         while ($row = $this->results->fetchRow()) {
             foreach ($colFits as $key => $val) {
                 /** @var float $stringWidth */
                 $stringWidth = $this->GetStringWidth($row[$key]);
                 $stringWidth += 6;
-                if ($adjustingMode && ($stringWidth > $this->sColWidth)) {
+                if ($adjustingMode && ($stringWidth > $sColWidth)) {
                     // any column whose data's width is bigger than
                     // the start width is now discarded
                     unset($colFits[$key]);
-                } else {
+                } elseif ($stringWidth > $val && $stringWidth < $sColWidth * 3) {
                     // if data's width is bigger than the current column width,
                     // enlarge the column (but avoid enlarging it if the
                     // data's width is very big)
-                    if ($stringWidth > $val && $stringWidth < $this->sColWidth * 3) {
-                        $colFits[$key] = $stringWidth;
-                    }
+                    $colFits[$key] = $stringWidth;
                 }
             }
         }
@@ -827,15 +778,15 @@ class Pdf extends PdfLib
         }
 
         if ($adjustingMode) {
-            $surplus = (count($colFits) * $this->sColWidth) - $totAlreadyFitted;
-            $surplusToAdd = $surplus / ($this->numFields - count($colFits));
+            $surplus = (count($colFits) * $sColWidth) - $totAlreadyFitted;
+            $surplusToAdd = $surplus / ($numFields - count($colFits));
         } else {
             $surplusToAdd = 0;
         }
 
-        for ($i = 0; $i < $this->numFields; $i++) {
+        for ($i = 0; $i < $numFields; $i++) {
             if (! array_key_exists($i, $colFits)) {
-                $this->tablewidths[$i] = $this->sColWidth + $surplusToAdd;
+                $this->tablewidths[$i] = $sColWidth + $surplusToAdd;
             }
 
             if ($this->displayColumn[$i] != false) {
@@ -849,7 +800,7 @@ class Pdf extends PdfLib
 
         // Pass 2
 
-        $this->results = $dbi->query($query, DatabaseInterface::CONNECT_USER, DatabaseInterface::QUERY_UNBUFFERED);
+        $this->results = $GLOBALS['dbi']->query($query, Connection::TYPE_USER, DatabaseInterface::QUERY_UNBUFFERED);
         $this->setY($this->tMargin);
         $this->AddPage();
         $this->setFont(PdfLib::PMA_PDF_FONT, '', 9);
@@ -867,29 +818,27 @@ class Pdf extends PdfLib
         $this->titleText = $titleText;
     }
 
-    public function setCurrentDb(?string $currentDb): void
+    public function setCurrentDb(string|null $currentDb): void
     {
         $this->currentDb = $currentDb ?? '';
     }
 
-    public function setCurrentTable(?string $currentTable): void
+    public function setCurrentTable(string|null $currentTable): void
     {
         $this->currentTable = $currentTable ?? '';
     }
 
-    public function setDbAlias(?string $dbAlias): void
+    public function setDbAlias(string|null $dbAlias): void
     {
         $this->dbAlias = $dbAlias ?? '';
     }
 
-    public function setTableAlias(?string $tableAlias): void
+    public function setTableAlias(string|null $tableAlias): void
     {
         $this->tableAlias = $tableAlias ?? '';
     }
 
-    /**
-     * @param array $aliases
-     */
+    /** @param mixed[] $aliases */
     public function setAliases(array $aliases): void
     {
         $this->aliases = $aliases;

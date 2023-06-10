@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Plugins\Schema;
 
+use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Plugins\Schema\Eps\EpsRelationSchema;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
 
-/**
- * @covers \PhpMyAdmin\Plugins\Schema\Eps\EpsRelationSchema
- */
+#[CoversClass(EpsRelationSchema::class)]
 class EpsRelationSchemaTest extends AbstractTestCase
 {
-    /** @var EpsRelationSchema */
-    protected $object;
+    protected EpsRelationSchema $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -22,6 +22,8 @@ class EpsRelationSchemaTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $_REQUEST['page_number'] = 33;
         $_REQUEST['eps_show_color'] = true;
         $_REQUEST['eps_show_keys'] = true;
@@ -39,7 +41,7 @@ class EpsRelationSchemaTest extends AbstractTestCase
         $GLOBALS['db'] = 'test_db';
         $GLOBALS['cfg']['Server']['DisableIS'] = true;
 
-        $this->object = new EpsRelationSchema('test_db');
+        $this->object = new EpsRelationSchema(DatabaseName::from('test_db'));
     }
 
     /**
@@ -49,14 +51,14 @@ class EpsRelationSchemaTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
     /**
      * Test for construct
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testConstructor(): void
     {
         $this->assertEquals(33, $this->object->getPageNumber());
@@ -69,9 +71,8 @@ class EpsRelationSchemaTest extends AbstractTestCase
 
     /**
      * Test for setPageNumber
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testSetPageNumber(): void
     {
         $this->object->setPageNumber(33);

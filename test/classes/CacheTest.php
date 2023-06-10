@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\Cache;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use stdClass;
 
-/**
- * @covers \PhpMyAdmin\Cache
- */
+#[CoversClass(Cache::class)]
 class CacheTest extends AbstractTestCase
 {
     public function setUp(): void
@@ -17,92 +17,61 @@ class CacheTest extends AbstractTestCase
         Cache::purge();
     }
 
-    /**
-     * @return array[]
-     */
-    public function dataProviderCacheKeyValues(): array
+    /** @return mixed[][] */
+    public static function dataProviderCacheKeyValues(): array
     {
         return [
-            'normal key and false value' => [
-                'mykey',
-                false,
-            ],
-            'normal key and null value' => [
-                'mykey',
-                null,
-            ],
-            'normal key and object value' => [
-                'mykey',
-                new stdClass(),
-            ],
+            'normal key and false value' => ['mykey', false],
+            'normal key and null value' => ['mykey', null],
+            'normal key and object value' => ['mykey', new stdClass()],
         ];
     }
 
-    /**
-     * @param mixed $valueToCache
-     *
-     * @dataProvider dataProviderCacheKeyValues
-     */
-    public function testCacheHas(string $cacheKey, $valueToCache): void
+    #[DataProvider('dataProviderCacheKeyValues')]
+    public function testCacheHas(string $cacheKey, mixed $valueToCache): void
     {
         $this->assertFalse(Cache::has($cacheKey));
-        $this->assertTrue(Cache::set($cacheKey, $valueToCache));
+        Cache::set($cacheKey, $valueToCache);
         $this->assertTrue(Cache::has($cacheKey));
-        $this->assertTrue(Cache::remove($cacheKey));
+        Cache::remove($cacheKey);
         $this->assertFalse(Cache::has($cacheKey));
     }
 
-    /**
-     * @param mixed $valueToCache
-     *
-     * @dataProvider dataProviderCacheKeyValues
-     */
-    public function testCachePurge(string $cacheKey, $valueToCache): void
+    #[DataProvider('dataProviderCacheKeyValues')]
+    public function testCachePurge(string $cacheKey, mixed $valueToCache): void
     {
         $this->assertFalse(Cache::has($cacheKey));
-        $this->assertTrue(Cache::set($cacheKey, $valueToCache));
+        Cache::set($cacheKey, $valueToCache);
         $this->assertTrue(Cache::has($cacheKey));
-        $this->assertTrue(Cache::purge());
+        Cache::purge();
         $this->assertFalse(Cache::has($cacheKey));
     }
 
-    /**
-     * @param mixed $valueToCache
-     *
-     * @dataProvider dataProviderCacheKeyValues
-     */
-    public function testCacheSet(string $cacheKey, $valueToCache): void
+    #[DataProvider('dataProviderCacheKeyValues')]
+    public function testCacheSet(string $cacheKey, mixed $valueToCache): void
     {
         $this->assertFalse(Cache::has($cacheKey));
-        $this->assertTrue(Cache::set($cacheKey, $valueToCache));
+        Cache::set($cacheKey, $valueToCache);
         $this->assertTrue(Cache::has($cacheKey));
     }
 
-    /**
-     * @param mixed $valueToCache
-     *
-     * @dataProvider dataProviderCacheKeyValues
-     */
-    public function testCacheGet(string $cacheKey, $valueToCache): void
+    #[DataProvider('dataProviderCacheKeyValues')]
+    public function testCacheGet(string $cacheKey, mixed $valueToCache): void
     {
         $this->assertFalse(Cache::has($cacheKey));
-        $this->assertTrue(Cache::set($cacheKey, $valueToCache));
+        Cache::set($cacheKey, $valueToCache);
         $this->assertTrue(Cache::has($cacheKey));
         $this->assertSame(Cache::get($cacheKey), $valueToCache);
     }
 
-    /**
-     * @param mixed $valueToCache
-     *
-     * @dataProvider dataProviderCacheKeyValues
-     */
-    public function testCacheGetDefaultValue(string $cacheKey, $valueToCache): void
+    #[DataProvider('dataProviderCacheKeyValues')]
+    public function testCacheGetDefaultValue(string $cacheKey, mixed $valueToCache): void
     {
         $this->assertFalse(Cache::has($cacheKey));
-        $this->assertTrue(Cache::set($cacheKey, $valueToCache));
+        Cache::set($cacheKey, $valueToCache);
         $this->assertTrue(Cache::has($cacheKey));
         $this->assertSame(Cache::get($cacheKey, null), $valueToCache);
-        $this->assertTrue(Cache::remove($cacheKey));
+        Cache::remove($cacheKey);
         $this->assertFalse(Cache::has($cacheKey));
         $this->assertNull(Cache::get($cacheKey, null));
         $defaultValue = new stdClass();
@@ -110,17 +79,13 @@ class CacheTest extends AbstractTestCase
         $this->assertFalse(Cache::get($cacheKey, false));
     }
 
-    /**
-     * @param mixed $valueToCache
-     *
-     * @dataProvider dataProviderCacheKeyValues
-     */
-    public function testCacheRemove(string $cacheKey, $valueToCache): void
+    #[DataProvider('dataProviderCacheKeyValues')]
+    public function testCacheRemove(string $cacheKey, mixed $valueToCache): void
     {
         $this->assertFalse(Cache::has($cacheKey));
-        $this->assertTrue(Cache::set($cacheKey, $valueToCache));
+        Cache::set($cacheKey, $valueToCache);
         $this->assertTrue(Cache::has($cacheKey));
-        $this->assertTrue(Cache::remove($cacheKey));
+        Cache::remove($cacheKey);
         $this->assertFalse(Cache::has($cacheKey));
     }
 }

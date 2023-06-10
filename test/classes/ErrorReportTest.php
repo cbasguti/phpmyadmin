@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\ConfigStorage\Relation;
+use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Error;
 use PhpMyAdmin\ErrorReport;
 use PhpMyAdmin\Template;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Utils\HttpRequest;
 use PhpMyAdmin\Version;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 use function htmlspecialchars;
 use function json_encode;
@@ -19,17 +23,22 @@ use const ENT_QUOTES;
 use const JSON_PRETTY_PRINT;
 use const JSON_UNESCAPED_SLASHES;
 
-/**
- * @covers \PhpMyAdmin\ErrorReport
- */
+#[CoversClass(ErrorReport::class)]
 class ErrorReportTest extends AbstractTestCase
 {
-    /** @var ErrorReport $errorReport */
-    private $errorReport;
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
+    private ErrorReport $errorReport;
 
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
         $GLOBALS['server'] = 1;
         $GLOBALS['cfg']['ServerDefault'] = 1;
         $GLOBALS['cfg']['ProxyUrl'] = '';
@@ -44,7 +53,7 @@ class ErrorReportTest extends AbstractTestCase
             new HttpRequest(),
             new Relation($this->dbi),
             new Template(),
-            $GLOBALS['config']
+            $GLOBALS['config'],
         );
         $this->errorReport->setSubmissionUrl('http://localhost');
     }
@@ -62,10 +71,7 @@ class ErrorReportTest extends AbstractTestCase
         $actual = $this->errorReport->getData('php');
         $this->assertEquals([], $actual);
 
-        $_SESSION['prev_errors'] = [
-            new Error(0, 'error 0', 'file', 1),
-            new Error(1, 'error 1', 'file', 2),
-        ];
+        $_SESSION['prev_errors'] = [new Error(0, 'error 0', 'file', 1), new Error(1, 'error 1', 'file', 2)];
 
         $report = [
             'pma_version' => Version::VERSION,
@@ -118,7 +124,7 @@ class ErrorReportTest extends AbstractTestCase
                 'POST',
                 false,
                 json_encode($report),
-                'Content-Type: application/json'
+                'Content-Type: application/json',
             )
             ->willReturn($return);
 
@@ -126,7 +132,7 @@ class ErrorReportTest extends AbstractTestCase
             $httpRequest,
             new Relation($this->dbi),
             new Template(),
-            $GLOBALS['config']
+            $GLOBALS['config'],
         );
         $this->errorReport->setSubmissionUrl($submissionUrl);
 
@@ -205,7 +211,7 @@ class ErrorReportTest extends AbstractTestCase
         $form = $this->errorReport->getForm();
         $this->assertStringContainsString(
             '<pre class="pre-scrollable">' . htmlspecialchars((string) $expectedData, ENT_QUOTES) . '</pre>',
-            $form
+            $form,
         );
     }
 
@@ -217,7 +223,7 @@ class ErrorReportTest extends AbstractTestCase
             '            if (response.success) {',
             '                // Get the column min value.',
             '                var min = response.column_data.min',
-            '                    ? \'(\' + Messages.strColumnMin +',
+            '                    ? \'(\' + window.Messages.strColumnMin +',
             '    this.completion.cm.removeKeyMap(this.keyMap);',
             '                        \' \' + response.column_data.min + \')\'',
             '                    : \'\';',
@@ -274,18 +280,12 @@ class ErrorReportTest extends AbstractTestCase
     /**
      * The urls to be tested for sanitization
      *
-     * @return array[]
+     * @return mixed[][]
      */
-    public function urlsToSanitize(): array
+    public static function urlsToSanitize(): array
     {
         return [
-            [
-                '',
-                [
-                    'index.php?',
-                    'index.php',
-                ],
-            ],
+            ['', ['index.php?', 'index.php']],
             [
                 'http://localhost/js/vendor/codemirror/addon/hint/show-hint.js?v=4.8.6-dev',
                 [
@@ -293,47 +293,17 @@ class ErrorReportTest extends AbstractTestCase
                     'js/vendor/codemirror/addon/hint/show-hint.js',
                 ],
             ],
-            [
-                'http://pma.7.3.local/tbl_sql.php?db=aaaaa&table=a&server=14',
-                [
-                    'tbl_sql.php?',
-                    'tbl_sql.php',
-                ],
-            ],
-            [
-                'http://pma.7.3.local/tbl_sql.php?db=aaaaa;table=a;server=14',
-                [
-                    'tbl_sql.php?',
-                    'tbl_sql.php',
-                ],
-            ],
-            [
-                'https://pma.7.3.local/tbl_sql.php?db=aaaaa;table=a;server=14',
-                [
-                    'tbl_sql.php?',
-                    'tbl_sql.php',
-                ],
-            ],
-            [
-                'https://pma.7.3.local/fileDotPhp.php?db=aaaaa;table=a;server=14',
-                [
-                    'fileDotPhp.php?',
-                    'fileDotPhp.php',
-                ],
-            ],
+            ['http://pma.7.3.local/tbl_sql.php?db=aaaaa&table=a&server=14', ['tbl_sql.php?', 'tbl_sql.php']],
+            ['http://pma.7.3.local/tbl_sql.php?db=aaaaa;table=a;server=14', ['tbl_sql.php?', 'tbl_sql.php']],
+            ['https://pma.7.3.local/tbl_sql.php?db=aaaaa;table=a;server=14', ['tbl_sql.php?', 'tbl_sql.php']],
+            ['https://pma.7.3.local/fileDotPhp.php?db=aaaaa;table=a;server=14', ['fileDotPhp.php?','fileDotPhp.php']],
             [
                 'https://pma.7.3.local/secretFolder/fileDotPhp.php?db=aaaaa;table=a;server=14',
-                [
-                    'fileDotPhp.php?',
-                    'fileDotPhp.php',
-                ],
+                ['fileDotPhp.php?', 'fileDotPhp.php'],
             ],
             [
                 'http://7.2.local/@williamdes/theREALphpMyAdminREPO/js/vendor/jquery/jquery-ui.min.js?v=5.0.0-dev',
-                [
-                    'js/vendor/jquery/jquery-ui.min.js?v=5.0.0-dev',
-                    'js/vendor/jquery/jquery-ui.min.js',
-                ],
+                ['js/vendor/jquery/jquery-ui.min.js?v=5.0.0-dev', 'js/vendor/jquery/jquery-ui.min.js'],
             ],
         ];
     }
@@ -341,11 +311,10 @@ class ErrorReportTest extends AbstractTestCase
     /**
      * Test the url sanitization
      *
-     * @param string $url    The url to test
-     * @param array  $result The result
-     *
-     * @dataProvider urlsToSanitize
+     * @param string  $url    The url to test
+     * @param mixed[] $result The result
      */
+    #[DataProvider('urlsToSanitize')]
     public function testSanitizeUrl(string $url, array $result): void
     {
         // $this->errorReport->sanitizeUrl
@@ -355,8 +324,8 @@ class ErrorReportTest extends AbstractTestCase
                 $this->errorReport,
                 ErrorReport::class,
                 'sanitizeUrl',
-                [$url]
-            )
+                [$url],
+            ),
         );
     }
 }

@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Stubs;
 
+use PhpMyAdmin\Exceptions\ExitException;
 use PhpMyAdmin\Footer;
 use PhpMyAdmin\Header;
 use PhpMyAdmin\Message;
@@ -21,21 +22,20 @@ class ResponseRenderer extends \PhpMyAdmin\ResponseRenderer
 {
     /**
      * HTML data to be used in the response
-     *
-     * @var string
      */
-    protected $htmlString;
+    protected string $htmlString = '';
 
     /**
      * An array of JSON key-value pairs
      * to be sent back for ajax requests
      *
-     * @var array
+     * @var mixed[]
      */
-    protected $json;
+    protected array $json = [];
 
-    /** @var int */
-    private $responseCode = 200;
+    private int $responseCode = 200;
+
+    private bool $isHeadersSent = false;
 
     /**
      * Creates a new class instance
@@ -43,11 +43,12 @@ class ResponseRenderer extends \PhpMyAdmin\ResponseRenderer
     public function __construct()
     {
         $this->isSuccess = true;
-        $this->htmlString = '';
-        $this->json = [];
         $this->isAjax = false;
+        $this->isDisabled = false;
 
         $GLOBALS['lang'] = 'en';
+        $GLOBALS['server'] ??= 1;
+        $GLOBALS['text_dir'] ??= 'ltr';
         $this->header = new Header();
         $this->footer = new Footer();
     }
@@ -67,7 +68,7 @@ class ResponseRenderer extends \PhpMyAdmin\ResponseRenderer
      * @param mixed|null                        $value Null, if passing an array in $json otherwise
      *                                                 it's a string value to the key
      */
-    public function addJSON($json, $value = null): void
+    public function addJSON(string|int|array $json, mixed $value = null): void
     {
         if (is_array($json)) {
             foreach ($json as $key => $value) {
@@ -82,10 +83,8 @@ class ResponseRenderer extends \PhpMyAdmin\ResponseRenderer
 
     /**
      * Return the final concatenated HTML string
-     *
-     * @return string
      */
-    public function getHTMLResult()
+    public function getHTMLResult(): string
     {
         return $this->htmlString;
     }
@@ -93,9 +92,9 @@ class ResponseRenderer extends \PhpMyAdmin\ResponseRenderer
     /**
      * Return the final JSON array
      *
-     * @return array
+     * @return mixed[]
      */
-    public function getJSONResult()
+    public function getJSONResult(): array
     {
         return $this->json;
     }
@@ -103,10 +102,8 @@ class ResponseRenderer extends \PhpMyAdmin\ResponseRenderer
     /**
      * Current I choose to return PhpMyAdmin\Header object directly because
      * our test has nothing about the Scripts and PhpMyAdmin\Header class.
-     *
-     * @return Header
      */
-    public function getHeader()
+    public function getHeader(): Header
     {
         return $this->header;
     }
@@ -169,5 +166,25 @@ class ResponseRenderer extends \PhpMyAdmin\ResponseRenderer
     public function getHttpResponseCode(): int
     {
         return $this->responseCode;
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->isDisabled;
+    }
+
+    public function headersSent(): bool
+    {
+        return $this->isHeadersSent;
+    }
+
+    public function setHeadersSent(bool $isHeadersSent): void
+    {
+        $this->isHeadersSent = $isHeadersSent;
+    }
+
+    public function callExit(string $message = ''): never
+    {
+        throw new ExitException($message);
     }
 }

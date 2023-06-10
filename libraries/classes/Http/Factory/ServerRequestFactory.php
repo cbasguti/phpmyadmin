@@ -35,15 +35,13 @@ use const PHP_URL_QUERY;
 
 class ServerRequestFactory
 {
-    /** @var ServerRequestFactoryInterface */
-    private $serverRequestFactory;
+    private ServerRequestFactoryInterface $serverRequestFactory;
 
-    /** @var UriFactoryInterface */
-    private $uriFactory;
+    private UriFactoryInterface $uriFactory;
 
     public function __construct(
-        ?ServerRequestFactoryInterface $serverRequestFactory = null,
-        ?UriFactoryInterface $uriFactory = null
+        ServerRequestFactoryInterface|null $serverRequestFactory = null,
+        UriFactoryInterface|null $uriFactory = null,
     ) {
         $this->serverRequestFactory = $serverRequestFactory ?? $this->createServerRequestFactory();
         $this->uriFactory = $uriFactory ?? $this->createUriFactory();
@@ -101,9 +99,7 @@ class ServerRequestFactory
         return new ServerRequest($serverRequest);
     }
 
-    /**
-     * @return array<string, string>
-     */
+    /** @return array<string, string> */
     protected function getallheaders(): array
     {
         /** @var array<string, string> $headers */
@@ -117,7 +113,7 @@ class ServerRequestFactory
         $serverRequest = $creator->serverRequestFactory->createServerRequest(
             $_SERVER['REQUEST_METHOD'] ?? 'GET',
             $creator->createUriFromGlobals($_SERVER),
-            $_SERVER
+            $_SERVER,
         );
 
         foreach ($creator->getallheaders() as $name => $value) {
@@ -158,7 +154,7 @@ class ServerRequestFactory
         if (isset($server['PHP_AUTH_USER']) && is_string($server['PHP_AUTH_USER']) && $server['PHP_AUTH_USER'] !== '') {
             $uri = $uri->withUserInfo(
                 $server['PHP_AUTH_USER'],
-                isset($server['PHP_AUTH_PW']) && is_string($server['PHP_AUTH_PW']) ? $server['PHP_AUTH_PW'] : null
+                isset($server['PHP_AUTH_PW']) && is_string($server['PHP_AUTH_PW']) ? $server['PHP_AUTH_PW'] : null,
             );
         }
 

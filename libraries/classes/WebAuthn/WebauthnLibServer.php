@@ -29,14 +29,11 @@ use const SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING;
 
 final class WebauthnLibServer implements Server
 {
-    /** @var TwoFactor */
-    private $twofactor;
-
-    public function __construct(TwoFactor $twofactor)
+    public function __construct(private TwoFactor $twofactor)
     {
-        $this->twofactor = $twofactor;
     }
 
+    /** @inheritDoc */
     public function getCredentialCreationOptions(string $userName, string $userId, string $relyingPartyId): array
     {
         $userEntity = new PublicKeyCredentialUserEntity($userName, $userId, $userName);
@@ -50,7 +47,7 @@ final class WebauthnLibServer implements Server
             AuthenticatorSelectionCriteria::createFromArray([
                 'authenticatorAttachment' => 'cross-platform',
                 'userVerification' => 'discouraged',
-            ])
+            ]),
         );
         /** @psalm-var array{
          *   challenge: non-empty-string,
@@ -64,18 +61,19 @@ final class WebauthnLibServer implements Server
         $creationOptions = $publicKeyCredentialCreationOptions->jsonSerialize();
         $creationOptions['challenge'] = sodium_bin2base64(
             sodium_base642bin($creationOptions['challenge'], SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
-            SODIUM_BASE64_VARIANT_ORIGINAL
+            SODIUM_BASE64_VARIANT_ORIGINAL,
         );
         Assert::stringNotEmpty($creationOptions['challenge']);
 
         return $creationOptions;
     }
 
+    /** @inheritDoc */
     public function getCredentialRequestOptions(
         string $userName,
         string $userId,
         string $relyingPartyId,
-        array $allowedCredentials
+        array $allowedCredentials,
     ): array {
         $userEntity = new PublicKeyCredentialUserEntity($userName, $userId, $userName);
         $relyingPartyEntity = new PublicKeyCredentialRpEntity('phpMyAdmin (' . $relyingPartyId . ')', $relyingPartyId);
@@ -83,14 +81,14 @@ final class WebauthnLibServer implements Server
         $server = new WebauthnServer($relyingPartyEntity, $publicKeyCredentialSourceRepository);
         $credentialSources = $publicKeyCredentialSourceRepository->findAllForUserEntity($userEntity);
         $allowedCredentials = array_map(
-            static function (PublicKeyCredentialSource $credential): PublicKeyCredentialDescriptor {
-                return $credential->getPublicKeyCredentialDescriptor();
-            },
-            $credentialSources
+            static fn (
+                PublicKeyCredentialSource $credential,
+            ): PublicKeyCredentialDescriptor => $credential->getPublicKeyCredentialDescriptor(),
+            $credentialSources,
         );
         $publicKeyCredentialRequestOptions = $server->generatePublicKeyCredentialRequestOptions(
             'discouraged',
-            $allowedCredentials
+            $allowedCredentials,
         );
         /**
          * @psalm-var array{
@@ -101,13 +99,13 @@ final class WebauthnLibServer implements Server
         $requestOptions = $publicKeyCredentialRequestOptions->jsonSerialize();
         $requestOptions['challenge'] = sodium_bin2base64(
             sodium_base642bin($requestOptions['challenge'], SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
-            SODIUM_BASE64_VARIANT_ORIGINAL
+            SODIUM_BASE64_VARIANT_ORIGINAL,
         );
         if (isset($requestOptions['allowCredentials'])) {
             foreach ($requestOptions['allowCredentials'] as $key => $credential) {
                 $requestOptions['allowCredentials'][$key]['id'] = sodium_bin2base64(
                     sodium_base642bin($credential['id'], SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
-                    SODIUM_BASE64_VARIANT_ORIGINAL
+                    SODIUM_BASE64_VARIANT_ORIGINAL,
                 );
             }
         }
@@ -115,22 +113,19 @@ final class WebauthnLibServer implements Server
         return $requestOptions;
     }
 
+    /** @inheritDoc */
     public function parseAndValidateAssertionResponse(
         string $assertionResponseJson,
         array $allowedCredentials,
         string $challenge,
-        ServerRequestInterface $request
+        ServerRequestInterface $request,
     ): void {
         Assert::string($this->twofactor->config['settings']['userHandle']);
         $userHandle = sodium_base642bin(
             $this->twofactor->config['settings']['userHandle'],
-            SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING
+            SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING,
         );
-        $userEntity = new PublicKeyCredentialUserEntity(
-            $this->twofactor->user,
-            $userHandle,
-            $this->twofactor->user
-        );
+        $userEntity = new PublicKeyCredentialUserEntity($this->twofactor->user, $userHandle, $this->twofactor->user);
         $host = $request->getUri()->getHost();
         $relyingPartyEntity = new PublicKeyCredentialRpEntity('phpMyAdmin (' . $host . ')', $host);
         $publicKeyCredentialSourceRepository = $this->createPublicKeyCredentialSourceRepository();
@@ -142,18 +137,14 @@ final class WebauthnLibServer implements Server
             'timeout' => 60000,
         ]);
         Assert::isInstanceOf($requestOptions, PublicKeyCredentialRequestOptions::class);
-        $server->loadAndCheckAssertionResponse(
-            $assertionResponseJson,
-            $requestOptions,
-            $userEntity,
-            $request
-        );
+        $server->loadAndCheckAssertionResponse($assertionResponseJson, $requestOptions, $userEntity, $request);
     }
 
+    /** @inheritDoc */
     public function parseAndValidateAttestationResponse(
         string $attestationResponse,
         string $credentialCreationOptions,
-        ServerRequestInterface $request
+        ServerRequestInterface $request,
     ): array {
         $creationOptions = json_decode($credentialCreationOptions, true);
         Assert::isArray($creationOptions);
@@ -194,7 +185,7 @@ final class WebauthnLibServer implements Server
         $publicKeyCredentialSource = $server->loadAndCheckAttestationResponse(
             $attestationResponse,
             $credentialCreationOptions,
-            $request
+            $request,
         );
 
         return $publicKeyCredentialSource->jsonSerialize();
@@ -203,15 +194,11 @@ final class WebauthnLibServer implements Server
     private function createPublicKeyCredentialSourceRepository(): PublicKeyCredentialSourceRepository
     {
         return new class ($this->twofactor) implements PublicKeyCredentialSourceRepository {
-            /** @var TwoFactor */
-            private $twoFactor;
-
-            public function __construct(TwoFactor $twoFactor)
+            public function __construct(private TwoFactor $twoFactor)
             {
-                $this->twoFactor = $twoFactor;
             }
 
-            public function findOneByCredentialId(string $publicKeyCredentialId): ?PublicKeyCredentialSource
+            public function findOneByCredentialId(string $publicKeyCredentialId): PublicKeyCredentialSource|null
             {
                 $data = $this->read();
                 if (isset($data[base64_encode($publicKeyCredentialId)])) {
@@ -221,9 +208,7 @@ final class WebauthnLibServer implements Server
                 return null;
             }
 
-            /**
-             * @return PublicKeyCredentialSource[]
-             */
+            /** @return PublicKeyCredentialSource[] */
             public function findAllForUserEntity(PublicKeyCredentialUserEntity $publicKeyCredentialUserEntity): array
             {
                 $sources = [];
@@ -247,9 +232,7 @@ final class WebauthnLibServer implements Server
                 $this->write($data);
             }
 
-            /**
-             * @return mixed[][]
-             */
+            /** @return mixed[][] */
             private function read(): array
             {
                 /** @psalm-var list<mixed[]> $credentials */
@@ -265,9 +248,7 @@ final class WebauthnLibServer implements Server
                 return $credentials;
             }
 
-            /**
-             * @param mixed[] $data
-             */
+            /** @param mixed[] $data */
             private function write(array $data): void
             {
                 $this->twoFactor->config['settings']['credentials'] = $data;

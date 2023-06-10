@@ -7,23 +7,29 @@ namespace PhpMyAdmin\Tests;
 use Exception;
 use PhpMyAdmin\Error;
 use PhpMyAdmin\ErrorHandler;
+use PhpMyAdmin\Exceptions\ExitException;
+use PhpMyAdmin\ResponseRenderer;
+use PhpMyAdmin\Tests\Stubs\ResponseRenderer as ResponseRendererStub;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
+use ReflectionProperty;
+use Throwable;
 
 use function array_keys;
 use function array_pop;
 use function count;
 
+use const E_ERROR;
 use const E_RECOVERABLE_ERROR;
 use const E_USER_NOTICE;
 use const E_USER_WARNING;
 use const E_WARNING;
 
-/**
- * @covers \PhpMyAdmin\ErrorHandler
- */
+#[CoversClass(ErrorHandler::class)]
 class ErrorHandlerTest extends AbstractTestCase
 {
-    /** @var ErrorHandler */
-    protected $object;
+    protected ErrorHandler $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -32,6 +38,9 @@ class ErrorHandlerTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['lang'] = 'en';
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $this->object = new ErrorHandler();
         $_SESSION['errors'] = [];
         $GLOBALS['server'] = 0;
@@ -46,57 +55,42 @@ class ErrorHandlerTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
     /**
      * Data provider for testHandleError
      *
-     * @return array data for testHandleError
+     * @return array<array{int, string, string, int, string, string}>
      */
-    public function providerForTestHandleError(): array
+    public static function providerForTestHandleError(): array
     {
         return [
-            [
-                E_RECOVERABLE_ERROR,
-                'Compile Error',
-                'error.txt',
-                12,
-                'Compile Error',
-                '',
-            ],
-            [
-                E_USER_NOTICE,
-                'User notice',
-                'error.txt',
-                12,
-                'User notice',
-                'User notice',
-            ],
+            [E_RECOVERABLE_ERROR, 'Compile Error', 'error.txt', 12, 'Compile Error', ''],
+            [E_USER_NOTICE, 'User notice', 'error.txt', 12, 'User notice', 'User notice'],
         ];
     }
 
     /**
      * Test for getDispErrors when PHP errors are not shown
      *
-     * @param int    $errno       error number
-     * @param string $errstr      error string
-     * @param string $errfile     error file
-     * @param int    $errline     error line
-     * @param string $output_show expected output if showing of errors is
-     *                            enabled
-     * @param string $output_hide expected output if showing of errors is
-     *                            disabled and 'sendErrorReports' is set to 'never'
-     *
-     * @dataProvider providerForTestHandleError
+     * @param int    $errno      error number
+     * @param string $errstr     error string
+     * @param string $errfile    error file
+     * @param int    $errline    error line
+     * @param string $outputShow expected output if showing of errors is enabled
+     * @param string $outputHide expected output if showing of errors is
+     *                           disabled and 'sendErrorReports' is set to 'never'
      */
+    #[DataProvider('providerForTestHandleError')]
     public function testGetDispErrorsForDisplayFalse(
         int $errno,
         string $errstr,
         string $errfile,
         int $errline,
-        string $output_show,
-        string $output_hide
+        string $outputShow,
+        string $outputHide,
     ): void {
         // TODO: Add other test cases for all combination of 'sendErrorReports'
         $GLOBALS['cfg']['SendErrorReports'] = 'never';
@@ -105,42 +99,39 @@ class ErrorHandlerTest extends AbstractTestCase
 
         $output = $this->object->getDispErrors();
 
-        if ($output_hide === '') {
+        if ($outputHide === '') {
             $this->assertEquals('', $output);
         } else {
-            $this->assertNotEmpty($output_show);// Useless check
-            $this->assertStringContainsString($output_hide, $output);
+            $this->assertNotEmpty($outputShow);// Useless check
+            $this->assertStringContainsString($outputHide, $output);
         }
     }
 
     /**
      * Test for getDispErrors when PHP errors are shown
      *
-     * @param int    $errno       error number
-     * @param string $errstr      error string
-     * @param string $errfile     error file
-     * @param int    $errline     error line
-     * @param string $output_show expected output if showing of errors is
-     *                            enabled
-     * @param string $output_hide expected output if showing of errors is
-     *                            disabled
-     *
-     * @dataProvider providerForTestHandleError
+     * @param int    $errno      error number
+     * @param string $errstr     error string
+     * @param string $errfile    error file
+     * @param int    $errline    error line
+     * @param string $outputShow expected output if showing of errors is enabled
+     * @param string $outputHide expected output if showing of errors is disabled
      */
+    #[DataProvider('providerForTestHandleError')]
     public function testGetDispErrorsForDisplayTrue(
         int $errno,
         string $errstr,
         string $errfile,
         int $errline,
-        string $output_show,
-        string $output_hide
+        string $outputShow,
+        string $outputHide,
     ): void {
         $this->object->handleError($errno, $errstr, $errfile, $errline);
 
-        $this->assertIsString($output_hide);// Useless check
+        $this->assertIsString($outputHide);// Useless check
         $this->assertStringContainsString(
-            $output_show,
-            $this->object->getDispErrors()
+            $outputShow,
+            $this->object->getDispErrors(),
         );
     }
 
@@ -153,61 +144,58 @@ class ErrorHandlerTest extends AbstractTestCase
             $this->object,
             ErrorHandler::class,
             'checkSavedErrors',
-            []
+            [],
         );
         $this->assertArrayNotHasKey('errors', $_SESSION);
     }
 
     /**
      * Test for countErrors
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testCountErrors(): void
     {
         $this->object->addError('Compile Error', E_WARNING, 'error.txt', 15);
         $this->assertEquals(
             1,
-            $this->object->countErrors()
+            $this->object->countErrors(),
         );
     }
 
     /**
      * Test for sliceErrors
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testSliceErrors(): void
     {
         $this->object->addError('Compile Error', E_WARNING, 'error.txt', 15);
         $this->object->addError('Compile Error', E_WARNING, 'error.txt', 16);
         $this->assertEquals(
             2,
-            $this->object->countErrors()
+            $this->object->countErrors(),
         );
         $this->assertEquals(
             [],
-            $this->object->sliceErrors(2)
+            $this->object->sliceErrors(2),
         );
         $this->assertEquals(
             2,
-            $this->object->countErrors()
+            $this->object->countErrors(),
         );
         $this->assertCount(
             1,
-            $this->object->sliceErrors(1)
+            $this->object->sliceErrors(1),
         );
         $this->assertEquals(
             1,
-            $this->object->countErrors()
+            $this->object->countErrors(),
         );
     }
 
     /**
      * Test for sliceErrors with 10 elements as an example
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testSliceErrorsOtherExample(): void
     {
         for ($i = 0; $i < 10; $i++) {
@@ -224,10 +212,8 @@ class ErrorHandlerTest extends AbstractTestCase
 
         // Gives the last element
         $this->assertEquals(
-            [
-                $firstKey => $elements[$firstKey],
-            ],
-            $elements
+            [$firstKey => $elements[$firstKey]],
+            $elements,
         );
         $this->assertEquals(9, count($this->object->getCurrentErrors()));
         $this->assertEquals(9, $this->object->countErrors());
@@ -253,12 +239,12 @@ class ErrorHandlerTest extends AbstractTestCase
         $this->object->addError('Compile Error', E_WARNING, 'error.txt', 15);
         $this->assertEquals(
             0,
-            $this->object->countUserErrors()
+            $this->object->countUserErrors(),
         );
         $this->object->addError('Compile Error', E_USER_WARNING, 'error.txt', 15);
         $this->assertEquals(
             1,
-            $this->object->countUserErrors()
+            $this->object->countUserErrors(),
         );
     }
 
@@ -285,7 +271,7 @@ class ErrorHandlerTest extends AbstractTestCase
     {
         $this->assertEquals(
             0,
-            $this->object->countDisplayErrors()
+            $this->object->countDisplayErrors(),
         );
     }
 
@@ -296,7 +282,7 @@ class ErrorHandlerTest extends AbstractTestCase
     {
         $this->assertEquals(
             0,
-            $this->object->countDisplayErrors()
+            $this->object->countDisplayErrors(),
         );
     }
 
@@ -310,11 +296,21 @@ class ErrorHandlerTest extends AbstractTestCase
 
     public function testHandleExceptionForDevEnv(): void
     {
+        $GLOBALS['lang'] = 'en';
+        $GLOBALS['text_dir'] = 'ltr';
         $GLOBALS['config']->set('environment', 'development');
+        $responseStub = new ResponseRendererStub();
+        (new ReflectionProperty(ResponseRenderer::class, 'instance'))->setValue($responseStub);
+        $responseStub->setHeadersSent(true);
         $errorHandler = new ErrorHandler();
         $this->assertSame([], $errorHandler->getCurrentErrors());
-        $errorHandler->handleException(new Exception('Exception message.'));
-        $output = $this->getActualOutputForAssertion();
+        try {
+            $errorHandler->handleException(new Exception('Exception message.'));
+        } catch (Throwable $throwable) {
+        }
+
+        $this->assertInstanceOf(ExitException::class, $throwable ?? null);
+        $output = $responseStub->getHTMLResult();
         $errors = $errorHandler->getCurrentErrors();
         $this->assertCount(1, $errors);
         $error = array_pop($errors);
@@ -328,11 +324,21 @@ class ErrorHandlerTest extends AbstractTestCase
 
     public function testHandleExceptionForProdEnv(): void
     {
+        $GLOBALS['lang'] = 'en';
+        $GLOBALS['text_dir'] = 'ltr';
         $GLOBALS['config']->set('environment', 'production');
+        $responseStub = new ResponseRendererStub();
+        (new ReflectionProperty(ResponseRenderer::class, 'instance'))->setValue($responseStub);
+        $responseStub->setHeadersSent(true);
         $errorHandler = new ErrorHandler();
         $this->assertSame([], $errorHandler->getCurrentErrors());
-        $errorHandler->handleException(new Exception('Exception message.'));
-        $output = $this->getActualOutputForAssertion();
+        try {
+            $errorHandler->handleException(new Exception('Exception message.'));
+        } catch (Throwable $throwable) {
+        }
+
+        $this->assertInstanceOf(ExitException::class, $throwable ?? null);
+        $output = $responseStub->getHTMLResult();
         $errors = $errorHandler->getCurrentErrors();
         $this->assertCount(1, $errors);
         $error = array_pop($errors);
@@ -340,7 +346,57 @@ class ErrorHandlerTest extends AbstractTestCase
         $this->assertSame('Exception: Exception message.', $error->getOnlyMessage());
         $this->assertStringContainsString($error->getDisplay(), $output);
         $this->assertStringContainsString('Exception: Exception message.', $output);
-        $this->assertStringNotContainsString('Internal error', $output);
         $this->assertStringNotContainsString('ErrorHandlerTest.php#' . $error->getLine(), $output);
+    }
+
+    public function testAddErrorWithFatalErrorAndHeadersSent(): void
+    {
+        $GLOBALS['lang'] = 'en';
+        $GLOBALS['text_dir'] = 'ltr';
+        $GLOBALS['config']->set('environment', 'production');
+        $responseStub = new ResponseRendererStub();
+        (new ReflectionProperty(ResponseRenderer::class, 'instance'))->setValue($responseStub);
+        $responseStub->setHeadersSent(true);
+        $errorHandler = new ErrorHandler();
+        try {
+            $errorHandler->addError('Fatal error message!', E_ERROR, './file/name', 1);
+        } catch (Throwable $exception) {
+        }
+
+        $this->assertInstanceOf(ExitException::class, $exception ?? null);
+        // phpcs:disable Generic.Files.LineLength.TooLong
+        $expectedStart = <<<'HTML'
+<div class="alert alert-danger" role="alert"><p><strong>Error</strong> in name#1</p><img src="themes/dot.gif" title="" alt="" class="icon ic_s_error"> Fatal error message!<p class="mt-3"><strong>Backtrace</strong></p><ol class="list-group"><li class="list-group-item">
+HTML;
+        // phpcs:enable
+        $output = $responseStub->getHTMLResult();
+        $this->assertStringStartsWith($expectedStart, $output);
+        $this->assertStringEndsWith('</li></ol></div>' . "\n" . '</body></html>', $output);
+    }
+
+    public function testAddErrorWithFatalErrorAndHeadersNotSent(): void
+    {
+        $GLOBALS['lang'] = 'en';
+        $GLOBALS['text_dir'] = 'ltr';
+        $GLOBALS['config']->set('environment', 'production');
+        $responseStub = new ResponseRendererStub();
+        (new ReflectionProperty(ResponseRenderer::class, 'instance'))->setValue($responseStub);
+        $responseStub->setHeadersSent(false);
+        $errorHandler = new ErrorHandler();
+        try {
+            $errorHandler->addError('Fatal error message!', E_ERROR, './file/name', 1);
+        } catch (Throwable $exception) {
+        }
+
+        $this->assertInstanceOf(ExitException::class, $exception ?? null);
+        // phpcs:disable Generic.Files.LineLength.TooLong
+        $expectedStart = <<<'HTML'
+<html><head><title>Error: Fatal error message!</title></head>
+<div class="alert alert-danger" role="alert"><p><strong>Error</strong> in name#1</p><img src="themes/dot.gif" title="" alt="" class="icon ic_s_error"> Fatal error message!<p class="mt-3"><strong>Backtrace</strong></p><ol class="list-group"><li class="list-group-item">
+HTML;
+        // phpcs:enable
+        $output = $responseStub->getHTMLResult();
+        $this->assertStringStartsWith($expectedStart, $output);
+        $this->assertStringEndsWith('</li></ol></div>' . "\n" . '</body></html>', $output);
     }
 }

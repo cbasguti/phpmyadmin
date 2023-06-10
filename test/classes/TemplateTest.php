@@ -4,17 +4,19 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests;
 
+use PhpMyAdmin\Config;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Twig\Extensions\Node\TransNode;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\PreserveGlobalState;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use Twig\Error\LoaderError;
 
-/**
- * @covers \PhpMyAdmin\Template
- */
+#[CoversClass(Template::class)]
 class TemplateTest extends AbstractTestCase
 {
-    /** @var Template */
-    protected $template;
+    protected Template $template;
 
     /**
      * Sets up the fixture.
@@ -22,6 +24,7 @@ class TemplateTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->template = new Template();
     }
 
@@ -31,15 +34,13 @@ class TemplateTest extends AbstractTestCase
      */
     public function testGetTwigEnvironment(): void
     {
-        global $cfg;
-
         $this->loadContainerBuilder();
 
-        $cfg['environment'] = 'production';
+        $GLOBALS['cfg']['environment'] = 'production';
         $twig = Template::getTwigEnvironment(null);
         $this->assertFalse($twig->isDebug());
         $this->assertFalse(TransNode::$enableAddDebugInfo);
-        $cfg['environment'] = 'development';
+        $GLOBALS['cfg']['environment'] = 'development';
         $twig = Template::getTwigEnvironment(null);
         $this->assertTrue($twig->isDebug());
         $this->assertTrue(TransNode::$enableAddDebugInfo);
@@ -49,15 +50,11 @@ class TemplateTest extends AbstractTestCase
      * Test for set function
      *
      * @param string $data Template name
-     *
-     * @dataProvider providerTestSet
      */
+    #[DataProvider('providerTestSet')]
     public function testSet(string $data): void
     {
-        $result = $this->template->render($data, [
-            'variable1' => 'value1',
-            'variable2' => 'value2',
-        ]);
+        $result = $this->template->render($data, ['variable1' => 'value1', 'variable2' => 'value2']);
         $this->assertStringContainsString('value1', $result);
         $this->assertStringContainsString('value2', $result);
     }
@@ -65,13 +62,11 @@ class TemplateTest extends AbstractTestCase
     /**
      * Data provider for testSet
      *
-     * @return array
+     * @return mixed[]
      */
-    public function providerTestSet(): array
+    public static function providerTestSet(): array
     {
-        return [
-            ['test/add_data'],
-        ];
+        return [['test/add_data']];
     }
 
     /**
@@ -80,31 +75,24 @@ class TemplateTest extends AbstractTestCase
      * @param string $templateFile Template name
      * @param string $key          Template variable array key
      * @param string $value        Template variable array value
-     *
-     * @dataProvider providerTestDynamicRender
      */
+    #[DataProvider('providerTestDynamicRender')]
     public function testDynamicRender(string $templateFile, string $key, string $value): void
     {
         $this->assertEquals(
             $value,
-            $this->template->render($templateFile, [$key => $value])
+            $this->template->render($templateFile, [$key => $value]),
         );
     }
 
     /**
      * Data provider for testDynamicRender
      *
-     * @return array
+     * @return mixed[]
      */
-    public function providerTestDynamicRender(): array
+    public static function providerTestDynamicRender(): array
     {
-        return [
-            [
-                'test/echo',
-                'variable',
-                'value',
-            ],
-        ];
+        return [['test/echo', 'variable', 'value']];
     }
 
     /**
@@ -121,92 +109,71 @@ class TemplateTest extends AbstractTestCase
      *
      * @param string $templateFile   Template name
      * @param string $expectedResult Expected result
-     *
-     * @dataProvider providerTestRender
      */
+    #[DataProvider('providerTestRender')]
     public function testRender(string $templateFile, string $expectedResult): void
     {
         $this->assertEquals(
             $expectedResult,
-            $this->template->render($templateFile)
+            $this->template->render($templateFile),
         );
     }
 
     /**
      * Data provider for testSet
      *
-     * @return array
+     * @return mixed[]
      */
-    public function providerTestRender(): array
+    public static function providerTestRender(): array
     {
-        return [
-            [
-                'test/static',
-                'static content',
-            ],
-        ];
+        return [['test/static', 'static content']];
     }
 
     /**
      * Test for render
      *
-     * @param string $templateFile   Template name
-     * @param array  $renderParams   Render params
-     * @param string $expectedResult Expected result
-     *
-     * @dataProvider providerTestRenderGettext
+     * @param string  $templateFile   Template name
+     * @param mixed[] $renderParams   Render params
+     * @param string  $expectedResult Expected result
      */
+    #[DataProvider('providerTestRenderGettext')]
     public function testRenderGettext(string $templateFile, array $renderParams, string $expectedResult): void
     {
         $this->assertEquals(
             $expectedResult,
-            $this->template->render($templateFile, $renderParams)
+            $this->template->render($templateFile, $renderParams),
         );
     }
 
     /**
      * Data provider for testRenderGettext
      *
-     * @return array
+     * @return mixed[]
      */
-    public function providerTestRenderGettext(): array
+    public static function providerTestRenderGettext(): array
     {
         return [
-            [
-                'test/gettext/gettext',
-                [],
-                'Text',
-            ],
-            [
-                'test/gettext/pgettext',
-                [],
-                'Text',
-            ],
-            [
-                'test/gettext/notes',
-                [],
-                'Text',
-            ],
-            [
-                'test/gettext/plural',
-                ['table_count' => 1],
-                'One table',
-            ],
-            [
-                'test/gettext/plural',
-                ['table_count' => 2],
-                '2 tables',
-            ],
-            [
-                'test/gettext/plural_notes',
-                ['table_count' => 1],
-                'One table',
-            ],
-            [
-                'test/gettext/plural_notes',
-                ['table_count' => 2],
-                '2 tables',
-            ],
+            ['test/gettext/gettext', [], 'Text'],
+            ['test/gettext/pgettext', [], 'Text'],
+            ['test/gettext/notes', [], 'Text'],
+            ['test/gettext/plural', ['table_count' => 1], 'One table'],
+            ['test/gettext/plural', ['table_count' => 2], '2 tables'],
+            ['test/gettext/plural_notes', ['table_count' => 1], 'One table'],
+            ['test/gettext/plural_notes', ['table_count' => 2], '2 tables'],
         ];
+    }
+
+    #[RunInSeparateProcess]
+    #[PreserveGlobalState(false)]
+    public function testLoadingTwigEnvOnlyOnce(): void
+    {
+        $config = $this->createMock(Config::class);
+        $config->expects($this->once())->method('getTempDir')->with($this->equalTo('twig'))->willReturn(null);
+
+        $template = new Template($config);
+        $this->assertSame('static content', $template->render('test/static'));
+
+        $template2 = new Template($config);
+        $this->assertSame('static content', $template2->render('test/static'));
     }
 }

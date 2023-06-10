@@ -5,16 +5,16 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Controllers\Transformation;
 
 use PhpMyAdmin\Controllers\Transformation\OverviewController;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer;
 use PhpMyAdmin\Transformations;
+use PHPUnit\Framework\Attributes\CoversClass;
 
 use function __;
 
-/**
- * @covers \PhpMyAdmin\Controllers\Transformation\OverviewController
- */
+#[CoversClass(OverviewController::class)]
 class OverviewControllerTest extends AbstractTestCase
 {
     /**
@@ -23,14 +23,17 @@ class OverviewControllerTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setGlobalConfig();
+
         parent::setTheme();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['text_dir'] = 'ltr';
 
         $GLOBALS['server'] = 1;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
     }
 
     public function testIndexAction(): void
@@ -39,20 +42,20 @@ class OverviewControllerTest extends AbstractTestCase
 
         $controller = new OverviewController($response, new Template(), new Transformations());
 
-        $controller();
+        $controller($this->createStub(ServerRequest::class));
         $actual = $response->getHTMLResult();
 
         $this->assertStringContainsString(
             __('Available media types'),
-            $actual
+            $actual,
         );
         $this->assertStringContainsString(
             'id="transformation">' . __('Available browser display transformations'),
-            $actual
+            $actual,
         );
         $this->assertStringContainsString(
             'id="input_transformation">' . __('Available input transformations'),
-            $actual
+            $actual,
         );
         $this->assertStringContainsString('Text/Plain', $actual);
         $this->assertStringContainsString('Image/JPEG: Inline', $actual);

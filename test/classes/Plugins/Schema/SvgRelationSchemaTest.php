@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Plugins\Schema;
 
+use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Plugins\Schema\Svg\SvgRelationSchema;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 
-/**
- * @covers \PhpMyAdmin\Plugins\Schema\Svg\SvgRelationSchema
- * @requires extension xmlwriter
- */
+#[CoversClass(SvgRelationSchema::class)]
+#[RequiresPhpExtension('xmlwriter')]
 class SvgRelationSchemaTest extends AbstractTestCase
 {
-    /** @var SvgRelationSchema */
-    protected $object;
+    protected SvgRelationSchema $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -23,6 +24,8 @@ class SvgRelationSchemaTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $_REQUEST['page_number'] = 33;
         $_REQUEST['svg_show_color'] = true;
         $_REQUEST['svg_show_keys'] = true;
@@ -40,10 +43,9 @@ class SvgRelationSchemaTest extends AbstractTestCase
         $GLOBALS['table'] = '';
         $GLOBALS['lang'] = 'en';
         $GLOBALS['text_dir'] = 'en';
-        $GLOBALS['PMA_PHP_SELF'] = '';
         $GLOBALS['cfg']['Server']['DisableIS'] = true;
 
-        $this->object = new SvgRelationSchema('test_db');
+        $this->object = new SvgRelationSchema(DatabaseName::from('test_db'));
     }
 
     /**
@@ -53,14 +55,14 @@ class SvgRelationSchemaTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
     /**
      * Test for construct
-     *
-     * @group medium
      */
+    #[Group('medium')]
     public function testConstructor(): void
     {
         $this->assertEquals(33, $this->object->getPageNumber());

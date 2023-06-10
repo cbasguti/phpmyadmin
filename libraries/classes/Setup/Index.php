@@ -30,10 +30,7 @@ class Index
     public static function messagesBegin(): void
     {
         if (! isset($_SESSION['messages']) || ! is_array($_SESSION['messages'])) {
-            $_SESSION['messages'] = [
-                'error' => [],
-                'notice' => [],
-            ];
+            $_SESSION['messages'] = ['error' => [], 'notice' => []];
         } else {
             // reset message states
             foreach ($_SESSION['messages'] as &$messages) {
@@ -53,7 +50,7 @@ class Index
      * @param string $title   language string id (in $str array)
      * @param string $message message text
      */
-    public static function messagesSet($type, $msgId, $title, $message): void
+    public static function messagesSet(string $type, string $msgId, string $title, string $message): void
     {
         $fresh = ! isset($_SESSION['messages'][$type][$msgId]);
         $_SESSION['messages'][$type][$msgId] = [
@@ -70,16 +67,16 @@ class Index
     public static function messagesEnd(): void
     {
         foreach ($_SESSION['messages'] as &$messages) {
-            $remove_ids = [];
+            $removeIds = [];
             foreach ($messages as $id => $msg) {
                 if ($msg['active'] != false) {
                     continue;
                 }
 
-                $remove_ids[] = $id;
+                $removeIds[] = $id;
             }
 
-            foreach ($remove_ids as $id) {
+            foreach ($removeIds as $id) {
                 unset($messages[$id]);
             }
         }
@@ -88,9 +85,9 @@ class Index
     /**
      * Prints message list, must be called after self::messagesEnd()
      *
-     * @return array
+     * @return mixed[]
      */
-    public static function messagesShowHtml()
+    public static function messagesShowHtml(): array
     {
         $return = [];
         foreach ($_SESSION['messages'] as $type => $messages) {
@@ -115,27 +112,26 @@ class Index
     {
         // version check messages should always be visible so let's make
         // a unique message id each time we run it
-        $message_id = uniqid('version_check');
+        $messageId = uniqid('version_check');
 
         // Fetch data
         $versionInformation = new VersionInformation();
-        $version_data = $versionInformation->getLatestVersion();
+        $versionData = $versionInformation->getLatestVersion();
 
-        if (empty($version_data)) {
+        if ($versionData === null) {
             self::messagesSet(
                 'error',
-                $message_id,
+                $messageId,
                 __('Version check'),
                 __(
-                    'Reading of version failed. Maybe you\'re offline or the upgrade server does not respond.'
-                )
+                    'Reading of version failed. Maybe you\'re offline or the upgrade server does not respond.',
+                ),
             );
 
             return;
         }
 
-        $releases = $version_data->releases;
-        $latestCompatible = $versionInformation->getLatestCompatibleVersion($releases);
+        $latestCompatible = $versionInformation->getLatestCompatibleVersion($versionData->releases);
         if ($latestCompatible == null) {
             return;
         }
@@ -143,57 +139,35 @@ class Index
         $version = $latestCompatible['version'];
         $date = $latestCompatible['date'];
 
-        $version_upstream = $versionInformation->versionToInt($version);
-        if ($version_upstream === false) {
-            self::messagesSet(
-                'error',
-                $message_id,
-                __('Version check'),
-                __('Got invalid version string from server')
-            );
+        $versionUpstream = $versionInformation->versionToInt($version);
 
-            return;
-        }
+        $versionLocal = $versionInformation->versionToInt(Version::VERSION);
 
-        $version_local = $versionInformation->versionToInt(Version::VERSION);
-        if ($version_local === false) {
-            self::messagesSet(
-                'error',
-                $message_id,
-                __('Version check'),
-                __('Unparsable version string')
-            );
-
-            return;
-        }
-
-        if ($version_upstream > $version_local) {
+        if ($versionUpstream > $versionLocal) {
             $version = htmlspecialchars($version);
             $date = htmlspecialchars($date);
             self::messagesSet(
                 'notice',
-                $message_id,
+                $messageId,
                 __('Version check'),
                 sprintf(__('A newer version of phpMyAdmin is available and you should consider upgrading.'
-                    . ' The newest version is %s, released on %s.'), $version, $date)
+                    . ' The newest version is %s, released on %s.'), $version, $date),
+            );
+        } elseif ($versionLocal % 100 == 0) {
+            self::messagesSet(
+                'notice',
+                $messageId,
+                __('Version check'),
+                Sanitize::sanitizeMessage(sprintf(__('You are using Git version, run [kbd]git pull[/kbd]'
+                    . ' :-)[br]The latest stable version is %s, released on %s.'), $version, $date)),
             );
         } else {
-            if ($version_local % 100 == 0) {
-                self::messagesSet(
-                    'notice',
-                    $message_id,
-                    __('Version check'),
-                    Sanitize::sanitizeMessage(sprintf(__('You are using Git version, run [kbd]git pull[/kbd]'
-                        . ' :-)[br]The latest stable version is %s, released on %s.'), $version, $date))
-                );
-            } else {
-                self::messagesSet(
-                    'notice',
-                    $message_id,
-                    __('Version check'),
-                    __('No newer stable version is available')
-                );
-            }
+            self::messagesSet(
+                'notice',
+                $messageId,
+                __('Version check'),
+                __('No newer stable version is available'),
+            );
         }
     }
 }

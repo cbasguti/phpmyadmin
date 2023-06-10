@@ -8,14 +8,14 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Dbal;
 
 use mysqli;
-use mysqli_stmt;
+use mysqli_sql_exception;
+use PhpMyAdmin\Config\Settings\Server;
 use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Identifiers\DatabaseName;
 use PhpMyAdmin\Query\Utilities;
 
 use function __;
 use function defined;
-use function mysqli_connect_errno;
-use function mysqli_connect_error;
 use function mysqli_get_client_info;
 use function mysqli_init;
 use function mysqli_report;
@@ -30,7 +30,9 @@ use const MYSQLI_CLIENT_SSL;
 use const MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT;
 use const MYSQLI_OPT_LOCAL_INFILE;
 use const MYSQLI_OPT_SSL_VERIFY_SERVER_CERT;
+use const MYSQLI_REPORT_ERROR;
 use const MYSQLI_REPORT_OFF;
+use const MYSQLI_REPORT_STRICT;
 use const MYSQLI_STORE_RESULT;
 use const MYSQLI_USE_RESULT;
 
@@ -39,98 +41,72 @@ use const MYSQLI_USE_RESULT;
  */
 class DbiMysqli implements DbiExtension
 {
-    /**
-     * connects to the database server
-     *
-     * @param string $user     mysql user name
-     * @param string $password mysql user password
-     * @param array  $server   host/port/socket/persistent
-     *
-     * @return mysqli|bool false on error or a mysqli object on success
-     */
-    public function connect($user, $password, array $server)
+    public function connect(Server $server): Connection|null
     {
-        if ($server) {
-            $server['host'] = empty($server['host'])
-                ? 'localhost'
-                : $server['host'];
-        }
-
-        mysqli_report(MYSQLI_REPORT_OFF);
+        mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
         $mysqli = mysqli_init();
 
         if ($mysqli === false) {
-            return false;
+            return null;
         }
 
-        $client_flags = 0;
+        $clientFlags = 0;
 
         /* Optionally compress connection */
-        if ($server['compress'] && defined('MYSQLI_CLIENT_COMPRESS')) {
-            $client_flags |= MYSQLI_CLIENT_COMPRESS;
+        if ($server->compress && defined('MYSQLI_CLIENT_COMPRESS')) {
+            $clientFlags |= MYSQLI_CLIENT_COMPRESS;
         }
 
         /* Optionally enable SSL */
-        if ($server['ssl']) {
-            $client_flags |= MYSQLI_CLIENT_SSL;
+        if ($server->ssl) {
+            $clientFlags |= MYSQLI_CLIENT_SSL;
             if (
-                ! empty($server['ssl_key']) ||
-                ! empty($server['ssl_cert']) ||
-                ! empty($server['ssl_ca']) ||
-                ! empty($server['ssl_ca_path']) ||
-                ! empty($server['ssl_ciphers'])
+                $server->sslKey !== null && $server->sslKey !== '' ||
+                $server->sslCert !== null && $server->sslCert !== '' ||
+                $server->sslCa !== null && $server->sslCa !== '' ||
+                $server->sslCaPath !== null && $server->sslCaPath !== '' ||
+                $server->sslCiphers !== null && $server->sslCiphers !== ''
             ) {
                 $mysqli->ssl_set(
-                    $server['ssl_key'] ?? '',
-                    $server['ssl_cert'] ?? '',
-                    $server['ssl_ca'] ?? '',
-                    $server['ssl_ca_path'] ?? '',
-                    $server['ssl_ciphers'] ?? ''
+                    $server->sslKey ?? '',
+                    $server->sslCert ?? '',
+                    $server->sslCa ?? '',
+                    $server->sslCaPath ?? '',
+                    $server->sslCiphers ?? '',
                 );
             }
 
-            /*
+            /**
              * disables SSL certificate validation on mysqlnd for MySQL 5.6 or later
+             *
              * @link https://bugs.php.net/bug.php?id=68344
              * @link https://github.com/phpmyadmin/phpmyadmin/pull/11838
              */
-            if (! $server['ssl_verify']) {
-                $mysqli->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, (int) $server['ssl_verify']);
-                $client_flags |= MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT;
+            if (! $server->sslVerify) {
+                $mysqli->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, (int) $server->sslVerify);
+                $clientFlags |= MYSQLI_CLIENT_SSL_DONT_VERIFY_SERVER_CERT;
             }
         }
 
         if ($GLOBALS['cfg']['PersistentConnections']) {
-            $host = 'p:' . $server['host'];
+            $host = 'p:' . $server->host;
         } else {
-            $host = $server['host'];
+            $host = $server->host;
         }
 
-        if ($server['hide_connection_errors']) {
-            $return_value = @$mysqli->real_connect(
+        try {
+            $mysqli->real_connect(
                 $host,
-                $user,
-                $password,
+                $server->user,
+                $server->password,
                 '',
-                $server['port'],
-                (string) $server['socket'],
-                $client_flags
+                (int) $server->port,
+                $server->socket,
+                $clientFlags,
             );
-        } else {
-            $return_value = $mysqli->real_connect(
-                $host,
-                $user,
-                $password,
-                '',
-                $server['port'],
-                (string) $server['socket'],
-                $client_flags
-            );
-        }
-
-        if ($return_value === false) {
-            /*
+        } catch (mysqli_sql_exception) {
+            /**
              * Switch to SSL if server asked us to do so, unfortunately
              * there are more ways MySQL server can tell this:
              *
@@ -138,75 +114,82 @@ class DbiMysqli implements DbiExtension
              * - #2001 - SSL Connection is required. Please specify SSL options and retry.
              * - #9002 - SSL connection is required. Please specify SSL options and retry.
              */
-            // phpcs:disable Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-            $error_number = $mysqli->connect_errno;
-            $error_message = $mysqli->connect_error;
-            // phpcs:enable
+            // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+            $errorNumber = $mysqli->connect_errno;
+            // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+            $errorMessage = $mysqli->connect_error;
             if (
-                ! $server['ssl']
-                && ($error_number == 3159
-                    || (($error_number == 2001 || $error_number == 9002)
-                        && stripos($error_message, 'SSL Connection is required') !== false))
+                ! $server->ssl
+                && ($errorNumber == 3159
+                    || (($errorNumber == 2001 || $errorNumber == 9002)
+                        && stripos($errorMessage, 'SSL Connection is required') !== false))
             ) {
                 trigger_error(
                     __('SSL connection enforced by server, automatically enabling it.'),
-                    E_USER_WARNING
+                    E_USER_WARNING,
                 );
-                $server['ssl'] = true;
 
-                return self::connect($user, $password, $server);
+                return self::connect($server->withSSL(true));
             }
 
-            if ($error_number === 1045 && $server['hide_connection_errors']) {
+            if ($errorNumber === 1045 && $server->hideConnectionErrors) {
                 trigger_error(
                     sprintf(
                         __(
                             'Error 1045: Access denied for user. Additional error information'
-                            . ' may be available, but is being hidden by the %s configuration directive.'
+                            . ' may be available, but is being hidden by the %s configuration directive.',
                         ),
                         '[code][doc@cfg_Servers_hide_connection_errors]'
-                        . '$cfg[\'Servers\'][$i][\'hide_connection_errors\'][/doc][/code]'
+                        . '$cfg[\'Servers\'][$i][\'hide_connection_errors\'][/doc][/code]',
                     ),
-                    E_USER_ERROR
+                    E_USER_ERROR,
                 );
+            } else {
+                trigger_error($errorNumber . ': ' . $errorMessage, E_USER_WARNING);
             }
 
-            return false;
+            mysqli_report(MYSQLI_REPORT_OFF);
+
+            return null;
         }
 
         $mysqli->options(MYSQLI_OPT_LOCAL_INFILE, (int) defined('PMA_ENABLE_LDI'));
 
-        return $mysqli;
+        mysqli_report(MYSQLI_REPORT_OFF);
+
+        return new Connection($mysqli);
     }
 
     /**
      * selects given database
      *
      * @param string|DatabaseName $databaseName database name to select
-     * @param mysqli              $link         the mysqli object
      */
-    public function selectDb($databaseName, $link): bool
+    public function selectDb(string|DatabaseName $databaseName, Connection $connection): bool
     {
-        return $link->select_db((string) $databaseName);
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
+        return $mysqli->select_db((string) $databaseName);
     }
 
     /**
      * runs a query and returns the result
      *
      * @param string $query   query to execute
-     * @param mysqli $link    mysqli object
      * @param int    $options query options
-     *
-     * @return MysqliResult|false
      */
-    public function realQuery(string $query, $link, int $options)
+    public function realQuery(string $query, Connection $connection, int $options): MysqliResult|false
     {
         $method = MYSQLI_STORE_RESULT;
-        if ($options == ($options | DatabaseInterface::QUERY_UNBUFFERED)) {
+        if ($options === ($options | DatabaseInterface::QUERY_UNBUFFERED)) {
             $method = MYSQLI_USE_RESULT;
         }
 
-        $result = $link->query($query, $method);
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
+        $result = $mysqli->query($query, $method);
         if ($result === false) {
             return false;
         }
@@ -217,44 +200,49 @@ class DbiMysqli implements DbiExtension
     /**
      * Run the multi query and output the results
      *
-     * @param mysqli $link  mysqli object
      * @param string $query multi query statement to execute
      */
-    public function realMultiQuery($link, $query): bool
+    public function realMultiQuery(Connection $connection, string $query): bool
     {
-        return $link->multi_query($query);
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
+        return $mysqli->multi_query($query);
     }
 
     /**
      * Check if there are any more query results from a multi query
-     *
-     * @param mysqli $link the mysqli object
      */
-    public function moreResults($link): bool
+    public function moreResults(Connection $connection): bool
     {
-        return $link->more_results();
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
+        return $mysqli->more_results();
     }
 
     /**
      * Prepare next result from multi_query
-     *
-     * @param mysqli $link the mysqli object
      */
-    public function nextResult($link): bool
+    public function nextResult(Connection $connection): bool
     {
-        return $link->next_result();
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
+        return $mysqli->next_result();
     }
 
     /**
      * Store the result returned from multi query
      *
-     * @param mysqli $link the mysqli object
-     *
      * @return MysqliResult|false false when empty results / result set when not empty
      */
-    public function storeResult($link)
+    public function storeResult(Connection $connection): MysqliResult|false
     {
-        $result = $link->store_result();
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
+        $result = $mysqli->store_result();
 
         return $result === false ? false : new MysqliResult($result);
     }
@@ -262,27 +250,29 @@ class DbiMysqli implements DbiExtension
     /**
      * Returns a string representing the type of connection used
      *
-     * @param mysqli $link mysql link
-     *
      * @return string type of connection used
      */
-    public function getHostInfo($link)
+    public function getHostInfo(Connection $connection): string
     {
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
         // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-        return $link->host_info;
+        return $mysqli->host_info;
     }
 
     /**
      * Returns the version of the MySQL protocol used
      *
-     * @param mysqli $link mysql link
-     *
-     * @return string version of the MySQL protocol used
+     * @return int version of the MySQL protocol used
      */
-    public function getProtoInfo($link)
+    public function getProtoInfo(Connection $connection): int
     {
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
         // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-        return $link->protocol_version;
+        return (int) $mysqli->protocol_version;
     }
 
     /**
@@ -290,76 +280,90 @@ class DbiMysqli implements DbiExtension
      *
      * @return string MySQL client library version
      */
-    public function getClientInfo()
+    public function getClientInfo(): string
     {
         return mysqli_get_client_info();
     }
 
     /**
      * Returns last error message or an empty string if no errors occurred.
-     *
-     * @param mysqli|false|null $link mysql link
      */
-    public function getError($link): string
+    public function getError(Connection $connection): string
     {
         $GLOBALS['errno'] = 0;
 
-        if ($link !== null && $link !== false) {
-            $error_number = $link->errno;
-            $error_message = $link->error;
-        } else {
-            $error_number = mysqli_connect_errno();
-            $error_message = (string) mysqli_connect_error();
-        }
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
 
-        if ($error_number === 0 || $error_message === '') {
+        $errorNumber = $mysqli->errno;
+        $errorMessage = $mysqli->error;
+
+        if ($errorNumber === 0 || $errorMessage === '') {
             return '';
         }
 
         // keep the error number for further check after
         // the call to getError()
-        $GLOBALS['errno'] = $error_number;
+        $GLOBALS['errno'] = $errorNumber;
 
-        return Utilities::formatError($error_number, $error_message);
+        return Utilities::formatError($errorNumber, $errorMessage);
     }
 
     /**
      * returns the number of rows affected by last query
      *
-     * @param mysqli $link the mysqli object
-     *
-     * @return int|string
      * @psalm-return int|numeric-string
      */
-    public function affectedRows($link)
+    public function affectedRows(Connection $connection): int|string
     {
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
         // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-        return $link->affected_rows;
+        return $mysqli->affected_rows;
     }
 
     /**
      * returns properly escaped string for use in MySQL queries
      *
-     * @param mysqli $link   database link
      * @param string $string string to be escaped
      *
      * @return string a MySQL escaped string
      */
-    public function escapeString($link, $string)
+    public function escapeString(Connection $connection, string $string): string
     {
-        return $link->real_escape_string($string);
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
+        return $mysqli->real_escape_string($string);
     }
 
     /**
      * Prepare an SQL statement for execution.
      *
-     * @param mysqli $link  database link
      * @param string $query The query, as a string.
-     *
-     * @return mysqli_stmt|false A statement object or false.
      */
-    public function prepare($link, string $query)
+    public function prepare(Connection $connection, string $query): Statement|null
     {
-        return $link->prepare($query);
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+        $statement = $mysqli->prepare($query);
+        if ($statement === false) {
+            return null;
+        }
+
+        return new MysqliStatement($statement);
+    }
+
+    /**
+     * Returns the number of warnings from the last query.
+     */
+    public function getWarningCount(Connection $connection): int
+    {
+        /** @var mysqli $mysqli */
+        $mysqli = $connection->connection;
+
+        // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
+        return $mysqli->warning_count;
     }
 }

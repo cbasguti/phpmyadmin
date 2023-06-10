@@ -11,11 +11,12 @@ namespace PhpMyAdmin\Navigation;
 use PhpMyAdmin\Config\PageSettings;
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Dbal\Connection;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Sanitize;
 use PhpMyAdmin\Server\Select;
 use PhpMyAdmin\Template;
-use PhpMyAdmin\Theme;
+use PhpMyAdmin\Theme\Theme;
 use PhpMyAdmin\Url;
 use PhpMyAdmin\Util;
 
@@ -35,28 +36,10 @@ use const PHP_URL_HOST;
  */
 class Navigation
 {
-    /** @var Template */
-    private $template;
+    private NavigationTree $tree;
 
-    /** @var Relation */
-    private $relation;
-
-    /** @var DatabaseInterface */
-    private $dbi;
-
-    /** @var NavigationTree */
-    private $tree;
-
-    /**
-     * @param Template          $template Template instance
-     * @param Relation          $relation Relation instance
-     * @param DatabaseInterface $dbi      DatabaseInterface instance
-     */
-    public function __construct($template, $relation, $dbi)
+    public function __construct(private Template $template, private Relation $relation, private DatabaseInterface $dbi)
     {
-        $this->template = $template;
-        $this->relation = $relation;
-        $this->dbi = $dbi;
         $this->tree = new NavigationTree($this->template, $this->dbi);
     }
 
@@ -67,10 +50,8 @@ class Navigation
      */
     public function getDisplay(): string
     {
-        global $cfg;
-
         $logo = [
-            'is_displayed' => $cfg['NavigationDisplayLogo'],
+            'is_displayed' => $GLOBALS['cfg']['NavigationDisplayLogo'],
             'has_link' => false,
             'link' => '#',
             'attributes' => ' target="_blank" rel="noopener noreferrer"',
@@ -80,18 +61,18 @@ class Navigation
         $response = ResponseRenderer::getInstance();
         if (! $response->isAjax()) {
             $logo['source'] = $this->getLogoSource();
-            $logo['has_link'] = (string) $cfg['NavigationLogoLink'] !== '';
-            $logo['link'] = trim((string) $cfg['NavigationLogoLink']);
+            $logo['has_link'] = (string) $GLOBALS['cfg']['NavigationLogoLink'] !== '';
+            $logo['link'] = trim((string) $GLOBALS['cfg']['NavigationLogoLink']);
             if (! Sanitize::checkLink($logo['link'], true)) {
                 $logo['link'] = 'index.php';
             }
 
-            if ($cfg['NavigationLogoLinkWindow'] === 'main') {
+            if ($GLOBALS['cfg']['NavigationLogoLinkWindow'] === 'main') {
                 if (empty(parse_url($logo['link'], PHP_URL_HOST))) {
                     $hasStartChar = strpos($logo['link'], '?');
                     $logo['link'] .= Url::getCommon(
                         [],
-                        is_bool($hasStartChar) ? '?' : Url::getArgSeparator()
+                        is_bool($hasStartChar) ? '?' : Url::getArgSeparator(),
                     );
                     // Internal link detected
                     $logo['attributes'] = '';
@@ -102,7 +83,7 @@ class Navigation
                 }
             }
 
-            if ($cfg['NavigationDisplayServers'] && count($cfg['Servers']) > 1) {
+            if ($GLOBALS['cfg']['NavigationDisplayServers'] && count($GLOBALS['cfg']['Servers']) > 1) {
                 $serverSelect = Select::render(true, true);
             }
 
@@ -114,7 +95,7 @@ class Navigation
         }
 
         if (! $response->isAjax() || ! empty($_POST['full']) || ! empty($_POST['reload'])) {
-            if ($cfg['ShowDatabasesNavigationAsTree']) {
+            if ($GLOBALS['cfg']['ShowDatabasesNavigationAsTree']) {
                 // provide database tree in navigation
                 $navRender = $this->tree->renderState();
             } else {
@@ -128,19 +109,19 @@ class Navigation
         return $this->template->render('navigation/main', [
             'is_ajax' => $response->isAjax(),
             'logo' => $logo,
-            'config_navigation_width' => $cfg['NavigationWidth'],
-            'is_synced' => $cfg['NavigationLinkWithMainPanel'],
-            'is_highlighted' => $cfg['NavigationTreePointerEnable'],
-            'is_autoexpanded' => $cfg['NavigationTreeAutoexpandSingleDb'],
+            'config_navigation_width' => $GLOBALS['cfg']['NavigationWidth'],
+            'is_synced' => $GLOBALS['cfg']['NavigationLinkWithMainPanel'],
+            'is_highlighted' => $GLOBALS['cfg']['NavigationTreePointerEnable'],
+            'is_autoexpanded' => $GLOBALS['cfg']['NavigationTreeAutoexpandSingleDb'],
             'server' => $GLOBALS['server'],
-            'auth_type' => $cfg['Server']['auth_type'],
-            'is_servers_displayed' => $cfg['NavigationDisplayServers'],
-            'servers' => $cfg['Servers'],
+            'auth_type' => $GLOBALS['cfg']['Server']['auth_type'],
+            'is_servers_displayed' => $GLOBALS['cfg']['NavigationDisplayServers'],
+            'servers' => $GLOBALS['cfg']['Servers'],
             'server_select' => $serverSelect ?? '',
             'navigation_tree' => $navRender,
             'is_navigation_settings_enabled' => ! defined('PMA_DISABLE_NAVI_SETTINGS'),
             'navigation_settings' => $navigationSettings ?? '',
-            'is_drag_drop_import_enabled' => $cfg['enable_drag_drop_import'] === true,
+            'is_drag_drop_import_enabled' => $GLOBALS['cfg']['enable_drag_drop_import'] === true,
             'is_mariadb' => $this->dbi->isMariaDB(),
         ]);
     }
@@ -148,16 +129,14 @@ class Navigation
     /**
      * Add an item of navigation tree to the hidden items list in PMA database.
      *
-     * @param string $itemName  name of the navigation tree item
-     * @param string $itemType  type of the navigation tree item
-     * @param string $dbName    database name
-     * @param string $tableName table name if applicable
+     * @param string $itemName name of the navigation tree item
+     * @param string $itemType type of the navigation tree item
+     * @param string $dbName   database name
      */
     public function hideNavigationItem(
-        $itemName,
-        $itemType,
-        $dbName,
-        $tableName = null
+        string $itemName,
+        string $itemType,
+        string $dbName,
     ): void {
         $navigationItemsHidingFeature = $this->relation->getRelationParameters()->navigationItemsHidingFeature;
         if ($navigationItemsHidingFeature === null) {
@@ -169,12 +148,11 @@ class Navigation
         $sqlQuery = 'INSERT INTO ' . $navTable
             . '(`username`, `item_name`, `item_type`, `db_name`, `table_name`)'
             . ' VALUES ('
-            . "'" . $this->dbi->escapeString($GLOBALS['cfg']['Server']['user']) . "',"
-            . "'" . $this->dbi->escapeString($itemName) . "',"
-            . "'" . $this->dbi->escapeString($itemType) . "',"
-            . "'" . $this->dbi->escapeString($dbName) . "',"
-            . "'" . (! empty($tableName) ? $this->dbi->escapeString($tableName) : '' )
-            . "')";
+            . $this->dbi->quoteString($GLOBALS['cfg']['Server']['user'], Connection::TYPE_CONTROL) . ','
+            . $this->dbi->quoteString($itemName, Connection::TYPE_CONTROL) . ','
+            . $this->dbi->quoteString($itemType, Connection::TYPE_CONTROL) . ','
+            . $this->dbi->quoteString($dbName, Connection::TYPE_CONTROL) . ','
+            . "'')";
         $this->dbi->tryQueryAsControlUser($sqlQuery);
     }
 
@@ -182,16 +160,14 @@ class Navigation
      * Remove a hidden item of navigation tree from the
      * list of hidden items in PMA database.
      *
-     * @param string $itemName  name of the navigation tree item
-     * @param string $itemType  type of the navigation tree item
-     * @param string $dbName    database name
-     * @param string $tableName table name if applicable
+     * @param string $itemName name of the navigation tree item
+     * @param string $itemType type of the navigation tree item
+     * @param string $dbName   database name
      */
     public function unhideNavigationItem(
-        $itemName,
-        $itemType,
-        $dbName,
-        $tableName = null
+        string $itemName,
+        string $itemType,
+        string $dbName,
     ): void {
         $navigationItemsHidingFeature = $this->relation->getRelationParameters()->navigationItemsHidingFeature;
         if ($navigationItemsHidingFeature === null) {
@@ -202,15 +178,11 @@ class Navigation
             . '.' . Util::backquote($navigationItemsHidingFeature->navigationHiding);
         $sqlQuery = 'DELETE FROM ' . $navTable
             . ' WHERE'
-            . " `username`='"
-            . $this->dbi->escapeString($GLOBALS['cfg']['Server']['user']) . "'"
-            . " AND `item_name`='" . $this->dbi->escapeString($itemName) . "'"
-            . " AND `item_type`='" . $this->dbi->escapeString($itemType) . "'"
-            . " AND `db_name`='" . $this->dbi->escapeString($dbName) . "'"
-            . (! empty($tableName)
-                ? " AND `table_name`='" . $this->dbi->escapeString($tableName) . "'"
-                : ''
-            );
+            . ' `username`='
+            . $this->dbi->quoteString($GLOBALS['cfg']['Server']['user'], Connection::TYPE_CONTROL)
+            . ' AND `item_name`=' . $this->dbi->quoteString($itemName, Connection::TYPE_CONTROL)
+            . ' AND `item_type`=' . $this->dbi->quoteString($itemType, Connection::TYPE_CONTROL)
+            . ' AND `db_name`=' . $this->dbi->quoteString($dbName, Connection::TYPE_CONTROL);
         $this->dbi->tryQueryAsControlUser($sqlQuery);
     }
 
@@ -218,14 +190,12 @@ class Navigation
      * Returns HTML for the dialog to show hidden navigation items.
      *
      * @param string $database database name
-     * @param string $itemType type of the items to include
-     * @param string $table    table name
      *
      * @return string HTML for the dialog to show hidden navigation items
      */
-    public function getItemUnhideDialog($database, $itemType = null, $table = null)
+    public function getItemUnhideDialog(string $database): string
     {
-        $hidden = $this->getHiddenItems($database, $table);
+        $hidden = $this->getHiddenItems($database);
 
         $typeMap = [
             'group' => __('Groups:'),
@@ -238,20 +208,13 @@ class Navigation
 
         return $this->template->render('navigation/item_unhide_dialog', [
             'database' => $database,
-            'table' => $table,
             'hidden' => $hidden,
             'types' => $typeMap,
-            'item_type' => $itemType,
         ]);
     }
 
-    /**
-     * @param string      $database Database name
-     * @param string|null $table    Table name
-     *
-     * @return array
-     */
-    private function getHiddenItems(string $database, ?string $table): array
+    /** @return mixed[] */
+    private function getHiddenItems(string $database): array
     {
         $navigationItemsHidingFeature = $this->relation->getRelationParameters()->navigationItemsHidingFeature;
         if ($navigationItemsHidingFeature === null) {
@@ -261,11 +224,10 @@ class Navigation
         $navTable = Util::backquote($navigationItemsHidingFeature->database)
             . '.' . Util::backquote($navigationItemsHidingFeature->navigationHiding);
         $sqlQuery = 'SELECT `item_name`, `item_type` FROM ' . $navTable
-            . " WHERE `username`='"
-            . $this->dbi->escapeString($GLOBALS['cfg']['Server']['user']) . "'"
-            . " AND `db_name`='" . $this->dbi->escapeString($database) . "'"
-            . " AND `table_name`='"
-            . (! empty($table) ? $this->dbi->escapeString($table) : '') . "'";
+            . ' WHERE `username`='
+            . $this->dbi->quoteString($GLOBALS['cfg']['Server']['user'], Connection::TYPE_CONTROL)
+            . ' AND `db_name`=' . $this->dbi->quoteString($database, Connection::TYPE_CONTROL)
+            . " AND `table_name`=''";
         $result = $this->dbi->tryQueryAsControlUser($sqlQuery);
 
         $hidden = [];
@@ -283,20 +245,18 @@ class Navigation
         return $hidden;
     }
 
-    /**
-     * @return string Logo source
-     */
+    /** @return string Logo source */
     private function getLogoSource(): string
     {
-        global $theme;
+        $GLOBALS['theme'] ??= null;
 
-        if ($theme instanceof Theme) {
-            if (@file_exists($theme->getFsPath() . 'img/logo_left.png')) {
-                return $theme->getPath() . '/img/logo_left.png';
+        if ($GLOBALS['theme'] instanceof Theme) {
+            if (@file_exists($GLOBALS['theme']->getFsPath() . 'img/logo_left.png')) {
+                return $GLOBALS['theme']->getPath() . '/img/logo_left.png';
             }
 
-            if (@file_exists($theme->getFsPath() . 'img/pma_logo2.png')) {
-                return $theme->getPath() . '/img/pma_logo2.png';
+            if (@file_exists($GLOBALS['theme']->getFsPath() . 'img/pma_logo2.png')) {
+                return $GLOBALS['theme']->getPath() . '/img/pma_logo2.png';
             }
         }
 

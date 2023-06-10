@@ -22,9 +22,10 @@ class NodeIndex extends Node
      * @param bool   $isGroup Whether this object has been created
      *                        while grouping nodes
      */
-    public function __construct($name, $type = Node::OBJECT, $isGroup = false)
+    public function __construct(string $name, int $type = Node::OBJECT, bool $isGroup = false)
     {
         parent::__construct($name, $type, $isGroup);
+
         $this->icon = ['image' => 'b_index', 'title' => __('Index')];
         $this->links = [
             'text' => ['route' => '/table/indexes', 'params' => ['db' => null, 'table' => null, 'index' => null]],

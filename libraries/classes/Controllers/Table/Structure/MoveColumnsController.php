@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Controllers\Table\Structure;
 
-use PhpMyAdmin\Controllers\Table\AbstractController;
+use PhpMyAdmin\Controllers\AbstractController;
 use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Message;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Table;
@@ -13,7 +14,7 @@ use PhpMyAdmin\Template;
 use PhpMyAdmin\Util;
 
 use function __;
-use function array_keys;
+use function array_column;
 use function array_splice;
 use function count;
 use function implode;
@@ -25,61 +26,56 @@ use function str_replace;
 
 final class MoveColumnsController extends AbstractController
 {
-    /** @var Table  The table object */
-    private $tableObj;
-
-    /** @var DatabaseInterface */
-    private $dbi;
+    private Table $tableObj;
 
     public function __construct(
         ResponseRenderer $response,
         Template $template,
-        string $db,
-        string $table,
-        DatabaseInterface $dbi
+        private DatabaseInterface $dbi,
     ) {
-        parent::__construct($response, $template, $db, $table);
-        $this->dbi = $dbi;
-        $this->tableObj = $this->dbi->getTable($this->db, $this->table);
+        parent::__construct($response, $template);
+
+        $this->tableObj = $this->dbi->getTable($GLOBALS['db'], $GLOBALS['table']);
     }
 
-    public function __invoke(): void
+    public function __invoke(ServerRequest $request): void
     {
-        if (! isset($_POST['move_columns']) || ! is_array($_POST['move_columns']) || ! $this->response->isAjax()) {
+        $moveColumns = $request->getParsedBodyParam('move_columns');
+        if (! is_array($moveColumns) || ! $this->response->isAjax()) {
             return;
         }
 
-        $this->dbi->selectDb($this->db);
+        $this->dbi->selectDb($GLOBALS['db']);
 
         /**
          * load the definitions for all columns
          */
-        $columns = $this->dbi->getColumnsFull($this->db, $this->table);
-        $column_names = array_keys($columns);
+        $columns = $this->dbi->getColumnsFull($GLOBALS['db'], $GLOBALS['table']);
+        $columnNames = array_column($columns, 'Field');
         $changes = [];
 
         // @see https://mariadb.com/kb/en/library/changes-improvements-in-mariadb-102/#information-schema
         $usesLiteralNull = $this->dbi->isMariaDB() && $this->dbi->getVersion() >= 100200;
         $defaultNullValue = $usesLiteralNull ? 'NULL' : null;
         // move columns from first to last
-        for ($i = 0, $l = count($_POST['move_columns']); $i < $l; $i++) {
-            $column = $_POST['move_columns'][$i];
+        for ($i = 0, $l = count($moveColumns); $i < $l; $i++) {
+            $column = $moveColumns[$i];
             // is this column already correctly placed?
-            if ($column_names[$i] == $column) {
+            if ($columnNames[$i] == $column) {
                 continue;
             }
 
             // it is not, let's move it to index $i
             $data = $columns[$column];
-            $extracted_columnspec = Util::extractColumnSpec($data['Type']);
+            $extractedColumnSpec = Util::extractColumnSpec($data['Type']);
             if (isset($data['Extra']) && $data['Extra'] === 'on update CURRENT_TIMESTAMP') {
-                $extracted_columnspec['attribute'] = $data['Extra'];
+                $extractedColumnSpec['attribute'] = $data['Extra'];
                 unset($data['Extra']);
             }
 
             $timeType = $data['Type'] === 'timestamp' || $data['Type'] === 'datetime';
             $timeDefault = $data['Default'] === 'CURRENT_TIMESTAMP' || $data['Default'] === 'current_timestamp()';
-            $current_timestamp = $timeType && $timeDefault;
+            $currentTimestamp = $timeType && $timeDefault;
 
             $uuidType = $data['Type'] === 'uuid';
             $uuidDefault = $data['Default'] === 'UUID' || $data['Default'] === 'uuid()';
@@ -87,23 +83,18 @@ final class MoveColumnsController extends AbstractController
 
             // @see https://mariadb.com/kb/en/library/information-schema-columns-table/#examples
             if ($data['Null'] === 'YES' && in_array($data['Default'], [$defaultNullValue, null])) {
-                $default_type = 'NULL';
-            } elseif ($current_timestamp) {
-                $default_type = 'CURRENT_TIMESTAMP';
+                $defaultType = 'NULL';
+            } elseif ($currentTimestamp) {
+                $defaultType = 'CURRENT_TIMESTAMP';
             } elseif ($uuid) {
-                $default_type = 'UUID';
+                $defaultType = 'UUID';
             } elseif ($data['Default'] === null) {
-                $default_type = 'NONE';
+                $defaultType = 'NONE';
             } else {
-                $default_type = 'USER_DEFINED';
+                $defaultType = 'USER_DEFINED';
             }
 
-            $virtual = [
-                'VIRTUAL',
-                'PERSISTENT',
-                'VIRTUAL GENERATED',
-                'STORED GENERATED',
-            ];
+            $virtual = ['VIRTUAL', 'PERSISTENT', 'VIRTUAL GENERATED', 'STORED GENERATED'];
             $data['Virtuality'] = '';
             $data['Expression'] = '';
             if (isset($data['Extra']) && in_array($data['Extra'], $virtual)) {
@@ -115,69 +106,67 @@ final class MoveColumnsController extends AbstractController
             $changes[] = 'CHANGE ' . Table::generateAlter(
                 $column,
                 $column,
-                mb_strtoupper($extracted_columnspec['type']),
-                $extracted_columnspec['spec_in_brackets'],
-                $extracted_columnspec['attribute'],
+                mb_strtoupper($extractedColumnSpec['type']),
+                $extractedColumnSpec['spec_in_brackets'],
+                $extractedColumnSpec['attribute'],
                 $data['Collation'] ?? '',
                 $data['Null'] === 'YES' ? 'YES' : 'NO',
-                $default_type,
-                $current_timestamp ? '' : $data['Default'],
-                isset($data['Extra']) && $data['Extra'] !== '' ? $data['Extra']
-                        : false,
-                isset($data['COLUMN_COMMENT']) && $data['COLUMN_COMMENT'] !== ''
-                        ? $data['COLUMN_COMMENT'] : false,
+                $defaultType,
+                $data['Default'] ?? '',
+                $data['Extra'] ?? '',
+                $data['COLUMN_COMMENT'] ?? '',
                 $data['Virtuality'],
                 $data['Expression'],
-                $i === 0 ? '-first' : $column_names[$i - 1]
+                $i === 0 ? '-first' : $columnNames[$i - 1],
             );
             // update current column_names array, first delete old position
-            for ($j = 0, $ll = count($column_names); $j < $ll; $j++) {
-                if ($column_names[$j] != $column) {
+            for ($j = 0, $ll = count($columnNames); $j < $ll; $j++) {
+                if ($columnNames[$j] != $column) {
                     continue;
                 }
 
-                unset($column_names[$j]);
+                unset($columnNames[$j]);
             }
 
             // insert moved column
-            array_splice($column_names, $i, 0, $column);
+            array_splice($columnNames, $i, 0, $column);
         }
 
-        if (empty($changes) && ! isset($_REQUEST['preview_sql'])) { // should never happen
+        if ($changes === [] && ! isset($_REQUEST['preview_sql'])) { // should never happen
             $this->response->setRequestStatus(false);
 
             return;
         }
 
         // query for moving the columns
-        $sql_query = sprintf(
+        $sqlQuery = sprintf(
             'ALTER TABLE %s %s',
-            Util::backquote($this->table),
-            implode(', ', $changes)
+            Util::backquote($GLOBALS['table']),
+            implode(', ', $changes),
         );
 
         if (isset($_REQUEST['preview_sql'])) { // preview sql
             $this->response->addJSON(
                 'sql_data',
-                $this->template->render('preview_sql', ['query_data' => $sql_query])
+                $this->template->render('preview_sql', ['query_data' => $sqlQuery]),
             );
 
             return;
         }
 
-        $this->dbi->tryQuery($sql_query);
-        $tmp_error = $this->dbi->getError();
-        if ($tmp_error !== '') {
+        $this->dbi->tryQuery($sqlQuery);
+        $tmpError = $this->dbi->getError();
+        if ($tmpError !== '') {
             $this->response->setRequestStatus(false);
-            $this->response->addJSON('message', Message::error($tmp_error));
+            $this->response->addJSON('message', Message::error($tmpError));
 
             return;
         }
 
         $message = Message::success(
-            __('The columns have been moved successfully.')
+            __('The columns have been moved successfully.'),
         );
         $this->response->addJSON('message', $message);
-        $this->response->addJSON('columns', $column_names);
+        $this->response->addJSON('columns', $columnNames);
     }
 }

@@ -11,33 +11,32 @@ use PhpMyAdmin\Message;
 use PhpMyAdmin\Server\Privileges\AccountLocking;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DummyResult;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\MockObject\Stub;
 
-/**
- * @covers \PhpMyAdmin\Controllers\Server\Privileges\AccountUnlockController
- */
+#[CoversClass(AccountUnlockController::class)]
 class AccountUnlockControllerTest extends AbstractTestCase
 {
     /** @var DatabaseInterface&Stub */
-    private $dbiStub;
+    private DatabaseInterface $dbiStub;
 
     /** @var ServerRequest&Stub  */
-    private $requestStub;
+    private ServerRequest $requestStub;
 
-    /** @var ResponseRenderer */
-    private $responseRendererStub;
+    private ResponseRenderer $responseRendererStub;
 
-    /** @var AccountUnlockController */
-    private $controller;
+    private AccountUnlockController $controller;
 
     protected function setUp(): void
     {
         parent::setUp();
 
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
+
         $GLOBALS['server'] = 1;
         $GLOBALS['text_dir'] = 'ltr';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
 
         $this->dbiStub = $this->createStub(DatabaseInterface::class);
         $this->dbiStub->method('isMariaDB')->willReturn(true);
@@ -52,14 +51,14 @@ class AccountUnlockControllerTest extends AbstractTestCase
         $this->controller = new AccountUnlockController(
             $this->responseRendererStub,
             new Template(),
-            new AccountLocking($this->dbiStub)
+            new AccountLocking($this->dbiStub),
         );
     }
 
     public function testWithValidAccount(): void
     {
         $this->dbiStub->method('getVersion')->willReturn(100402);
-        $this->dbiStub->method('tryQuery')->willReturn(true);
+        $this->dbiStub->method('tryQuery')->willReturn($this->createStub(DummyResult::class));
 
         ($this->controller)($this->requestStub);
 

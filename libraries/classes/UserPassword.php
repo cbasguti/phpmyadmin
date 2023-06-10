@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin;
 
 use PhpMyAdmin\Html\Generator;
+use PhpMyAdmin\Plugins\AuthenticationPluginFactory;
 use PhpMyAdmin\Query\Compatibility;
 use PhpMyAdmin\Server\Privileges;
 
@@ -16,46 +17,39 @@ use function strlen;
  */
 class UserPassword
 {
-    /** @var Privileges */
-    private $serverPrivileges;
-
-    /**
-     * @param Privileges $serverPrivileges Privileges object
-     */
-    public function __construct(Privileges $serverPrivileges)
-    {
-        $this->serverPrivileges = $serverPrivileges;
+    public function __construct(
+        private Privileges $serverPrivileges,
+        private AuthenticationPluginFactory $authPluginFactory,
+        private DatabaseInterface $dbi,
+    ) {
     }
 
     /**
      * Generate the message
      *
-     * @return array   error value and message
+     * @return array{error: bool, msg: Message} error value and message
      */
-    public function setChangePasswordMsg()
+    public function setChangePasswordMsg(string $pmaPw, string $pmaPw2, bool $skipPassword): array
     {
         $error = false;
         $message = Message::success(__('The profile has been updated.'));
 
-        if ($_POST['nopass'] != '1') {
-            if (strlen($_POST['pma_pw']) === 0 || strlen($_POST['pma_pw2']) === 0) {
+        if ($skipPassword === false) {
+            if ($pmaPw === '' || $pmaPw2 === '') {
                 $message = Message::error(__('The password is empty!'));
                 $error = true;
-            } elseif ($_POST['pma_pw'] !== $_POST['pma_pw2']) {
+            } elseif ($pmaPw !== $pmaPw2) {
                 $message = Message::error(
-                    __('The passwords aren\'t the same!')
+                    __('The passwords aren\'t the same!'),
                 );
                 $error = true;
-            } elseif (strlen($_POST['pma_pw']) > 256) {
+            } elseif (strlen($pmaPw) > 256) {
                 $message = Message::error(__('Password is too long!'));
                 $error = true;
             }
         }
 
-        return [
-            'error' => $error,
-            'msg' => $message,
-        ];
+        return ['error' => $error, 'msg' => $message];
     }
 
     /**
@@ -63,39 +57,37 @@ class UserPassword
      *
      * @param string $password New password
      */
-    public function changePassword($password): string
+    public function changePassword(string $password, string|null $authenticationPlugin): string
     {
-        global $auth_plugin, $dbi;
+        $hashingFunction = $this->changePassHashingFunction($authenticationPlugin);
 
-        $hashing_function = $this->changePassHashingFunction();
+        [$username, $hostname] = $this->dbi->getCurrentUserAndHost();
 
-        [$username, $hostname] = $dbi->getCurrentUserAndHost();
+        $serverVersion = $this->dbi->getVersion();
 
-        $serverVersion = $dbi->getVersion();
-
-        $orig_auth_plugin = $this->serverPrivileges->getCurrentAuthenticationPlugin('change', $username, $hostname);
+        $origAuthPlugin = $this->serverPrivileges->getCurrentAuthenticationPlugin($username, $hostname);
         $authPluginChanged = false;
 
         if (isset($_POST['authentication_plugin']) && ! empty($_POST['authentication_plugin'])) {
-            if ($orig_auth_plugin !== $_POST['authentication_plugin']) {
+            if ($origAuthPlugin !== $_POST['authentication_plugin']) {
                 $authPluginChanged = true;
             }
 
-            $orig_auth_plugin = $_POST['authentication_plugin'];
+            $origAuthPlugin = $_POST['authentication_plugin'];
         }
 
-        $sql_query = 'SET password = '
-            . ($password == '' ? '\'\'' : $hashing_function . '(\'***\')');
+        $sqlQuery = 'SET password = '
+            . ($password == '' ? '\'\'' : $hashingFunction . '(\'***\')');
 
         $isPerconaOrMySql = Compatibility::isMySqlOrPerconaDb();
         if ($isPerconaOrMySql && $serverVersion >= 50706) {
-            $sql_query = $this->getChangePasswordQueryAlterUserMySQL(
+            $sqlQuery = $this->getChangePasswordQueryAlterUserMySQL(
                 $serverVersion,
                 $username,
                 $hostname,
-                $orig_auth_plugin,
+                $origAuthPlugin,
                 $password === '' ? '' : '***', // Mask it, preview mode
-                $authPluginChanged
+                $authPluginChanged,
             );
         } elseif (
             ($isPerconaOrMySql && $serverVersion >= 50507)
@@ -105,28 +97,29 @@ class UserPassword
             // explicitly set value of `old_passwords` so that
             // it does not give an error while using
             // the PASSWORD() function
-            if ($orig_auth_plugin === 'sha256_password') {
+            if ($origAuthPlugin === 'sha256_password') {
                 $value = 2;
             } else {
                 $value = 0;
             }
 
-            $dbi->tryQuery('SET `old_passwords` = ' . $value . ';');
+            $this->dbi->tryQuery('SET `old_passwords` = ' . $value . ';');
         }
 
         $this->changePassUrlParamsAndSubmitQuery(
             $username,
             $hostname,
             $password,
-            $sql_query,
-            $hashing_function,
-            $orig_auth_plugin,
-            $authPluginChanged
+            $sqlQuery,
+            $hashingFunction,
+            $origAuthPlugin,
+            $authPluginChanged,
         );
 
-        $auth_plugin->handlePasswordChange($password);
+        $authPlugin = $this->authPluginFactory->create();
+        $authPlugin->handlePasswordChange($password);
 
-        return $sql_query;
+        return $sqlQuery;
     }
 
     private function getChangePasswordQueryAlterUserMySQL(
@@ -135,10 +128,8 @@ class UserPassword
         string $hostname,
         string $authPlugin,
         string $password,
-        bool $authPluginChanged
+        bool $authPluginChanged,
     ): string {
-        global $dbi;
-
         // Starting with MySQL 5.7.37 the security check changed
         // See: https://github.com/mysql/mysql-server/commit/b31a8a5d7805834ca2d25629c0e584d2c53b1a5b
         // See: https://github.com/phpmyadmin/phpmyadmin/issues/17654
@@ -147,34 +138,34 @@ class UserPassword
         // So let's avoid stating a plugin if it's not needed/changed
 
         if ($serverVersion >= 50706 && $serverVersion < 50737) {
-            return 'ALTER USER \'' . $dbi->escapeString($username)
-                . '\'@\'' . $dbi->escapeString($hostname)
-                . '\' IDENTIFIED WITH ' . $authPlugin . ' BY '
-                . ($password === '' ? '\'\'' : '\'' . $dbi->escapeString($password) . '\'');
+            return 'ALTER USER ' . $GLOBALS['dbi']->quoteString($username)
+                . '@' . $GLOBALS['dbi']->quoteString($hostname)
+                . ' IDENTIFIED WITH ' . $authPlugin . ' BY '
+                . ($password === '' ? "''" : '' . $GLOBALS['dbi']->quoteString($password) . '');
         }
 
-        $sql_query = 'ALTER USER \'' . $dbi->escapeString($username)
-            . '\'@\'' . $dbi->escapeString($hostname) . '\' IDENTIFIED';
+        $sqlQuery = 'ALTER USER ' . $GLOBALS['dbi']->quoteString($username)
+            . '@' . $GLOBALS['dbi']->quoteString($hostname) . ' IDENTIFIED';
 
         if ($authPluginChanged) {
-            $sql_query .= ' WITH ' . $authPlugin;
+            $sqlQuery .= ' WITH ' . $authPlugin;
         }
 
-        return $sql_query . ' BY ' . ($password === '' ? '\'\'' : '\'' . $dbi->escapeString($password) . '\'');
+        return $sqlQuery . ' BY ' . (
+            $password === '' ? "''" : $GLOBALS['dbi']->quoteString($password)
+        );
     }
 
     /**
      * Generate the hashing function
      */
-    private function changePassHashingFunction(): string
+    private function changePassHashingFunction(string|null $authenticationPlugin): string
     {
-        if (isset($_POST['authentication_plugin']) && $_POST['authentication_plugin'] === 'mysql_old_password') {
-            $hashing_function = 'OLD_PASSWORD';
-        } else {
-            $hashing_function = 'PASSWORD';
+        if ($authenticationPlugin === 'mysql_old_password') {
+            return 'OLD_PASSWORD';
         }
 
-        return $hashing_function;
+        return 'PASSWORD';
     }
 
     /**
@@ -184,73 +175,71 @@ class UserPassword
         string $username,
         string $hostname,
         string $password,
-        string $sql_query,
-        string $hashing_function,
-        string $orig_auth_plugin,
-        bool $authPluginChanged
+        string $sqlQuery,
+        string $hashingFunction,
+        string $origAuthPlugin,
+        bool $authPluginChanged,
     ): void {
-        global $dbi;
+        $errUrl = Url::getFromRoute('/user-password');
 
-        $err_url = Url::getFromRoute('/user-password');
-
-        $serverVersion = $dbi->getVersion();
+        $serverVersion = $this->dbi->getVersion();
         $isPerconaOrMySql = Compatibility::isMySqlOrPerconaDb();
 
         if ($isPerconaOrMySql && $serverVersion >= 50706) {
-            $local_query = $this->getChangePasswordQueryAlterUserMySQL(
+            $localQuery = $this->getChangePasswordQueryAlterUserMySQL(
                 $serverVersion,
                 $username,
                 $hostname,
-                $orig_auth_plugin,
+                $origAuthPlugin,
                 $password,
-                $authPluginChanged
+                $authPluginChanged,
             );
         } elseif (
             Compatibility::isMariaDb()
             && $serverVersion >= 50200
             && $serverVersion < 100100
-            && $orig_auth_plugin !== ''
+            && $origAuthPlugin !== ''
         ) {
-            if ($orig_auth_plugin === 'mysql_native_password') {
+            if ($origAuthPlugin === 'mysql_native_password') {
                 // Set the hashing method used by PASSWORD()
                 // to be 'mysql_native_password' type
-                $dbi->tryQuery('SET old_passwords = 0;');
-            } elseif ($orig_auth_plugin === 'sha256_password') {
+                $this->dbi->tryQuery('SET old_passwords = 0;');
+            } elseif ($origAuthPlugin === 'sha256_password') {
                 // Set the hashing method used by PASSWORD()
                 // to be 'sha256_password' type
-                $dbi->tryQuery('SET `old_passwords` = 2;');
+                $this->dbi->tryQuery('SET `old_passwords` = 2;');
             }
 
             $hashedPassword = $this->serverPrivileges->getHashedPassword($_POST['pma_pw']);
 
-            $local_query = 'UPDATE `mysql`.`user` SET'
+            $localQuery = 'UPDATE `mysql`.`user` SET'
                 . " `authentication_string` = '" . $hashedPassword
                 . "', `Password` = '', "
-                . " `plugin` = '" . $orig_auth_plugin . "'"
-                . " WHERE `User` = '" . $dbi->escapeString($username)
-                . "' AND Host = '" . $dbi->escapeString($hostname) . "';";
+                . ' `plugin` = ' . $this->dbi->quoteString($origAuthPlugin)
+                . ' WHERE `User` = ' . $this->dbi->quoteString($username)
+                . ' AND Host = ' . $this->dbi->quoteString($hostname) . ';';
         } else {
-            $local_query = 'SET password = ' . ($password == ''
+            $localQuery = 'SET password = ' . ($password == ''
                 ? '\'\''
-                : $hashing_function . '(\''
-                    . $dbi->escapeString($password) . '\')');
+                : $hashingFunction . '(' . $this->dbi->quoteString($password) . ')');
         }
 
-        if (! @$dbi->tryQuery($local_query)) {
+        if (! @$this->dbi->tryQuery($localQuery)) {
             Generator::mysqlDie(
-                $dbi->getError(),
-                $sql_query,
+                $this->dbi->getError(),
+                $sqlQuery,
                 false,
-                $err_url
+                $errUrl,
             );
         }
 
         // Flush privileges after successful password change
-        $dbi->tryQuery('FLUSH PRIVILEGES;');
+        $this->dbi->tryQuery('FLUSH PRIVILEGES;');
     }
 
-    public function getFormForChangePassword(?string $username, ?string $hostname): string
+    /** @psalm-param non-empty-string $route */
+    public function getFormForChangePassword(string|null $username, string|null $hostname, string $route): string
     {
-        return $this->serverPrivileges->getFormForChangePassword($username ?? '', $hostname ?? '', false);
+        return $this->serverPrivileges->getFormForChangePassword($username ?? '', $hostname ?? '', false, $route);
     }
 }

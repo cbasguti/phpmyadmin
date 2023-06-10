@@ -19,7 +19,6 @@ use function ini_get;
 use function is_array;
 use function json_encode;
 use function str_contains;
-use function strlen;
 use function strtr;
 
 /**
@@ -32,32 +31,28 @@ class Url
      *
      * @see Url::getCommon()
      *
-     * @param string|array $db     optional database name
-     *                             (can also be an array of parameters)
-     * @param string       $table  optional table name
-     * @param int          $indent indenting level
-     * @param string|array $skip   do not generate a hidden field for this parameter
-     *                             (can be an array of strings)
+     * @param string|mixed[] $db    optional database name (can also be an array of parameters)
+     * @param string         $table optional table name
+     * @param string|mixed[] $skip  do not generate a hidden field for this parameter (can be an array of strings)
      *
      * @return string   string with input fields
      */
     public static function getHiddenInputs(
-        $db = '',
-        $table = '',
-        $indent = 0,
-        $skip = []
-    ) {
-        global $config;
+        string|array $db = '',
+        string $table = '',
+        string|array $skip = [],
+    ): string {
+        $GLOBALS['config'] ??= null;
 
         if (is_array($db)) {
             $params =& $db;
         } else {
             $params = [];
-            if (strlen((string) $db) > 0) {
+            if ($db !== '') {
                 $params['db'] = $db;
             }
 
-            if (strlen((string) $table) > 0) {
+            if ($table !== '') {
                 $params['table'] = $table;
             }
         }
@@ -66,7 +61,7 @@ class Url
             $params['server'] = $GLOBALS['server'];
         }
 
-        if (empty($config->getCookie('pma_lang')) && ! empty($GLOBALS['lang'])) {
+        if (empty($GLOBALS['config']->getCookie('pma_lang')) && ! empty($GLOBALS['lang'])) {
             $params['lang'] = $GLOBALS['lang'];
         }
 
@@ -112,23 +107,23 @@ class Url
      * <input type="hidden" name="ccc[b]" Value="ccc_b">
      * </code>
      *
-     * @param array  $values   hidden values
-     * @param string $pre      prefix
-     * @param bool   $is_token if token already added in hidden input field
+     * @param mixed[] $values  hidden values
+     * @param string  $pre     prefix
+     * @param bool    $isToken if token already added in hidden input field
      *
      * @return string form fields of type hidden
      */
-    public static function getHiddenFields(array $values, $pre = '', $is_token = false)
+    public static function getHiddenFields(array $values, string $pre = '', bool $isToken = false): string
     {
         $fields = '';
 
         /* Always include token in plain forms */
-        if ($is_token === false && isset($_SESSION[' PMA_token '])) {
+        if ($isToken === false && isset($_SESSION[' PMA_token '])) {
             $values['token'] = $_SESSION[' PMA_token '];
         }
 
         foreach ($values as $name => $value) {
-            if (! empty($pre)) {
+            if ($pre !== '') {
                 $name = $pre . '[' . $name . ']';
             }
 
@@ -175,7 +170,7 @@ class Url
      *
      * @return string   string with URL parameters
      */
-    public static function getCommon(array $params = [], $divider = '?', $encrypt = true)
+    public static function getCommon(array $params = [], string $divider = '?', bool $encrypt = true): string
     {
         return self::getCommonRaw($params, $divider, $encrypt);
     }
@@ -209,28 +204,30 @@ class Url
      *
      * @return string   string with URL parameters
      */
-    public static function getCommonRaw(array $params = [], $divider = '?', $encrypt = true)
+    public static function getCommonRaw(array $params = [], string $divider = '?', bool $encrypt = true): string
     {
-        global $config;
+        $GLOBALS['config'] ??= null;
 
         // avoid overwriting when creating navigation panel links to servers
         if (
             isset($GLOBALS['server'])
             && $GLOBALS['server'] != $GLOBALS['cfg']['ServerDefault']
             && ! isset($params['server'])
-            && ! $config->get('is_setup')
+            && ! $GLOBALS['config']->get('is_setup')
         ) {
             $params['server'] = $GLOBALS['server'];
         }
 
         // Can be null when the user is missing an extension.
-        if ($config !== null && empty($config->getCookie('pma_lang')) && ! empty($GLOBALS['lang'])) {
+        if (
+            $GLOBALS['config'] !== null && empty($GLOBALS['config']->getCookie('pma_lang')) && ! empty($GLOBALS['lang'])
+        ) {
             $params['lang'] = $GLOBALS['lang'];
         }
 
         $query = self::buildHttpQuery($params, $encrypt);
 
-        if (($divider !== '?' && $divider !== '&') || strlen($query) > 0) {
+        if (($divider !== '?' && $divider !== '&') || $query !== '') {
             return $divider . $query;
         }
 
@@ -240,16 +237,18 @@ class Url
     /**
      * @param array<int|string, mixed> $params
      * @param bool                     $encrypt whether to encrypt URL params
-     *
-     * @return string
      */
-    public static function buildHttpQuery($params, $encrypt = true)
+    public static function buildHttpQuery(array $params, bool $encrypt = true): string
     {
-        global $config;
+        if ($params === []) {
+            return '';
+        }
+
+        $GLOBALS['config'] ??= null;
 
         $separator = self::getArgSeparator();
 
-        if (! $encrypt || $config === null || ! $config->get('URLQueryEncryption')) {
+        if (! $encrypt || $GLOBALS['config'] === null || ! $GLOBALS['config']->get('URLQueryEncryption')) {
             return http_build_query($params, '', $separator);
         }
 
@@ -268,8 +267,6 @@ class Url
             'hostname',
             'dbname',
             'tablename',
-            'checkprivsdb',
-            'checkprivstable',
         ];
         $paramsToEncrypt = [];
         foreach ($params as $paramKey => $paramValue) {
@@ -295,7 +292,7 @@ class Url
         return strtr(base64_encode($crypto->encrypt($query)), '+/', '-_');
     }
 
-    public static function decryptQuery(string $query): ?string
+    public static function decryptQuery(string $query): string|null
     {
         $crypto = new Crypto();
 
@@ -313,42 +310,37 @@ class Url
      *
      * @return string  character used for separating url parts usually ; or &
      */
-    public static function getArgSeparator($encode = 'none')
+    public static function getArgSeparator(string $encode = 'none'): string
     {
         static $separator = null;
-        static $html_separator = null;
+        static $htmlSeparator = null;
 
         if ($separator === null) {
             // use separators defined by php, but prefer ';'
             // as recommended by W3C
             // (see https://www.w3.org/TR/1999/REC-html401-19991224/appendix
             // /notes.html#h-B.2.2)
-            $arg_separator = (string) ini_get('arg_separator.input');
-            if (str_contains($arg_separator, ';')) {
+            $argSeparator = (string) ini_get('arg_separator.input');
+            if (str_contains($argSeparator, ';')) {
                 $separator = ';';
-            } elseif (strlen($arg_separator) > 0) {
-                $separator = $arg_separator[0];
+            } elseif ($argSeparator !== '') {
+                $separator = $argSeparator[0];
             } else {
                 $separator = '&';
             }
 
-            $html_separator = htmlentities($separator);
+            $htmlSeparator = htmlentities($separator);
         }
 
-        switch ($encode) {
-            case 'html':
-                return $html_separator;
-
-            case 'text':
-            case 'none':
-            default:
-                return $separator;
-        }
+        return match ($encode) {
+            'html' => $htmlSeparator,
+            default => $separator,
+        };
     }
 
     /**
-     * @param string $route                Route to use
-     * @param array  $additionalParameters Additional URL parameters
+     * @param string  $route                Route to use
+     * @param mixed[] $additionalParameters Additional URL parameters
      */
     public static function getFromRoute(string $route, array $additionalParameters = []): string
     {

@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Navigation\Nodes;
 
-use PhpMyAdmin\Navigation\NodeFactory;
+use PhpMyAdmin\Navigation\Nodes\NodeEvent;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Navigation\Nodes\NodeEvent
- */
+#[CoversClass(NodeEvent::class)]
 class NodeEventTest extends AbstractTestCase
 {
     /**
@@ -18,6 +17,8 @@ class NodeEventTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 0;
     }
 
@@ -26,8 +27,7 @@ class NodeEventTest extends AbstractTestCase
      */
     public function testConstructor(): void
     {
-        $parent = NodeFactory::getInstance('NodeEvent');
-        $this->assertIsArray($parent->links);
+        $parent = new NodeEvent('default');
         $this->assertEquals(
             [
                 'text' => [
@@ -39,7 +39,7 @@ class NodeEventTest extends AbstractTestCase
                     'params' => ['export_item' => 1, 'db' => null, 'item_name' => null],
                 ],
             ],
-            $parent->links
+            $parent->links,
         );
     }
 }

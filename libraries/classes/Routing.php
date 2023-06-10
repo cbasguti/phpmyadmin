@@ -10,20 +10,30 @@ use FastRoute\Dispatcher\GroupCountBased as DispatcherGroupCountBased;
 use FastRoute\RouteCollector;
 use FastRoute\RouteParser\Std as RouteParserStd;
 use PhpMyAdmin\Controllers\HomeController;
+use PhpMyAdmin\Controllers\Setup\MainController;
+use PhpMyAdmin\Controllers\Setup\ShowConfigController;
+use PhpMyAdmin\Controllers\Setup\ValidateController;
 use PhpMyAdmin\Http\ServerRequest;
 use Psr\Container\ContainerInterface;
 
 use function __;
+use function array_pop;
+use function explode;
 use function file_exists;
 use function file_put_contents;
 use function htmlspecialchars;
+use function implode;
 use function is_array;
 use function is_readable;
-use function is_string;
 use function is_writable;
+use function mb_strlen;
+use function mb_strpos;
+use function mb_strrpos;
+use function mb_substr;
 use function rawurldecode;
 use function sprintf;
 use function trigger_error;
+use function urldecode;
 use function var_export;
 
 use const CACHE_DIR;
@@ -46,9 +56,7 @@ class Routing
 
     public static function skipCache(): bool
     {
-        global $cfg;
-
-        return ($cfg['environment'] ?? '') === 'development';
+        return ($GLOBALS['cfg']['environment'] ?? '') === 'development';
     }
 
     public static function canWriteCache(): bool
@@ -83,7 +91,7 @@ class Routing
 
         $routeCollector = new RouteCollector(
             new RouteParserStd(),
-            new DataGeneratorGroupCountBased()
+            new DataGeneratorGroupCountBased(),
         );
         $routeDefinitionCallback($routeCollector);
 
@@ -94,18 +102,18 @@ class Routing
         // If no skip cache then try to write if write is possible
         if (! $skipCache && $canWriteCache) {
             $writeWorks = self::writeCache(
-                '<?php return ' . var_export($dispatchData, true) . ';'
+                '<?php return ' . var_export($dispatchData, true) . ';',
             );
             if (! $writeWorks) {
                 trigger_error(
                     sprintf(
                         __(
                             'The routing cache could not be written, '
-                            . 'you need to adjust permissions on the folder/file "%s"'
+                            . 'you need to adjust permissions on the folder/file "%s"',
                         ),
-                        self::ROUTES_CACHE_FILE
+                        self::ROUTES_CACHE_FILE,
                     ),
-                    E_USER_WARNING
+                    E_USER_WARNING,
                 );
             }
         }
@@ -119,39 +127,14 @@ class Routing
     }
 
     /**
-     * @psalm-return non-empty-string
-     */
-    public static function getCurrentRoute(): string
-    {
-        /** @var mixed $route */
-        $route = $_GET['route'] ?? $_POST['route'] ?? '/';
-        if (! is_string($route) || $route === '') {
-            $route = '/';
-        }
-
-        /**
-         * See FAQ 1.34.
-         *
-         * @see https://docs.phpmyadmin.net/en/latest/faq.html#faq1-34
-         */
-        $db = isset($_GET['db']) && is_string($_GET['db']) ? $_GET['db'] : '';
-        if ($route === '/' && $db !== '') {
-            $table = isset($_GET['table']) && is_string($_GET['table']) ? $_GET['table'] : '';
-            $route = $table === '' ? '/database/structure' : '/sql';
-        }
-
-        return $route;
-    }
-
-    /**
      * Call associated controller for a route using the dispatcher
      */
     public static function callControllerForRoute(
         ServerRequest $request,
-        string $route,
         Dispatcher $dispatcher,
-        ContainerInterface $container
+        ContainerInterface $container,
     ): void {
+        $route = $request->getRoute();
         $routeInfo = $dispatcher->dispatch($request->getMethod(), rawurldecode($route));
 
         if ($routeInfo[0] === Dispatcher::NOT_FOUND) {
@@ -160,7 +143,7 @@ class Routing
             $response->setHttpResponseCode(404);
             echo Message::error(sprintf(
                 __('Error 404! The page %s was not found.'),
-                '<code>' . htmlspecialchars($route) . '</code>'
+                '<code>' . htmlspecialchars($route) . '</code>',
             ))->getDisplay();
 
             return;
@@ -184,25 +167,99 @@ class Routing
         /** @var array<string, string> $vars */
         $vars = $routeInfo[2];
 
-        /**
-         * @psalm-var callable(ServerRequest=, array<string, string>=):void $controller
-         */
+        /** @psalm-var callable(ServerRequest=, array<string, string>=):void $controller */
         $controller = $container->get($controllerName);
         $controller($request, $vars);
     }
 
-    /**
-     * @param mixed $dispatchData
-     *
-     * @psalm-assert-if-true array[] $dispatchData
-     */
-    private static function isRoutesCacheFileValid($dispatchData): bool
+    /** @psalm-assert-if-true array[] $dispatchData */
+    private static function isRoutesCacheFileValid(mixed $dispatchData): bool
     {
         return is_array($dispatchData)
-            && isset($dispatchData[0], $dispatchData[1])
-            && is_array($dispatchData[0]) && is_array($dispatchData[1])
-            && isset($dispatchData[0]['GET']) && is_array($dispatchData[0]['GET'])
-            && isset($dispatchData[0]['GET']['/']) && is_string($dispatchData[0]['GET']['/'])
+            && isset($dispatchData[1])
+            && is_array($dispatchData[1])
+            && isset($dispatchData[0]['GET']['/'])
             && $dispatchData[0]['GET']['/'] === HomeController::class;
+    }
+
+    public static function callSetupController(ServerRequest $request): void
+    {
+        $route = $request->getRoute();
+        if ($route === '/setup' || $route === '/') {
+            (new MainController())($request);
+
+            return;
+        }
+
+        if ($route === '/setup/show-config') {
+            (new ShowConfigController())($request);
+
+            return;
+        }
+
+        if ($route === '/setup/validate') {
+            (new ValidateController())($request);
+
+            return;
+        }
+
+        echo (new Template())->render('error/generic', [
+            'lang' => $GLOBALS['lang'] ?? 'en',
+            'dir' => $GLOBALS['text_dir'] ?? 'ltr',
+            'error_message' => Sanitize::sanitizeMessage(sprintf(
+                __('Error 404! The page %s was not found.'),
+                '[code]' . htmlspecialchars($route) . '[/code]',
+            )),
+        ]);
+    }
+
+    /**
+     * PATH_INFO could be compromised if set, so remove it from PHP_SELF
+     * and provide a clean PHP_SELF here
+     */
+    public static function getCleanPathInfo(): string
+    {
+        $pmaPhpSelf = Core::getenv('PHP_SELF');
+        if ($pmaPhpSelf === '') {
+            $pmaPhpSelf = urldecode(Core::getenv('REQUEST_URI'));
+        }
+
+        $pathInfo = Core::getenv('PATH_INFO');
+        if ($pathInfo !== '' && $pmaPhpSelf !== '') {
+            $questionPos = mb_strpos($pmaPhpSelf, '?');
+            if ($questionPos != false) {
+                $pmaPhpSelf = mb_substr($pmaPhpSelf, 0, $questionPos);
+            }
+
+            $pathInfoPos = mb_strrpos($pmaPhpSelf, $pathInfo);
+            if ($pathInfoPos !== false) {
+                $pathInfoPart = mb_substr($pmaPhpSelf, $pathInfoPos, mb_strlen($pathInfo));
+                if ($pathInfoPart === $pathInfo) {
+                    $pmaPhpSelf = mb_substr($pmaPhpSelf, 0, $pathInfoPos);
+                }
+            }
+        }
+
+        $path = [];
+        foreach (explode('/', $pmaPhpSelf) as $part) {
+            // ignore parts that have no value
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+
+            if ($part !== '..') {
+                // cool, we found a new part
+                $path[] = $part;
+            } elseif ($path !== []) {
+                // going back up? sure
+                array_pop($path);
+            }
+
+            // Here we intentionall ignore case where we go too up
+            // as there is nothing sane to do
+        }
+
+        /** TODO: Do we really need htmlspecialchars here? */
+        return htmlspecialchars('/' . implode('/', $path));
     }
 }

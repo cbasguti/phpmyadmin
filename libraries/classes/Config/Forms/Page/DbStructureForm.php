@@ -12,13 +12,9 @@ use PhpMyAdmin\Config\Forms\User\MainForm;
 
 class DbStructureForm extends BaseForm
 {
-    /**
-     * @return array
-     */
-    public static function getForms()
+    /** @return mixed[] */
+    public static function getForms(): array
     {
-        return [
-            'DbStructure' => MainForm::getForms()['DbStructure'],
-        ];
+        return ['DbStructure' => MainForm::getForms()['DbStructure']];
     }
 }

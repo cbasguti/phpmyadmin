@@ -9,14 +9,13 @@ use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
-/**
- * @covers \PhpMyAdmin\Database\Events
- */
+#[CoversClass(Events::class)]
 class EventsTest extends AbstractTestCase
 {
-    /** @var Events */
-    private $events;
+    private Events $events;
 
     /**
      * Set up
@@ -24,31 +23,34 @@ class EventsTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setGlobalConfig();
+
         parent::setLanguage();
+
         parent::setTheme();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['text_dir'] = 'ltr';
         $GLOBALS['server'] = 0;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
 
         $this->events = new Events(
             $GLOBALS['dbi'],
             new Template(),
-            ResponseRenderer::getInstance()
+            ResponseRenderer::getInstance(),
         );
     }
 
     /**
      * Test for getDataFromRequest
      *
-     * @param array $in  Input
-     * @param array $out Expected output
-     *
-     * @dataProvider providerGetDataFromRequest
+     * @param array<string, string> $in  Input
+     * @param array<string, string> $out Expected output
      */
+    #[DataProvider('providerGetDataFromRequest')]
     public function testGetDataFromRequestEmpty(array $in, array $out): void
     {
         unset($_POST);
@@ -66,9 +68,9 @@ class EventsTest extends AbstractTestCase
     /**
      * Data provider for testGetDataFromRequestEmpty
      *
-     * @return array
+     * @return array<array{array<string, string>, array<string, string>}>
      */
-    public function providerGetDataFromRequest(): array
+    public static function providerGetDataFromRequest(): array
     {
         return [
             [
@@ -143,26 +145,25 @@ class EventsTest extends AbstractTestCase
     /**
      * Test for getEditorForm
      *
-     * @param array  $data    Data for routine
-     * @param string $matcher Matcher
-     *
-     * @dataProvider providerGetEditorFormAdd
+     * @param array<string, string> $data    Data for routine
+     * @param string                $matcher Matcher
      */
+    #[DataProvider('providerGetEditorFormAdd')]
     public function testGetEditorFormAdd(array $data, string $matcher): void
     {
         ResponseRenderer::getInstance()->setAjax(false);
         $this->assertStringContainsString(
             $matcher,
-            $this->events->getEditorForm('add', 'change', $data)
+            $this->events->getEditorForm('add', 'change', $data),
         );
     }
 
     /**
      * Data provider for testGetEditorFormAdd
      *
-     * @return array
+     * @return array<array{array<string, string>, string}>
      */
-    public function providerGetEditorFormAdd(): array
+    public static function providerGetEditorFormAdd(): array
     {
         $data = [
             'item_name' => '',
@@ -198,26 +199,25 @@ class EventsTest extends AbstractTestCase
     /**
      * Test for getEditorForm
      *
-     * @param array  $data    Data for routine
-     * @param string $matcher Matcher
-     *
-     * @dataProvider providerGetEditorFormEdit
+     * @param array<string, string> $data    Data for routine
+     * @param string                $matcher Matcher
      */
+    #[DataProvider('providerGetEditorFormEdit')]
     public function testGetEditorFormEdit(array $data, string $matcher): void
     {
         ResponseRenderer::getInstance()->setAjax(false);
         $this->assertStringContainsString(
             $matcher,
-            $this->events->getEditorForm('edit', 'change', $data)
+            $this->events->getEditorForm('edit', 'change', $data),
         );
     }
 
     /**
      * Data provider for testGetEditorFormEdit
      *
-     * @return array
+     * @return array<array{array<string, string>, string}>
      */
-    public function providerGetEditorFormEdit(): array
+    public static function providerGetEditorFormEdit(): array
     {
         $data = [
             'item_name' => 'foo',
@@ -253,17 +253,16 @@ class EventsTest extends AbstractTestCase
     /**
      * Test for getEditorForm
      *
-     * @param array  $data    Data for routine
-     * @param string $matcher Matcher
-     *
-     * @dataProvider providerGetEditorFormAjax
+     * @param array<string, string> $data    Data for routine
+     * @param string                $matcher Matcher
      */
+    #[DataProvider('providerGetEditorFormAjax')]
     public function testGetEditorFormAjax(array $data, string $matcher): void
     {
         ResponseRenderer::getInstance()->setAjax(true);
         $this->assertStringContainsString(
             $matcher,
-            $this->events->getEditorForm('edit', 'change', $data)
+            $this->events->getEditorForm('edit', 'change', $data),
         );
         ResponseRenderer::getInstance()->setAjax(false);
     }
@@ -271,9 +270,9 @@ class EventsTest extends AbstractTestCase
     /**
      * Data provider for testGetEditorFormAjax
      *
-     * @return array
+     * @return array<array{array<string, string>, string}>
      */
-    public function providerGetEditorFormAjax(): array
+    public static function providerGetEditorFormAjax(): array
     {
         $data = [
             'item_name' => '',
@@ -302,17 +301,14 @@ class EventsTest extends AbstractTestCase
     /**
      * Test for getQueryFromRequest
      *
-     * @param array  $request Request
-     * @param string $query   Query
-     * @param int    $num_err Error number
-     *
-     * @dataProvider providerGetQueryFromRequest
+     * @param array<string, string> $request Request
+     * @param string                $query   Query
+     * @param int                   $numErr  Error number
      */
-    public function testGetQueryFromRequest(array $request, string $query, int $num_err): void
+    #[DataProvider('providerGetQueryFromRequest')]
+    public function testGetQueryFromRequest(array $request, string $query, int $numErr): void
     {
-        global $errors;
-
-        $errors = [];
+        $GLOBALS['errors'] = [];
 
         unset($_POST);
         $_POST = $request;
@@ -326,15 +322,15 @@ class EventsTest extends AbstractTestCase
         $GLOBALS['dbi'] = $dbi;
 
         $this->assertEquals($query, $this->events->getQueryFromRequest());
-        $this->assertCount($num_err, $errors);
+        $this->assertCount($numErr, $GLOBALS['errors']);
     }
 
     /**
      * Data provider for testGetQueryFromRequest
      *
-     * @return array
+     * @return array<array{array<string, string>, string, int}>
      */
-    public function providerGetQueryFromRequest(): array
+    public static function providerGetQueryFromRequest(): array
     {
         return [
             // Testing success

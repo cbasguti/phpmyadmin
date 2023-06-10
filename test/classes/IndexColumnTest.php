@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\IndexColumn;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 
-/**
- * @covers \PhpMyAdmin\IndexColumn
- */
+#[CoversClass(IndexColumn::class)]
 class IndexColumnTest extends TestCase
 {
-    /** @var IndexColumn */
-    private $object;
+    private IndexColumn $object;
 
     protected function setUp(): void
     {
@@ -45,9 +43,9 @@ class IndexColumnTest extends TestCase
 
     public function testGetCompareData(): void
     {
-        $this->assertEquals(
+        $this->assertSame(
             ['Column_name' => '', 'Seq_in_index' => 1, 'Collation' => null, 'Sub_part' => null, 'Null' => ''],
-            $this->object->getCompareData()
+            $this->object->getCompareData(),
         );
         $object = new IndexColumn([
             'Column_name' => 'name',
@@ -56,7 +54,7 @@ class IndexColumnTest extends TestCase
             'Sub_part' => 2,
             'Null' => 'NO',
         ]);
-        $this->assertEquals(
+        $this->assertSame(
             [
                 'Column_name' => 'name',
                 'Seq_in_index' => 2,
@@ -64,7 +62,7 @@ class IndexColumnTest extends TestCase
                 'Sub_part' => 2,
                 'Null' => 'NO',
             ],
-            $object->getCompareData()
+            $object->getCompareData(),
         );
     }
 

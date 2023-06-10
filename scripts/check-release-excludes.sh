@@ -45,11 +45,20 @@ validateExtension() {
                 foundFileExt
             fi
         ;;
-        js/vendor/*)
+        js/global.d.ts)
+        ;;
+        public/js/vendor/*)
             if [ \
                 "${extension}" != "js" -a "${extension}" != "map" \
                 -a "${extension}" != "css" -a "${filename}" != "LICENSE" \
                 -a "${extension}" != "txt" \
+            ]; then
+                foundFileExt
+            fi
+        ;;
+        js/dist/*)
+            if [ \
+                "${extension}" != "js" -a "${extension}" != "map" \
             ]; then
                 foundFileExt
             fi
@@ -59,14 +68,14 @@ validateExtension() {
                 foundFileExt
             fi
         ;;
-        js/dist/*)
-            if [ "${extension}" != "js" ];then
+        public/js/dist/*)
+            if [ "${extension}" != "js" -a "${extension}" != "map" ];then
                 foundFileExt
             fi
         ;;
         js/src/*)
             if [ \
-                "${extension}" != "js" -a "${extension}" != "mjs" \
+                "${extension}" != "ts" -a "${extension}" != "mjs"  \
             ]; then
                 foundFileExt
             fi
@@ -86,7 +95,7 @@ validateExtension() {
                 foundFileExt
             fi
         ;;
-        setup/*)
+        public/setup/*)
             if [ \
                 "${extension}" != "php" -a "${extension}" != "twig" \
                 -a "${extension}" != "css" \
@@ -109,7 +118,7 @@ validateExtension() {
                 foundFileExt
             fi
         ;;
-        themes/*)
+        public/themes/*)
             if [ \
                 "${extension}" != "css" -a "${extension}" != "png" \
                 -a "${extension}" != "scss" -a "${extension}" != "map" \
@@ -169,7 +178,11 @@ validateExtension() {
         ;;
         README)
         ;;
-        favicon.ico)
+        public/favicon.ico)
+        ;;
+        tsconfig.json)
+        ;;
+        webpack.config.cjs)
         ;;
         babel.config.json)
         ;;
@@ -181,19 +194,15 @@ validateExtension() {
         ;;
         yarn.lock)
         ;;
-        .rtlcssrc.json)
-        ;;
-        robots.txt)
+        public/robots.txt)
         ;;
         index.php)
         ;;
-        url.php)
-        ;;
-        js/messages.php)
+        public/index.php)
         ;;
         config.sample.inc.php)
         ;;
-        show_config_errors.php)
+        public/show_config_errors.php)
         ;;
         *)
             foundFileExt
@@ -338,7 +347,7 @@ for filePath in ${FILE_LIST}; do
 done
 
 if [ ${found} -gt 0 ]; then
-    echo 'Some new files to be excluded where found.'
+    echo 'Some new files to be excluded were found.'
     echo 'Please update create-release.sh'
     exit 1
 else

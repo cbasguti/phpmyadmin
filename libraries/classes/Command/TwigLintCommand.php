@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Command;
 
 use PhpMyAdmin\Template;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -58,21 +59,15 @@ use const E_USER_DEPRECATED;
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+#[AsCommand(name: 'lint:twig', description: 'Lint a Twig template and outputs encountered errors.')]
 class TwigLintCommand extends Command
 {
-    /** @var string|null */
-    protected static $defaultName = 'lint:twig';
-
-    /** @var string|null */
-    protected static $defaultDescription = 'Lint a Twig template and outputs encountered errors';
-
     protected function configure(): void
     {
-        $this
-            ->setDescription((string) self::$defaultDescription)
-            ->addOption('show-deprecations', null, InputOption::VALUE_NONE, 'Show deprecations as errors');
+        $this->addOption('show-deprecations', null, InputOption::VALUE_NONE, 'Show deprecations as errors');
     }
 
+    /** @return mixed[] */
     protected function findFiles(string $baseFolder): array
     {
         /* Open the handle */
@@ -126,7 +121,7 @@ class TwigLintCommand extends Command
                     }
 
                     return $prevErrorHandler ? $prevErrorHandler($level, $message, $file, $line) : false;
-                }
+                },
             );
         }
 
@@ -141,6 +136,7 @@ class TwigLintCommand extends Command
         return $this->display($output, $io, $filesInfo);
     }
 
+    /** @return mixed[] */
     protected function getFilesInfo(string $templatesPath): array
     {
         $filesInfo = [];
@@ -160,6 +156,7 @@ class TwigLintCommand extends Command
         return (string) file_get_contents($filePath);
     }
 
+    /** @return mixed[] */
     private function validate(string $template, string $file): array
     {
         $twig = Template::getTwigEnvironment(null);
@@ -186,6 +183,7 @@ class TwigLintCommand extends Command
         return ['template' => $template, 'file' => $file, 'valid' => true];
     }
 
+    /** @param mixed[] $filesInfo */
     private function display(OutputInterface $output, SymfonyStyle $io, array $filesInfo): int
     {
         $errors = 0;
@@ -209,8 +207,8 @@ class TwigLintCommand extends Command
             sprintf(
                 '%d Twig files have valid syntax and %d contain errors.',
                 count($filesInfo) - $errors,
-                $errors
-            )
+                $errors,
+            ),
         );
 
         return Command::FAILURE;
@@ -220,7 +218,7 @@ class TwigLintCommand extends Command
         SymfonyStyle $output,
         string $template,
         Error $exception,
-        ?string $file = null
+        string|null $file = null,
     ): void {
         $line = $exception->getTemplateLine();
 
@@ -243,7 +241,7 @@ class TwigLintCommand extends Command
                 '%s %-6s %s',
                 $lineNumber === $line ? '<error> >> </error>' : '    ',
                 $lineNumber,
-                $code
+                $code,
             ));
             if ($lineNumber !== $line) {
                 continue;
@@ -253,6 +251,7 @@ class TwigLintCommand extends Command
         }
     }
 
+    /** @return mixed[] */
     private function getContext(string $template, int $line, int $context = 3): array
     {
         $lines = explode("\n", $template);

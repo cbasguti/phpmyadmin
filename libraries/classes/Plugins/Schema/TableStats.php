@@ -10,6 +10,7 @@ namespace PhpMyAdmin\Plugins\Schema;
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\Font;
 use PhpMyAdmin\Index;
+use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Util;
 
 use function array_flip;
@@ -29,53 +30,25 @@ use function sprintf;
  */
 abstract class TableStats
 {
-    /** @var Dia\Dia|Eps\Eps|Pdf\Pdf|Svg\Svg */
-    protected $diagram;
+    public mixed $displayfield;
 
-    /** @var string */
-    protected $db;
+    /** @var mixed[] */
+    public array $fields = [];
 
-    /** @var int */
-    protected $pageNumber;
+    /** @var mixed[] */
+    public array $primary = [];
 
-    /** @var string */
-    protected $tableName;
+    public int|float $x = 0;
 
-    /** @var bool */
-    protected $showKeys;
+    public int|float $y = 0;
 
-    /** @var bool */
-    protected $tableDimension;
+    public int|float $width = 0;
 
-    /** @var mixed */
-    public $displayfield;
+    public int $heightCell = 0;
 
-    /** @var array */
-    public $fields = [];
+    protected Relation $relation;
 
-    /** @var array */
-    public $primary = [];
-
-    /** @var int|float */
-    public $x = 0;
-
-    /** @var int|float */
-    public $y = 0;
-
-    /** @var int */
-    public $width = 0;
-
-    /** @var int */
-    public $heightCell = 0;
-
-    /** @var bool */
-    protected $offline;
-
-    /** @var Relation */
-    protected $relation;
-
-    /** @var Font */
-    protected $font;
+    protected Font $font;
 
     /**
      * @param Pdf\Pdf|Svg\Svg|Eps\Eps|Dia\Dia $diagram        schema diagram
@@ -88,27 +61,15 @@ abstract class TableStats
      * @param bool                            $offline        whether the coordinates are sent from the browser
      */
     public function __construct(
-        $diagram,
-        $db,
-        $pageNumber,
-        $tableName,
-        $showKeys,
-        $tableDimension,
-        $offline
+        protected Pdf\Pdf|Svg\Svg|Eps\Eps|Dia\Dia $diagram,
+        protected string $db,
+        protected int $pageNumber,
+        protected string $tableName,
+        protected bool $showKeys,
+        protected bool $tableDimension,
+        protected bool $offline,
     ) {
-        global $dbi;
-
-        $this->diagram = $diagram;
-        $this->db = $db;
-        $this->pageNumber = $pageNumber;
-        $this->tableName = $tableName;
-
-        $this->showKeys = $showKeys;
-        $this->tableDimension = $tableDimension;
-
-        $this->offline = $offline;
-
-        $this->relation = new Relation($dbi);
+        $this->relation = new Relation($GLOBALS['dbi']);
         $this->font = new Font();
 
         // checks whether the table exists
@@ -127,26 +88,24 @@ abstract class TableStats
      */
     protected function validateTableAndLoadFields(): void
     {
-        global $dbi;
-
         $sql = 'DESCRIBE ' . Util::backquote($this->tableName);
-        $result = $dbi->tryQuery($sql);
+        $result = $GLOBALS['dbi']->tryQuery($sql);
         if (! $result || ! $result->numRows()) {
             $this->showMissingTableError();
-            exit;
+            ResponseRenderer::getInstance()->callExit();
         }
 
         if ($this->showKeys) {
-            $indexes = Index::getFromTable($this->tableName, $this->db);
-            $all_columns = [];
+            $indexes = Index::getFromTable($GLOBALS['dbi'], $this->tableName, $this->db);
+            $allColumns = [];
             foreach ($indexes as $index) {
-                $all_columns = array_merge(
-                    $all_columns,
-                    array_flip(array_keys($index->getColumns()))
+                $allColumns = array_merge(
+                    $allColumns,
+                    array_flip(array_keys($index->getColumns())),
                 );
             }
 
-            $this->fields = array_keys($all_columns);
+            $this->fields = array_keys($allColumns);
         } else {
             $this->fields = $result->fetchAllColumn();
         }
@@ -192,9 +151,7 @@ abstract class TableStats
      */
     protected function loadPrimaryKey(): void
     {
-        global $dbi;
-
-        $result = $dbi->query('SHOW INDEX FROM ' . Util::backquote($this->tableName) . ';');
+        $result = $GLOBALS['dbi']->query('SHOW INDEX FROM ' . Util::backquote($this->tableName) . ';');
         if ($result->numRows() <= 0) {
             return;
         }
@@ -214,7 +171,7 @@ abstract class TableStats
      *
      * @return string title of the current table
      */
-    protected function getTitle()
+    protected function getTitle(): string
     {
         return ($this->tableDimension
             ? sprintf('%.0fx%0.f', $this->width, $this->heightCell)

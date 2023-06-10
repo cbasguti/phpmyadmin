@@ -5,23 +5,25 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Plugins\Auth;
 
 use PhpMyAdmin\DatabaseInterface;
-use PhpMyAdmin\Footer;
+use PhpMyAdmin\Exceptions\ExitException;
 use PhpMyAdmin\Header;
 use PhpMyAdmin\Plugins\Auth\AuthenticationHttp;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Tests\AbstractNetworkTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use Throwable;
 
 use function base64_encode;
 use function ob_get_clean;
 use function ob_start;
 
-/**
- * @covers \PhpMyAdmin\Plugins\Auth\AuthenticationHttp
- */
+#[CoversClass(AuthenticationHttp::class)]
 class AuthenticationHttpTest extends AbstractNetworkTestCase
 {
-    /** @var AuthenticationHttp */
-    protected $object;
+    protected AuthenticationHttp $object;
 
     /**
      * Configures global environment.
@@ -29,13 +31,16 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setGlobalConfig();
+
         parent::setTheme();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['cfg']['Servers'] = [];
         $GLOBALS['server'] = 0;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
         $GLOBALS['lang'] = 'en';
         $GLOBALS['text_dir'] = 'ltr';
         $GLOBALS['token_provided'] = true;
@@ -49,61 +54,39 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
-    /**
-     * @param mixed   $set_minimal set minimal
-     * @param mixed   $body_id     body id
-     * @param mixed   $set_title   set title
-     * @param mixed[] ...$headers  headers
-     */
-    public function doMockResponse($set_minimal, $body_id, $set_title, ...$headers): void
+    public function doMockResponse(int $setMinimal, int $bodyId, int $setTitle, mixed ...$headers): void
     {
-        // mock footer
-        $mockFooter = $this->getMockBuilder(Footer::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['setMinimal'])
-            ->getMock();
-
-        $mockFooter->expects($this->exactly($set_minimal))
-            ->method('setMinimal')
-            ->with();
-
-        // mock header
-
         $mockHeader = $this->getMockBuilder(Header::class)
             ->disableOriginalConstructor()
             ->onlyMethods(
-                [
-                    'setBodyId',
-                    'setTitle',
-                    'disableMenuAndConsole',
-                ]
+                ['setBodyId', 'setTitle', 'disableMenuAndConsole'],
             )
             ->getMock();
 
-        $mockHeader->expects($this->exactly($body_id))
+        $mockHeader->expects($this->exactly($bodyId))
             ->method('setBodyId')
             ->with('loginform');
 
-        $mockHeader->expects($this->exactly($set_title))
+        $mockHeader->expects($this->exactly($setTitle))
             ->method('setTitle')
             ->with('Access denied!');
 
-        $mockHeader->expects($this->exactly($set_title))
+        $mockHeader->expects($this->exactly($setTitle))
             ->method('disableMenuAndConsole')
             ->with();
 
         // set mocked headers and footers
         $mockResponse = $this->mockResponse($headers);
 
-        $mockResponse->expects($this->exactly($set_title))
-            ->method('getFooter')
-            ->with()
-            ->will($this->returnValue($mockFooter));
+        $mockResponse->expects($this->exactly($setMinimal))
+            ->method('setMinimalFooter')
+            ->with();
 
-        $mockResponse->expects($this->exactly($set_title))
+        $mockResponse->expects($this->exactly($setTitle))
             ->method('getHeader')
             ->with()
             ->will($this->returnValue($mockHeader));
@@ -111,9 +94,8 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
         if (! empty($_REQUEST['old_usr'])) {
             $this->object->logOut();
         } else {
-            $this->assertFalse(
-                $this->object->showLoginForm()
-            );
+            $this->expectException(ExitException::class);
+            $this->object->showLoginForm();
         }
     }
 
@@ -126,7 +108,7 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
             0,
             0,
             0,
-            ['Location: https://example.com/logout']
+            ['Location: https://example.com/logout'],
         );
     }
 
@@ -141,7 +123,7 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
             1,
             ['WWW-Authenticate: Basic realm="phpMyAdmin verboseMessag"'],
             ['status: 401 Unauthorized'],
-            401
+            401,
         );
     }
 
@@ -156,7 +138,7 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
             1,
             ['WWW-Authenticate: Basic realm="phpMyAdmin hst"'],
             ['status: 401 Unauthorized'],
-            401
+            401,
         );
     }
 
@@ -171,7 +153,7 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
             1,
             ['WWW-Authenticate: Basic realm="realmmessage"'],
             ['status: 401 Unauthorized'],
-            401
+            401,
         );
     }
 
@@ -183,28 +165,27 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
      * @param string|bool $expectedReturn expected return value from test
      * @param string      $expectedUser   expected username to be set
      * @param string|bool $expectedPass   expected password to be set
-     * @param string|bool $old_usr        value for $_REQUEST['old_usr']
-     *
-     * @dataProvider readCredentialsProvider
+     * @param string|bool $oldUsr         value for $_REQUEST['old_usr']
      */
+    #[DataProvider('readCredentialsProvider')]
     public function testAuthCheck(
         string $user,
         string $pass,
         string $userIndex,
         string $passIndex,
-        $expectedReturn,
+        string|bool $expectedReturn,
         string $expectedUser,
-        $expectedPass,
-        $old_usr = ''
+        string|bool $expectedPass,
+        string|bool $oldUsr = '',
     ): void {
         $_SERVER[$userIndex] = $user;
         $_SERVER[$passIndex] = $pass;
 
-        $_REQUEST['old_usr'] = $old_usr;
+        $_REQUEST['old_usr'] = $oldUsr;
 
         $this->assertEquals(
             $expectedReturn,
-            $this->object->readCredentials()
+            $this->object->readCredentials(),
         );
 
         $this->assertEquals($expectedUser, $this->object->user);
@@ -216,23 +197,14 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
     }
 
     /**
-     * Data provider for testAuthCheck
-     *
-     * @return array Test data
+     * @return array<array{
+     *     0: string, 1: string, 2: string, 3: string, 4: string|bool, 5: string, 6: string|bool, 7?: string|bool
+     * }>
      */
-    public function readCredentialsProvider(): array
+    public static function readCredentialsProvider(): array
     {
         return [
-            [
-                'Basic ' . base64_encode('foo:bar'),
-                'pswd',
-                'PHP_AUTH_USER',
-                'PHP_AUTH_PW',
-                false,
-                '',
-                'bar',
-                'foo',
-            ],
+            ['Basic ' . base64_encode('foo:bar'), 'pswd', 'PHP_AUTH_USER', 'PHP_AUTH_PW', false, '', 'bar', 'foo'],
             [
                 'Basic ' . base64_encode('foobar'),
                 'pswd',
@@ -242,15 +214,7 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
                 'Basic Zm9vYmFy',
                 'pswd',
             ],
-            [
-                'Basic ' . base64_encode('foobar:'),
-                'pswd',
-                'AUTH_USER',
-                'AUTH_PASSWORD',
-                true,
-                'foobar',
-                false,
-            ],
+            ['Basic ' . base64_encode('foobar:'), 'pswd', 'AUTH_USER', 'AUTH_PASSWORD', true, 'foobar', false],
             [
                 'Basic ' . base64_encode(':foobar'),
                 'pswd',
@@ -260,15 +224,7 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
                 'Basic OmZvb2Jhcg==',
                 'pswd',
             ],
-            [
-                'BasicTest',
-                'pswd',
-                'Authorization',
-                'AUTH_PASSWORD',
-                true,
-                'BasicTest',
-                'pswd',
-            ],
+            ['BasicTest', 'pswd', 'Authorization', 'AUTH_PASSWORD', true, 'BasicTest', 'pswd'],
         ];
     }
 
@@ -282,7 +238,7 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
         $GLOBALS['cfg']['Server']['user'] = 'testUser';
 
         $this->assertTrue(
-            $this->object->storeCredentials()
+            $this->object->storeCredentials(),
         );
 
         $this->assertEquals('testUser', $GLOBALS['cfg']['Server']['user']);
@@ -296,28 +252,17 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
         // case 2
         $this->object->user = 'testUser';
         $this->object->password = 'testPass';
-        $GLOBALS['cfg']['Servers'][1] = [
-            'host' => 'a',
-            'user' => 'testUser',
-            'foo' => 'bar',
-        ];
+        $GLOBALS['cfg']['Servers'][1] = ['host' => 'a', 'user' => 'testUser', 'foo' => 'bar'];
 
-        $GLOBALS['cfg']['Server'] = [
-            'host' => 'a',
-            'user' => 'user2',
-        ];
+        $GLOBALS['cfg']['Server'] = ['host' => 'a', 'user' => 'user2'];
 
         $this->assertTrue(
-            $this->object->storeCredentials()
+            $this->object->storeCredentials(),
         );
 
         $this->assertEquals(
-            [
-                'user' => 'testUser',
-                'password' => 'testPass',
-                'host' => 'a',
-            ],
-            $GLOBALS['cfg']['Server']
+            ['user' => 'testUser', 'password' => 'testPass', 'host' => 'a'],
+            $GLOBALS['cfg']['Server'],
         );
 
         $this->assertEquals(2, $GLOBALS['server']);
@@ -326,38 +271,27 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
         $GLOBALS['server'] = 3;
         $this->object->user = 'testUser';
         $this->object->password = 'testPass';
-        $GLOBALS['cfg']['Servers'][1] = [
-            'host' => 'a',
-            'user' => 'testUsers',
-            'foo' => 'bar',
-        ];
+        $GLOBALS['cfg']['Servers'][1] = ['host' => 'a', 'user' => 'testUsers', 'foo' => 'bar'];
 
-        $GLOBALS['cfg']['Server'] = [
-            'host' => 'a',
-            'user' => 'user2',
-        ];
+        $GLOBALS['cfg']['Server'] = ['host' => 'a', 'user' => 'user2'];
 
         $this->assertTrue(
-            $this->object->storeCredentials()
+            $this->object->storeCredentials(),
         );
 
         $this->assertEquals(
-            [
-                'user' => 'testUser',
-                'password' => 'testPass',
-                'host' => 'a',
-            ],
-            $GLOBALS['cfg']['Server']
+            ['user' => 'testUser', 'password' => 'testPass', 'host' => 'a'],
+            $GLOBALS['cfg']['Server'],
         );
 
         $this->assertEquals(3, $GLOBALS['server']);
     }
 
-    /**
-     * @group medium
-     */
+    #[Group('medium')]
+    #[RunInSeparateProcess]
     public function testAuthFails(): void
     {
+        $GLOBALS['cfg']['Server']['host'] = '';
         $_REQUEST = [];
         ResponseRenderer::getInstance()->setAjax(false);
 
@@ -373,8 +307,14 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
         $GLOBALS['errno'] = 31;
 
         ob_start();
-        $this->object->showFailure('');
+        try {
+            $this->object->showFailure('');
+        } catch (Throwable $throwable) {
+        }
+
         $result = ob_get_clean();
+
+        $this->assertInstanceOf(ExitException::class, $throwable);
 
         $this->assertIsString($result);
 
@@ -386,15 +326,20 @@ class AuthenticationHttpTest extends AbstractNetworkTestCase
             ->getMock();
 
         $this->object->expects($this->exactly(2))
-            ->method('authForm');
+            ->method('authForm')
+            ->willThrowException(new ExitException());
         // case 2
         $GLOBALS['cfg']['Server']['host'] = 'host';
         $GLOBALS['errno'] = 1045;
 
-        $this->object->showFailure('');
+        try {
+            $this->object->showFailure('');
+        } catch (ExitException) {
+        }
 
         // case 3
         $GLOBALS['errno'] = 1043;
+        $this->expectException(ExitException::class);
         $this->object->showFailure('');
     }
 }

@@ -22,11 +22,9 @@ class NodeDatabaseContainer extends Node
      *
      * @param string $name An identifier for the new node
      */
-    public function __construct($name)
+    public function __construct(string $name)
     {
-        global $dbi;
-
-        $checkUserPrivileges = new CheckUserPrivileges($dbi);
+        $checkUserPrivileges = new CheckUserPrivileges($GLOBALS['dbi']);
         $checkUserPrivileges->getPrivileges();
 
         parent::__construct($name, Node::CONTAINER);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Plugins\TwoFactor;
 
+use PhpMyAdmin\Common;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Plugins\TwoFactorPlugin;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\TwoFactor;
@@ -33,15 +35,16 @@ use const SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING;
  */
 class WebAuthn extends TwoFactorPlugin
 {
-    /** @var string */
-    public static $id = 'WebAuthn';
+    public static string $id = 'WebAuthn';
 
-    /** @var Server */
-    private $server;
+    private Server $server;
+
+    public ServerRequest|null $serverRequest = null;
 
     public function __construct(TwoFactor $twofactor)
     {
         parent::__construct($twofactor);
+
         if (
             ! isset($this->twofactor->config['settings']['userHandle'])
             || ! is_string($this->twofactor->config['settings']['userHandle'])
@@ -69,15 +72,24 @@ class WebAuthn extends TwoFactorPlugin
         $this->server = $server;
     }
 
+    private function getRequest(): ServerRequest
+    {
+        if ($this->serverRequest === null) {
+            $this->serverRequest = Common::getRequest();
+        }
+
+        return $this->serverRequest;
+    }
+
     public function render(): string
     {
-        $request = $GLOBALS['request'];
+        $request = $this->getRequest();
         $userHandle = sodium_base642bin($this->getUserHandleFromSettings(), SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING);
         $requestOptions = $this->server->getCredentialRequestOptions(
             $this->twofactor->user,
             $userHandle,
             $request->getUri()->getHost(),
-            $this->getAllowedCredentials()
+            $this->getAllowedCredentials(),
         );
         $requestOptionsEncoded = json_encode($requestOptions);
         $_SESSION['WebAuthnCredentialRequestOptions'] = $requestOptionsEncoded;
@@ -85,14 +97,14 @@ class WebAuthn extends TwoFactorPlugin
 
         return $this->template->render(
             'login/twofactor/webauthn_request',
-            ['request_options' => $requestOptionsEncoded]
+            ['request_options' => $requestOptionsEncoded],
         );
     }
 
     public function check(): bool
     {
         $this->provided = false;
-        $request = $GLOBALS['request'];
+        $request = $this->getRequest();
         $authenticatorResponse = $request->getParsedBodyParam('webauthn_request_response', '');
         if ($authenticatorResponse === '' || ! isset($_SESSION['WebAuthnCredentialRequestOptions'])) {
             return false;
@@ -115,7 +127,7 @@ class WebAuthn extends TwoFactorPlugin
                 $authenticatorResponse,
                 $this->getAllowedCredentials(),
                 $requestOptions['challenge'],
-                $request
+                $request,
             );
         } catch (Throwable $exception) {
             $this->message = $exception->getMessage();
@@ -128,7 +140,7 @@ class WebAuthn extends TwoFactorPlugin
 
     public function setup(): string
     {
-        $request = $GLOBALS['request'];
+        $request = $this->getRequest();
         $userId = sodium_bin2base64(random_bytes(32), SODIUM_BASE64_VARIANT_ORIGINAL);
         $host = $request->getUri()->getHost();
         $creationOptions = $this->server->getCredentialCreationOptions($this->twofactor->user, $userId, $host);
@@ -138,14 +150,14 @@ class WebAuthn extends TwoFactorPlugin
 
         return $this->template->render(
             'login/twofactor/webauthn_creation',
-            ['creation_options' => $creationOptionsEncoded]
+            ['creation_options' => $creationOptionsEncoded],
         );
     }
 
     public function configure(): bool
     {
         $this->provided = false;
-        $request = $GLOBALS['request'];
+        $request = $this->getRequest();
         $authenticatorResponse = $request->getParsedBodyParam('webauthn_creation_response', '');
         if ($authenticatorResponse === '' || ! isset($_SESSION['WebAuthnCredentialCreationOptions'])) {
             return false;
@@ -163,7 +175,7 @@ class WebAuthn extends TwoFactorPlugin
             $credential = $this->server->parseAndValidateAttestationResponse(
                 $authenticatorResponse,
                 $credentialCreationOptions,
-                $request
+                $request,
             );
             $this->saveCredential($credential);
         } catch (Throwable $exception) {
@@ -184,7 +196,7 @@ class WebAuthn extends TwoFactorPlugin
     {
         return __(
             'Provides authentication using hardware security tokens supporting the WebAuthn/FIDO2 protocol,'
-            . ' such as a YubiKey.'
+            . ' such as a YubiKey.',
         );
     }
 
@@ -195,9 +207,7 @@ class WebAuthn extends TwoFactorPlugin
         $scripts->addFile('webauthn.js');
     }
 
-    /**
-     * @psalm-return list<array{id: non-empty-string, type: non-empty-string}>
-     */
+    /** @psalm-return list<array{id: non-empty-string, type: non-empty-string}> */
     private function getAllowedCredentials(): array
     {
         $allowedCredentials = [];
@@ -231,7 +241,7 @@ class WebAuthn extends TwoFactorPlugin
         Assert::isArray($this->twofactor->config['settings']['credentials']);
         $id = sodium_bin2base64(
             sodium_base642bin($credential['publicKeyCredentialId'], SODIUM_BASE64_VARIANT_URLSAFE_NO_PADDING),
-            SODIUM_BASE64_VARIANT_ORIGINAL
+            SODIUM_BASE64_VARIANT_ORIGINAL,
         );
         $this->twofactor->config['settings']['credentials'][$id] = $credential;
         $this->twofactor->config['settings']['userHandle'] = $credential['userHandle'];

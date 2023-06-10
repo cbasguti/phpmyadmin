@@ -7,33 +7,47 @@ namespace PhpMyAdmin\Tests\Controllers\Export\Template;
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\ConfigStorage\RelationParameters;
 use PhpMyAdmin\Controllers\Export\Template\LoadController;
+use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Export\TemplateModel;
 use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Tests\Stubs\ResponseRenderer;
+use PHPUnit\Framework\Attributes\CoversClass;
+use ReflectionClass;
 
-/**
- * @covers \PhpMyAdmin\Controllers\Export\Template\LoadController
- */
+#[CoversClass(LoadController::class)]
 class LoadControllerTest extends AbstractTestCase
 {
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
+    }
+
     public function testLoad(): void
     {
-        global $cfg;
-
         $GLOBALS['server'] = 1;
         $GLOBALS['text_dir'] = 'ltr';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
 
-        $_SESSION['relation'] = [];
-        $_SESSION['relation'][$GLOBALS['server']] = RelationParameters::fromArray([
+        $relationParameters = RelationParameters::fromArray([
             'exporttemplateswork' => true,
             'db' => 'db',
             'export_templates' => 'table',
-        ])->toArray();
+        ]);
+        (new ReflectionClass(Relation::class))->getProperty('cache')->setValue(
+            [$GLOBALS['server'] => $relationParameters],
+        );
 
-        $cfg['Server']['user'] = 'user';
+        $GLOBALS['cfg']['Server']['user'] = 'user';
 
         $response = new ResponseRenderer();
         $request = $this->createStub(ServerRequest::class);
@@ -43,7 +57,7 @@ class LoadControllerTest extends AbstractTestCase
             $response,
             new Template(),
             new TemplateModel($this->dbi),
-            new Relation($this->dbi)
+            new Relation($this->dbi),
         ))($request);
 
         $this->assertTrue($response->hasSuccessState());

@@ -21,6 +21,7 @@ use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Throwable;
 
+use function bin2hex;
 use function curl_close;
 use function curl_errno;
 use function curl_error;
@@ -32,16 +33,15 @@ use function end;
 use function file_put_contents;
 use function getenv;
 use function is_bool;
+use function is_object;
 use function is_string;
 use function json_decode;
 use function json_encode;
 use function mb_strtolower;
-use function mb_substr;
-use function mt_getrandmax;
 use function preg_match;
-use function random_int;
+use function property_exists;
+use function random_bytes;
 use function reset;
-use function sha1;
 use function sprintf;
 use function strlen;
 use function substr;
@@ -58,49 +58,37 @@ use const CURLOPT_USERPWD;
 use const DIRECTORY_SEPARATOR;
 use const JSON_PRETTY_PRINT;
 use const JSON_UNESCAPED_SLASHES;
-use const PHP_EOL;
 
 abstract class TestBase extends TestCase
 {
-    /** @var RemoteWebDriver */
-    protected $webDriver;
+    protected RemoteWebDriver $webDriver;
 
     /**
      * Name of database for the test
-     *
-     * @var string
      */
-    public $databaseName;
+    public string $databaseName;
 
     /**
      * The session Id (Browserstack)
-     *
-     * @var string
      */
-    protected $sessionId;
+    protected string $sessionId;
 
     /**
      * The window handle for the SQL tab
-     *
-     * @var string|null
      */
-    private $sqlWindowHandle = null;
+    private string|null $sqlWindowHandle = null;
 
     private const SESSION_REST_URL = 'https://api.browserstack.com/automate/sessions/';
 
     /**
      * Create a test database for this test class
-     *
-     * @var bool
      */
-    protected static $createDatabase = true;
+    protected static bool $createDatabase = true;
 
     /**
      * Did the test create the phpMyAdmin storage database ?
-     *
-     * @var bool
      */
-    private $hadStorageDatabaseInstall = false;
+    private bool $hadStorageDatabaseInstall = false;
 
     /**
      * Configures the selenium and database link.
@@ -128,7 +116,7 @@ abstract class TestBase extends TestCase
         if ($this->getTestSuiteUserLogin() === '') {
             //TODO: handle config mode
             $this->markTestSkipped(
-                'The ENV "TESTSUITE_USER" is not defined, you may also want to define "TESTSUITE_PASSWORD".'
+                'The ENV "TESTSUITE_USER" is not defined, you may also want to define "TESTSUITE_PASSWORD".',
             );
         }
 
@@ -147,7 +135,7 @@ abstract class TestBase extends TestCase
         $this->webDriver->manage()->window()->maximize();
 
         if (! static::$createDatabase) {
-            // Stop here, we where not asked to create a database
+            // Stop here, we were not asked to create a database
             return;
         }
 
@@ -159,9 +147,9 @@ abstract class TestBase extends TestCase
      */
     protected function createDatabase(): void
     {
-        $this->databaseName = $this->getDbPrefix() . mb_substr(sha1((string) random_int(0, mt_getrandmax())), 0, 7);
+        $this->databaseName = $this->getDbPrefix() . bin2hex(random_bytes(4));
         $this->dbQuery(
-            'CREATE DATABASE IF NOT EXISTS `' . $this->databaseName . '`; USE `' . $this->databaseName . '`;'
+            'CREATE DATABASE IF NOT EXISTS `' . $this->databaseName . '`; USE `' . $this->databaseName . '`;',
         );
         static::$createDatabase = true;
     }
@@ -286,7 +274,7 @@ abstract class TestBase extends TestCase
     {
         $className = substr(static::class, strlen('PhpMyAdmin\Tests\Selenium\\'));
 
-        return $className . ': ' . $this->getName();
+        return $className . ': ' . $this->name();
     }
 
     /**
@@ -330,7 +318,7 @@ abstract class TestBase extends TestCase
                 'debug' => false,
                 'consoleLogs' => 'verbose',
                 'networkLogs' => true,
-            ]
+            ],
         );
     }
 
@@ -348,21 +336,21 @@ abstract class TestBase extends TestCase
                 $capabilities->setCapability(ChromeOptions::CAPABILITY_W3C, $chromeOptions);
                 $capabilities->setCapability(
                     'loggingPrefs',
-                    ['browser' => 'ALL']
+                    ['browser' => 'ALL'],
                 );
 
                 if ($this->hasCIConfig() && $this->hasBrowserstackConfig()) {
                     $capabilities->setCapability(
                         'os',
-                        'Windows' // Force windows
+                        'Windows', // Force windows
                     );
                     $capabilities->setCapability(
                         'os_version',
-                        '10' // Force windows 10
+                        '10', // Force windows 10
                     );
                     $capabilities->setCapability(
                         'browser_version',
-                        '80.0' // Force chrome 80.0
+                        '80.0', // Force chrome 80.0
                     );
                     $capabilities->setCapability('resolution', '1920x1080');
                 }
@@ -374,15 +362,15 @@ abstract class TestBase extends TestCase
                 if ($this->hasCIConfig() && $this->hasBrowserstackConfig()) {
                     $capabilities->setCapability(
                         'os',
-                        'OS X' // Force OS X
+                        'OS X', // Force OS X
                     );
                     $capabilities->setCapability(
                         'os_version',
-                        'Sierra' // Force OS X Sierra
+                        'Sierra', // Force OS X Sierra
                     );
                     $capabilities->setCapability(
                         'browser_version',
-                        '10.1' // Force Safari 10.1
+                        '10.1', // Force Safari 10.1
                     );
                 }
 
@@ -393,15 +381,15 @@ abstract class TestBase extends TestCase
                 if ($this->hasCIConfig() && $this->hasBrowserstackConfig()) {
                     $capabilities->setCapability(
                         'os',
-                        'Windows' // Force windows
+                        'Windows', // Force windows
                     );
                     $capabilities->setCapability(
                         'os_version',
-                        '10' // Force windows 10
+                        '10', // Force windows 10
                     );
                     $capabilities->setCapability(
                         'browser_version',
-                        'insider preview' // Force Edge insider preview
+                        'insider preview', // Force Edge insider preview
                     );
                 }
 
@@ -623,7 +611,7 @@ abstract class TestBase extends TestCase
      *
      * @throws Exception
      */
-    public function dbQuery(string $query, ?Closure $onResults = null, ?Closure $afterSubmit = null): bool
+    public function dbQuery(string $query, Closure|null $onResults = null, Closure|null $afterSubmit = null): bool
     {
         $didSucceed = false;
         $handles = null;
@@ -631,7 +619,7 @@ abstract class TestBase extends TestCase
         if (! $this->sqlWindowHandle) {
             $this->webDriver->executeScript("window.open('about:blank','_blank');", []);
             $this->webDriver->wait()->until(
-                WebDriverExpectedCondition::numberOfWindowsToBe(2)
+                WebDriverExpectedCondition::numberOfWindowsToBe(2),
             );
             $handles = $this->webDriver->getWindowHandles();
 
@@ -691,17 +679,14 @@ abstract class TestBase extends TestCase
         // This call will also create the file path
         $this->webDriver->takeScreenshot(
             $screenshotDir . DIRECTORY_SEPARATOR
-            . 'screenshot_' . $key . '_' . $comment . '.png'
+            . 'screenshot_' . $key . '_' . $comment . '.png',
         );
         $htmlOutput = $screenshotDir . DIRECTORY_SEPARATOR . 'source_' . $key . '.html';
         file_put_contents($htmlOutput, $this->webDriver->getPageSource());
         $testInfo = $screenshotDir . DIRECTORY_SEPARATOR . 'source_' . $key . '.json';
         file_put_contents($testInfo, json_encode(
-            [
-                'filesKey' => $key,
-                'testName' => $this->getTestName(),
-            ],
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+            ['filesKey' => $key, 'testName' => $this->getTestName()],
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
         ));
     }
 
@@ -733,9 +718,12 @@ abstract class TestBase extends TestCase
      */
     public function waitForElement(string $func, string $arg): RemoteWebElement
     {
-        return $this->webDriver->wait(30, 500)->until(
-            WebDriverExpectedCondition::presenceOfElementLocated(WebDriverBy::$func($arg))
+        $element = $this->webDriver->wait(30, 500)->until(
+            WebDriverExpectedCondition::presenceOfElementLocated(WebDriverBy::$func($arg)),
         );
+        $this->assertInstanceOf(RemoteWebElement::class, $element);
+
+        return $element;
     }
 
     /**
@@ -747,9 +735,12 @@ abstract class TestBase extends TestCase
      */
     public function waitUntilElementIsPresent(string $func, string $arg, int $timeout): RemoteWebElement
     {
-        return $this->webDriver->wait($timeout, 500)->until(
-            WebDriverExpectedCondition::presenceOfElementLocated(WebDriverBy::$func($arg))
+        $element = $this->webDriver->wait($timeout, 500)->until(
+            WebDriverExpectedCondition::presenceOfElementLocated(WebDriverBy::$func($arg)),
         );
+        $this->assertInstanceOf(RemoteWebElement::class, $element);
+
+        return $element;
     }
 
     /**
@@ -759,11 +750,14 @@ abstract class TestBase extends TestCase
      * @param string $arg     Selector
      * @param int    $timeout Timeout in seconds
      */
-    public function waitUntilElementIsVisible(string $func, string $arg, int $timeout): WebDriverElement
+    public function waitUntilElementIsVisible(string $func, string $arg, int $timeout = 10): WebDriverElement
     {
-        return $this->webDriver->wait($timeout, 500)->until(
-            WebDriverExpectedCondition::visibilityOfElementLocated(WebDriverBy::$func($arg))
+        $element = $this->webDriver->wait($timeout, 500)->until(
+            WebDriverExpectedCondition::visibilityOfElementLocated(WebDriverBy::$func($arg)),
         );
+        $this->assertInstanceOf(WebDriverElement::class, $element);
+
+        return $element;
     }
 
     /**
@@ -793,7 +787,7 @@ abstract class TestBase extends TestCase
     {
         try {
             $this->webDriver->findElement(WebDriverBy::$func($arg));
-        } catch (NoSuchElementException | InvalidArgumentException | InvalidSelectorException $e) {
+        } catch (NoSuchElementException | InvalidArgumentException | InvalidSelectorException) {
             // Element not present
             return false;
         }
@@ -879,10 +873,8 @@ abstract class TestBase extends TestCase
     /**
      * Wrapper around alertText method to not use it on not supported
      * browsers.
-     *
-     * @return mixed
      */
-    public function alertText()
+    public function alertText(): mixed
     {
         /**
          * Not supported in Safari Webdriver, see
@@ -905,7 +897,7 @@ abstract class TestBase extends TestCase
     {
         $this->waitForElement('cssSelector', 'div.cm-s-default');
         $this->webDriver->executeScript(
-            "$('.cm-s-default')[" . $index . '].CodeMirror.setValue(' . json_encode($text) . ');'
+            "$('.cm-s-default')[" . $index . '].CodeMirror.setValue(' . json_encode($text) . ');',
         );
     }
 
@@ -935,7 +927,7 @@ abstract class TestBase extends TestCase
             $this->waitForElement('cssSelector', 'li.dropdown.show > a');
 
             $this->waitUntilElementIsPresent('cssSelector', 'li.nav-item.dropdown.show > ul', 5000);
-        } catch (WebDriverException $e) {
+        } catch (WebDriverException) {
             return;
         }
     }
@@ -953,8 +945,6 @@ abstract class TestBase extends TestCase
         // go to table page
         $this->waitForElement('xpath', "//th//a[contains(., '" . $table . "')]")->click();
         $this->waitAjax();
-
-        $this->waitForElement('xpath', "//a[@class='nav-link text-nowrap' and contains(., 'Browse')]");
     }
 
     /**
@@ -976,12 +966,9 @@ abstract class TestBase extends TestCase
         // go to specific database page
         $this->waitForElement(
             'xpath',
-            '//tr[(contains(@class, "db-row"))]//a[contains(., "' . $database . '")]'
+            '//tr[(contains(@class, "db-row"))]//a[contains(., "' . $database . '")]',
         )->click();
         $this->waitAjax();
-
-        // Wait for it to load
-        $this->waitForElement('xpath', "//a[@class='nav-link text-nowrap' and contains(., 'Structure')]");
     }
 
     /**
@@ -1074,13 +1061,13 @@ JS;
         $this->webDriver->executeAsyncScript(
             'var callback = arguments[arguments.length - 1];'
             . 'function startWaitingForAjax() {'
-            . '    if (! AJAX.active) {'
+            . '    if (! window.AJAX.active) {'
             . '        callback();'
             . '    } else {'
             . '        setTimeout(startWaitingForAjax, 200);'
             . '    }'
             . '}'
-            . 'startWaitingForAjax();'
+            . 'startWaitingForAjax();',
         );
     }
 
@@ -1090,9 +1077,9 @@ JS;
     public function waitAjaxMessage(): void
     {
         /* Get current message count */
-        $ajax_message_count = $this->webDriver->executeScript('return ajaxMessageCount;');
+        $ajaxMessageCount = $this->webDriver->executeScript('return window.getAjaxMessageCount();');
         /* Ensure the popup is gone */
-        $this->waitForElementNotPresent('id', 'ajax_message_num_' . $ajax_message_count);
+        $this->waitForElementNotPresent('id', 'ajax_message_num_' . $ajaxMessageCount);
     }
 
     /**
@@ -1108,7 +1095,7 @@ JS;
             $this->dbQuery('DROP DATABASE IF EXISTS `phpmyadmin`;');
         }
 
-        if ($this->hasFailed()) {
+        if ($this->status()->asString() !== 'success') {
             return;
         }
 
@@ -1132,10 +1119,7 @@ JS;
         }
 
         $payload = json_encode(
-            [
-                'status' => $status,
-                'reason' => $message,
-            ]
+            ['status' => $status, 'reason' => $message],
         );
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, self::SESSION_REST_URL . $this->sessionId . '.json');
@@ -1145,7 +1129,7 @@ JS;
         curl_setopt(
             $ch,
             CURLOPT_USERPWD,
-            $this->getBrowserStackCredentials()
+            $this->getBrowserStackCredentials(),
         );
 
         $headers = [];
@@ -1154,7 +1138,7 @@ JS;
 
         curl_exec($ch);
         if (curl_errno($ch)) {
-            echo 'Error: ' . curl_error($ch) . PHP_EOL;
+            echo 'Error: ' . curl_error($ch) . "\n";
         }
 
         curl_close($ch);
@@ -1172,24 +1156,23 @@ JS;
         curl_setopt(
             $ch,
             CURLOPT_USERPWD,
-            $this->getBrowserStackCredentials()
+            $this->getBrowserStackCredentials(),
         );
         $result = curl_exec($ch);
         if (is_bool($result)) {
-            echo 'Error: ' . curl_error($ch) . PHP_EOL;
+            echo 'Error: ' . curl_error($ch) . "\n";
 
             return;
         }
 
         $proj = json_decode($result);
-        // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-        if (isset($proj->automation_session)) {
+        if (is_object($proj) && property_exists($proj, 'automation_session')) {
             // phpcs:ignore Squiz.NamingConventions.ValidVariableName.MemberNotCamelCaps
-            echo 'Test failed, get more information here: ' . $proj->automation_session->public_url . PHP_EOL;
+            echo 'Test failed, get more information here: ' . $proj->automation_session->public_url . "\n";
         }
 
         if (curl_errno($ch)) {
-            echo 'Error: ' . curl_error($ch) . PHP_EOL;
+            echo 'Error: ' . curl_error($ch) . "\n";
         }
 
         curl_close($ch);
@@ -1197,10 +1180,8 @@ JS;
 
     /**
      * Mark unsuccessful tests as 'Failures' on Browerstack
-     *
-     * @param Throwable $t Throwable
      */
-    public function onNotSuccessfulTest(Throwable $t): void
+    public function onNotSuccessfulTest(Throwable $t): never
     {
         $this->markTestAs('failed', $t->getMessage());
         $this->takeScrenshot('test_failed');

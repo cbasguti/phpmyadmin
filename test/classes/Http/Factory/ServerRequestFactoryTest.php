@@ -10,44 +10,32 @@ use Nyholm\Psr7\Factory\Psr17Factory as NyholmPsr17Factory;
 use PhpMyAdmin\Http\Factory\ServerRequestFactory;
 use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Psr\Http\Message\ServerRequestFactoryInterface;
+use Psr\Http\Message\ServerRequestInterface;
 use Slim\Psr7\Factory\ServerRequestFactory as SlimServerRequestFactory;
 
 use function class_exists;
 
-/**
- * @covers \PhpMyAdmin\Http\Factory\ServerRequestFactory
- */
+#[CoversClass(ServerRequestFactory::class)]
 class ServerRequestFactoryTest extends AbstractTestCase
 {
     private const IMPLEMENTATION_CLASSES = [
-        'slim/psr7' => [
-            SlimServerRequestFactory::class,
-            'Slim PSR-7',
-        ],
-        'guzzlehttp/psr7' => [
-            GuzzleHttpFactory::class,
-            'Guzzle PSR-7',
-        ],
-        'nyholm/psr7' => [
-            NyholmPsr17Factory::class,
-            'Nyholm PSR-7',
-        ],
-        'laminas/laminas-diactoros' => [
-            LaminasServerRequestFactory::class,
-            'Laminas diactoros PSR-7',
-        ],
+        'slim/psr7' => [SlimServerRequestFactory::class, 'Slim PSR-7'],
+        'guzzlehttp/psr7' => [GuzzleHttpFactory::class, 'Guzzle PSR-7'],
+        'nyholm/psr7' => [NyholmPsr17Factory::class, 'Nyholm PSR-7'],
+        'laminas/laminas-diactoros' => [LaminasServerRequestFactory::class, 'Laminas diactoros PSR-7'],
     ];
 
-    public function dataProviderPsr7Implementations(): array
+    /** @return mixed[][] */
+    public static function dataProviderPsr7Implementations(): array
     {
         return self::IMPLEMENTATION_CLASSES;
     }
 
-    /**
-     * @phpstan-param class-string $className
-     */
-    private function testOrSkip(string $className, string $humanName): void
+    /** @phpstan-param class-string $className */
+    private function runOrSkip(string $className, string $humanName): void
     {
         if (! class_exists($className)) {
             $this->markTestSkipped($humanName . ' is missing');
@@ -68,14 +56,11 @@ class ServerRequestFactoryTest extends AbstractTestCase
         }
     }
 
-    /**
-     * @phpstan-param class-string $className
-     *
-     * @dataProvider dataProviderPsr7Implementations
-     */
+    /** @phpstan-param class-string $className */
+    #[DataProvider('dataProviderPsr7Implementations')]
     public function testPsr7ImplementationGet(string $className, string $humanName): void
     {
-        $this->testOrSkip($className, $humanName);
+        $this->runOrSkip($className, $humanName);
 
         $_GET['foo'] = 'bar';
         $_GET['blob'] = 'baz';
@@ -87,31 +72,28 @@ class ServerRequestFactoryTest extends AbstractTestCase
         $request = ServerRequestFactory::createFromGlobals();
         $this->assertSame(
             'GET',
-            $request->getMethod()
+            $request->getMethod(),
         );
         $this->assertSame(
             'http://phpmyadmin.local/test-page.php?foo=bar&blob=baz',
-            $request->getUri()->__toString()
+            $request->getUri()->__toString(),
         );
         $this->assertFalse(
-            $request->isPost()
+            $request->isPost(),
         );
         $this->assertSame(
             'default',
-            $request->getParam('not-exists', 'default')
+            $request->getParam('not-exists', 'default'),
         );
         $this->assertSame(
             'bar',
-            $request->getParam('foo')
+            $request->getParam('foo'),
         );
         $this->assertSame(
             'baz',
-            $request->getParam('blob')
+            $request->getParam('blob'),
         );
-        $this->assertSame([
-            'foo' => 'bar',
-            'blob' => 'baz',
-        ], $request->getQueryParams());
+        $this->assertSame(['foo' => 'bar', 'blob' => 'baz'], $request->getQueryParams());
     }
 
     public function testCreateServerRequestFromGlobals(): void
@@ -127,59 +109,53 @@ class ServerRequestFactoryTest extends AbstractTestCase
         $_SERVER['HTTP_HOST'] = 'phpmyadmin.local';
 
         $creator = $this->getMockBuilder(ServerRequestFactory::class)
-            ->setMethods(['getallheaders'])
+            ->onlyMethods(['getallheaders'])
             ->getMock();
 
         $creator
             ->method('getallheaders')
             ->willReturn(['Content-Type' => 'application/x-www-form-urlencoded']);
 
+        /** @var ServerRequestInterface $serverRequest */
         $serverRequest = $this->callFunction(
             $creator,
             ServerRequestFactory::class,
             'createServerRequestFromGlobals',
-            [$creator]
+            [$creator],
         );
 
         $request = new ServerRequest($serverRequest);
 
         $this->assertSame(
             ['application/x-www-form-urlencoded'],
-            $request->getHeader('Content-Type')
+            $request->getHeader('Content-Type'),
         );
         $this->assertSame(
             'POST',
-            $request->getMethod()
+            $request->getMethod(),
         );
         $this->assertSame(
             'http://phpmyadmin.local/test-page.php?foo=bar&blob=baz',
-            $request->getUri()->__toString()
+            $request->getUri()->__toString(),
         );
         $this->assertTrue(
-            $request->isPost()
+            $request->isPost(),
         );
         $this->assertSame(
             'default',
-            $request->getParam('not-exists', 'default')
+            $request->getParam('not-exists', 'default'),
         );
         $this->assertSame(
             'bar',
-            $request->getParam('foo')
+            $request->getParam('foo'),
         );
         $this->assertSame(
             'baz',
-            $request->getParam('blob')
+            $request->getParam('blob'),
         );
-        $this->assertSame([
-            'foo' => 'bar',
-            'blob' => 'baz',
-        ], $request->getQueryParams());
+        $this->assertSame(['foo' => 'bar', 'blob' => 'baz'], $request->getQueryParams());
 
-        $this->assertSame([
-            'input1' => 'value1',
-            'input2' => 'value2',
-            'input3' => '',
-        ], $request->getParsedBody());
+        $this->assertSame(['input1' => 'value1', 'input2' => 'value2', 'input3' => ''], $request->getParsedBody());
 
         $this->assertNull($request->getParsedBodyParam('foo'));
         $this->assertSame('value1', $request->getParsedBodyParam('input1'));
@@ -187,21 +163,16 @@ class ServerRequestFactoryTest extends AbstractTestCase
         $this->assertSame('', $request->getParsedBodyParam('input3', 'default'));
     }
 
-    /**
-     * @phpstan-param class-string $className
-     *
-     * @dataProvider dataProviderPsr7Implementations
-     */
+    /** @phpstan-param class-string $className */
+    #[DataProvider('dataProviderPsr7Implementations')]
     public function testPsr7ImplementationCreateServerRequestFactory(string $className, string $humanName): void
     {
-        $this->testOrSkip($className, $humanName);
+        $this->runOrSkip($className, $humanName);
 
         $serverRequestFactory = new $className();
         $this->assertInstanceOf(ServerRequestFactoryInterface::class, $serverRequestFactory);
 
-        $factory = new ServerRequestFactory(
-            $serverRequestFactory
-        );
+        $factory = new ServerRequestFactory($serverRequestFactory);
         $this->assertInstanceOf(ServerRequestFactory::class, $factory);
     }
 }

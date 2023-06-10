@@ -5,37 +5,48 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests\Controllers\Database\MultiTableQuery;
 
 use PhpMyAdmin\Controllers\Database\MultiTableQuery\TablesController;
+use PhpMyAdmin\DatabaseInterface;
+use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Controllers\Database\MultiTableQuery\TablesController
- */
+#[CoversClass(TablesController::class)]
 class TablesControllerTest extends AbstractTestCase
 {
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
-        parent::setGlobalDbi();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
+
         parent::loadContainerBuilder();
+
         parent::loadDbiIntoContainerBuilder();
+
         $GLOBALS['server'] = 1;
-        $GLOBALS['PMA_PHP_SELF'] = '';
+
         parent::loadResponseIntoContainerBuilder();
     }
 
     public function testGetForeignKeyConstrainsForTable(): void
     {
-        $_GET['tables'] = [
-            'table1',
-            'table2',
-        ];
+        $_GET['tables'] = ['table1', 'table2'];
         $_GET['db'] = 'test';
 
-        global $containerBuilder;
         /** @var TablesController $multiTableQueryController */
-        $multiTableQueryController = $containerBuilder->get(TablesController::class);
-        $multiTableQueryController();
+        $multiTableQueryController = $GLOBALS['containerBuilder']->get(TablesController::class);
+        $request = $this->createStub(ServerRequest::class);
+        $request->method('getQueryParam')->willReturnOnConsecutiveCalls($_GET['tables'], $_GET['db']);
+        $multiTableQueryController($request);
         $this->assertSame(
             [
                 'foreignKeyConstrains' => [
@@ -47,7 +58,7 @@ class TablesControllerTest extends AbstractTestCase
                     ],
                 ],
             ],
-            $this->getResponseJsonResult()
+            $this->getResponseJsonResult(),
         );
     }
 }

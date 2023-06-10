@@ -1,34 +1,48 @@
+# https://docs.github.com/en/actions
+
 name: Mutation tests
 
 on:
   push:
-    branches: [master]
+    branches:
+      - master
+    paths:
+      - '*/classes/**.php'
   pull_request:
-    branches: [master]
+    branches:
+      - master
+    paths:
+      - '*/classes/**.php'
+  schedule:
+    - cron: '0 0 * * *'
 
 permissions:
   contents: read
 
 jobs:
-  tests:
-    name: Mutation tests with PHP ${{ matrix.php-version }}
+  infection:
+    name: Infection
     runs-on: ${{ matrix.operating-system }}
     strategy:
       matrix:
-        php-version: ["8.1"]
-        operating-system: [ubuntu-latest]
+        php-version:
+          - "8.2"
+        operating-system:
+          - ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
 
-      - name: Fetch github.base_ref (for diffing)
-        if: ${{ github.base_ref != '' }}
-        run: |
-          git fetch --depth=1 origin +refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}
+      - name: Checkout base ref code
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.base_ref }}
 
       - name: Install Gettext
-        run: |
-          sudo apt-get install -y gettext
+        run: sudo apt-get install -y gettext
 
       - name: Generate mo files
         run: ./scripts/generate-mo --quiet
@@ -47,22 +61,20 @@ jobs:
           dependency-versions: highest
 
       - name: Collect coverage report
-        run: |
-          composer run phpunit -- --testsuite unit --stop-on-failure
+        run: composer run phpunit -- --testsuite unit --stop-on-failure
 
-      - name: Infection
-        if: ${{ github.base_ref != '' }}
+      - name: Run Infection for changed files only
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
         run: |
-          CHANGED_FILES=$(git diff origin/$GITHUB_BASE_REF --diff-filter=AM --name-only | grep libraries/classes/ | paste -sd "," -);
-          infection -j$(nproc) --skip-initial-tests --no-interaction --no-progress --coverage=build/logs \
-            --ignore-msi-with-no-mutations \
-            --filter=$CHANGED_FILES
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then \
+            INFECTION_GIT_DIFF_BASE="origin/$GITHUB_REF_NAME^"; else \
+            INFECTION_GIT_DIFF_BASE="origin/$GITHUB_BASE_REF"; fi
+          infection -j$(nproc) --git-diff-lines --git-diff-base="$INFECTION_GIT_DIFF_BASE" \
+            --logger-github --ignore-msi-with-no-mutations --only-covered \
+            --skip-initial-tests --coverage=build/logs --no-interaction --no-progress
+
+      - name: Run Infection for all files
+        if: github.event_name == 'schedule'
         env:
           INFECTION_BADGE_API_KEY: ${{ secrets.INFECTION_BADGE_API_KEY }}
-
-      - name: Infection
-        if: ${{ github.base_ref == '' }}
-        run: |
-          infection -j$(nproc) --skip-initial-tests --no-interaction --no-progress --coverage=build/logs
-        env:
-          INFECTION_BADGE_API_KEY: ${{ secrets.INFECTION_BADGE_API_KEY }}
+        run: infection -j$(nproc) --skip-initial-tests --coverage=build/logs --no-interaction --no-progress

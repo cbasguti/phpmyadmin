@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Navigation\Nodes;
 
-use PhpMyAdmin\Navigation\NodeFactory;
+use PhpMyAdmin\Navigation\Nodes\NodeView;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Navigation\Nodes\NodeView
- */
+#[CoversClass(NodeView::class)]
 class NodeViewTest extends AbstractTestCase
 {
     /**
@@ -18,6 +17,8 @@ class NodeViewTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 0;
     }
 
@@ -26,14 +27,13 @@ class NodeViewTest extends AbstractTestCase
      */
     public function testConstructor(): void
     {
-        $parent = NodeFactory::getInstance('NodeView');
-        $this->assertIsArray($parent->links);
+        $parent = new NodeView('default');
         $this->assertEquals(
             [
                 'text' => ['route' => '/sql', 'params' => ['pos' => 0, 'db' => null, 'table' => null]],
                 'icon' => ['route' => '/table/structure', 'params' => ['db' => null, 'table' => null]],
             ],
-            $parent->links
+            $parent->links,
         );
         $this->assertEquals('b_props', $parent->icon['image']);
         $this->assertEquals('View', $parent->icon['title']);

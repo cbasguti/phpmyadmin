@@ -21,16 +21,13 @@ class Scripts
      * @var array<string, array<string, int|string|array<string, string>>>
      * @psalm-var array<string, array{has_onload: 0|1, filename: non-empty-string, params: array<string, string>}>
      */
-    private $files;
+    private array $files = [];
     /**
      * A string of discrete javascript code snippets
-     *
-     * @var string
      */
-    private $code;
+    private string $code = '';
 
-    /** @var Template */
-    private $template;
+    private Template $template;
 
     /**
      * Generates new Scripts objects
@@ -38,8 +35,6 @@ class Scripts
     public function __construct()
     {
         $this->template = new Template();
-        $this->files = [];
-        $this->code = '';
     }
 
     /**
@@ -50,7 +45,7 @@ class Scripts
      */
     public function addFile(
         string $filename,
-        array $params = []
+        array $params = [],
     ): void {
         $hash = md5($filename);
         if (! empty($this->files[$hash]) || $filename === '') {
@@ -58,11 +53,7 @@ class Scripts
         }
 
         $hasOnload = $this->hasOnloadEvent($filename);
-        $this->files[$hash] = [
-            'has_onload' => (int) $hasOnload,
-            'filename' => $filename,
-            'params' => $params,
-        ];
+        $this->files[$hash] = ['has_onload' => (int) $hasOnload, 'filename' => $filename, 'params' => $params];
     }
 
     /**
@@ -86,11 +77,13 @@ class Scripts
      */
     private function hasOnloadEvent(string $filename): bool
     {
-        return ! str_contains($filename, 'jquery')
-            && ! str_contains($filename, 'codemirror')
-            && ! str_contains($filename, 'messages.php')
-            && ! str_contains($filename, 'ajax.js')
-            && ! str_contains($filename, 'cross_framing_protection.js');
+        return ! str_contains($filename, 'vendor')
+            && ! str_contains($filename, 'runtime.js')
+            && ! str_contains($filename, 'name-conflict-fixes.js')
+            && ! str_contains($filename, 'index.php')
+            && ! str_contains($filename, 'shared.js')
+            && ! str_contains($filename, 'datetimepicker.js')
+            && ! str_contains($filename, 'validator-messages.js');
     }
 
     /**
@@ -119,10 +112,7 @@ class Scripts
                 continue;
             }
 
-            $retval[] = [
-                'name' => $file['filename'],
-                'fire' => $file['has_onload'],
-            ];
+            $retval[] = ['name' => $file['filename'], 'fire' => $file['has_onload']];
         }
 
         return $retval;

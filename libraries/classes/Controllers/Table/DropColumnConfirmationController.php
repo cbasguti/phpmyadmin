@@ -4,39 +4,42 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Controllers\Table;
 
+use PhpMyAdmin\Controllers\AbstractController;
 use PhpMyAdmin\DbTableExists;
-use PhpMyAdmin\Url;
-use PhpMyAdmin\Util;
+use PhpMyAdmin\Http\ServerRequest;
+use PhpMyAdmin\Identifiers\DatabaseName;
+use PhpMyAdmin\Identifiers\InvalidIdentifier;
+use PhpMyAdmin\Identifiers\TableName;
+use Webmozart\Assert\Assert;
+use Webmozart\Assert\InvalidArgumentException;
 
 use function __;
 
 final class DropColumnConfirmationController extends AbstractController
 {
-    public function __invoke(): void
+    public function __invoke(ServerRequest $request): void
     {
-        global $urlParams, $errorUrl, $cfg;
+        $fields = $request->getParsedBodyParam('selected_fld');
+        try {
+            $db = DatabaseName::from($request->getParsedBodyParam('db'));
+            $table = TableName::from($request->getParsedBodyParam('table'));
+            Assert::allStringNotEmpty($fields);
+        } catch (InvalidIdentifier $exception) {
+            $this->sendErrorResponse($exception->getMessage());
 
-        $selected = $_POST['selected_fld'] ?? null;
-
-        if (empty($selected)) {
-            $this->response->setRequestStatus(false);
-            $this->response->addJSON('message', __('No column selected.'));
+            return;
+        } catch (InvalidArgumentException) {
+            $this->sendErrorResponse(__('No column selected.'));
 
             return;
         }
 
-        Util::checkParameters(['db', 'table']);
-
-        $urlParams = ['db' => $this->db, 'table' => $this->table];
-        $errorUrl = Util::getScriptNameForOption($cfg['DefaultTabTable'], 'table');
-        $errorUrl .= Url::getCommon($urlParams, '&');
-
-        DbTableExists::check();
+        DbTableExists::check($db->getName(), $table->getName());
 
         $this->render('table/structure/drop_confirm', [
-            'db' => $this->db,
-            'table' => $this->table,
-            'fields' => $selected,
+            'db' => $db->getName(),
+            'table' => $table->getName(),
+            'fields' => $fields,
         ]);
     }
 }

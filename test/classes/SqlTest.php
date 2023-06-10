@@ -6,25 +6,30 @@ namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\ConfigStorage\Relation;
 use PhpMyAdmin\ConfigStorage\RelationCleanup;
-use PhpMyAdmin\FieldMetadata;
+use PhpMyAdmin\DatabaseInterface;
 use PhpMyAdmin\Operations;
 use PhpMyAdmin\ParseAnalyze;
 use PhpMyAdmin\Sql;
 use PhpMyAdmin\Template;
+use PhpMyAdmin\Tests\Stubs\DbiDummy;
 use PhpMyAdmin\Transformations;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use ReflectionMethod;
 use stdClass;
 
 use const MYSQLI_TYPE_SHORT;
 use const MYSQLI_TYPE_TIMESTAMP;
 use const MYSQLI_TYPE_VAR_STRING;
 
-/**
- * @covers \PhpMyAdmin\Sql
- */
+#[CoversClass(Sql::class)]
 class SqlTest extends AbstractTestCase
 {
-    /** @var Sql */
-    private $sql;
+    protected DatabaseInterface $dbi;
+
+    protected DbiDummy $dummyDbi;
+
+    private Sql $sql;
 
     /**
      * Setup for test cases
@@ -32,8 +37,14 @@ class SqlTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
+
         parent::setTheme();
+
+        $this->dummyDbi = $this->createDbiDummy();
+        $this->dbi = $this->createDatabaseInterface($this->dummyDbi);
+        $GLOBALS['dbi'] = $this->dbi;
         $GLOBALS['server'] = 1;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = 'table';
@@ -49,7 +60,7 @@ class SqlTest extends AbstractTestCase
         $GLOBALS['cfg']['Confirm'] = true;
         $GLOBALS['cfg']['LoginCookieValidity'] = 1440;
         $GLOBALS['cfg']['enable_drag_drop_import'] = true;
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
+        $GLOBALS['showtable'] = null;
 
         $relation = new Relation($GLOBALS['dbi']);
         $this->sql = new Sql(
@@ -58,7 +69,7 @@ class SqlTest extends AbstractTestCase
             new RelationCleanup($GLOBALS['dbi'], $relation),
             new Operations($GLOBALS['dbi'], $relation),
             new Transformations(),
-            new Template()
+            new Template(),
         );
     }
 
@@ -71,11 +82,12 @@ class SqlTest extends AbstractTestCase
         $GLOBALS['_SESSION']['tmpval']['pos'] = 1;
         $GLOBALS['_SESSION']['tmpval']['max_rows'] = 2;
 
-        $analyzed_sql_results = $this->parseAndAnalyze('SELECT * FROM test LIMIT 0, 10');
-        $this->assertEquals(
-            'SELECT * FROM test LIMIT 1, 2 ',
-            $this->callFunction($this->sql, Sql::class, 'getSqlWithLimitClause', [&$analyzed_sql_results])
-        );
+        $this->assertEquals('SELECT * FROM test LIMIT 1, 2 ', $this->callFunction(
+            $this->sql,
+            Sql::class,
+            'getSqlWithLimitClause',
+            [ParseAnalyze::sqlQuery('SELECT * FROM test LIMIT 0, 10', $GLOBALS['db'])[0]],
+        ));
     }
 
     /**
@@ -88,32 +100,32 @@ class SqlTest extends AbstractTestCase
 
         $this->assertTrue(
             $this->callFunction($this->sql, Sql::class, 'isRememberSortingOrder', [
-                $this->parseAndAnalyze('SELECT * FROM tbl'),
-            ])
+                ParseAnalyze::sqlQuery('SELECT * FROM tbl', $GLOBALS['db'])[0],
+            ]),
         );
 
         $this->assertFalse(
             $this->callFunction($this->sql, Sql::class, 'isRememberSortingOrder', [
-                $this->parseAndAnalyze('SELECT col FROM tbl'),
-            ])
+                ParseAnalyze::sqlQuery('SELECT col FROM tbl', $GLOBALS['db'])[0],
+            ]),
         );
 
         $this->assertFalse(
             $this->callFunction($this->sql, Sql::class, 'isRememberSortingOrder', [
-                $this->parseAndAnalyze('SELECT 1'),
-            ])
+                ParseAnalyze::sqlQuery('SELECT 1', $GLOBALS['db'])[0],
+            ]),
         );
 
         $this->assertFalse(
             $this->callFunction($this->sql, Sql::class, 'isRememberSortingOrder', [
-                $this->parseAndAnalyze('SELECT col1, col2 FROM tbl'),
-            ])
+                ParseAnalyze::sqlQuery('SELECT col1, col2 FROM tbl', $GLOBALS['db'])[0],
+            ]),
         );
 
         $this->assertFalse(
             $this->callFunction($this->sql, Sql::class, 'isRememberSortingOrder', [
-                $this->parseAndAnalyze('SELECT COUNT(*) from tbl'),
-            ])
+                ParseAnalyze::sqlQuery('SELECT COUNT(*) from tbl', $GLOBALS['db'])[0],
+            ]),
         );
     }
 
@@ -127,14 +139,14 @@ class SqlTest extends AbstractTestCase
 
         $this->assertTrue(
             $this->callFunction($this->sql, Sql::class, 'isAppendLimitClause', [
-                $this->parseAndAnalyze('SELECT * FROM tbl'),
-            ])
+                ParseAnalyze::sqlQuery('SELECT * FROM tbl', $GLOBALS['db'])[0],
+            ]),
         );
 
         $this->assertFalse(
             $this->callFunction($this->sql, Sql::class, 'isAppendLimitClause', [
-                $this->parseAndAnalyze('SELECT * from tbl LIMIT 0, 10'),
-            ])
+                ParseAnalyze::sqlQuery('SELECT * from tbl LIMIT 0, 10', $GLOBALS['db'])[0],
+            ]),
         );
     }
 
@@ -144,18 +156,18 @@ class SqlTest extends AbstractTestCase
         $GLOBALS['_SESSION']['tmpval']['max_rows'] = 10;
 
         $this->assertTrue(Sql::isJustBrowsing(
-            $this->parseAndAnalyze('SELECT * FROM db.tbl'),
-            null
+            ParseAnalyze::sqlQuery('SELECT * FROM db.tbl', $GLOBALS['db'])[0],
+            null,
         ));
 
         $this->assertTrue(Sql::isJustBrowsing(
-            $this->parseAndAnalyze('SELECT * FROM tbl WHERE 1'),
-            null
+            ParseAnalyze::sqlQuery('SELECT * FROM tbl WHERE 1', $GLOBALS['db'])[0],
+            null,
         ));
 
         $this->assertFalse(Sql::isJustBrowsing(
-            $this->parseAndAnalyze('SELECT * from tbl1, tbl2 LIMIT 0, 10'),
-            null
+            ParseAnalyze::sqlQuery('SELECT * from tbl1, tbl2 LIMIT 0, 10', $GLOBALS['db'])[0],
+            null,
         ));
     }
 
@@ -166,20 +178,20 @@ class SqlTest extends AbstractTestCase
     {
         $this->assertTrue(
             $this->callFunction($this->sql, Sql::class, 'isDeleteTransformationInfo', [
-                $this->parseAndAnalyze('ALTER TABLE tbl DROP COLUMN col'),
-            ])
+                ParseAnalyze::sqlQuery('ALTER TABLE tbl DROP COLUMN col', $GLOBALS['db'])[0],
+            ]),
         );
 
         $this->assertTrue(
             $this->callFunction($this->sql, Sql::class, 'isDeleteTransformationInfo', [
-                $this->parseAndAnalyze('DROP TABLE tbl'),
-            ])
+                ParseAnalyze::sqlQuery('DROP TABLE tbl', $GLOBALS['db'])[0],
+            ]),
         );
 
         $this->assertFalse(
             $this->callFunction($this->sql, Sql::class, 'isDeleteTransformationInfo', [
-                $this->parseAndAnalyze('SELECT * from tbl'),
-            ])
+                ParseAnalyze::sqlQuery('SELECT * from tbl', $GLOBALS['db'])[0],
+            ]),
         );
     }
 
@@ -190,26 +202,26 @@ class SqlTest extends AbstractTestCase
     {
         $this->assertTrue(
             $this->sql->hasNoRightsToDropDatabase(
-                $this->parseAndAnalyze('DROP DATABASE db'),
+                ParseAnalyze::sqlQuery('DROP DATABASE db', $GLOBALS['db'])[0],
                 false,
-                false
-            )
+                false,
+            ),
         );
 
         $this->assertFalse(
             $this->sql->hasNoRightsToDropDatabase(
-                $this->parseAndAnalyze('DROP TABLE tbl'),
+                ParseAnalyze::sqlQuery('DROP TABLE tbl', $GLOBALS['db'])[0],
                 false,
-                false
-            )
+                false,
+            ),
         );
 
         $this->assertFalse(
             $this->sql->hasNoRightsToDropDatabase(
-                $this->parseAndAnalyze('SELECT * from tbl'),
+                ParseAnalyze::sqlQuery('SELECT * from tbl', $GLOBALS['db'])[0],
                 false,
-                false
-            )
+                false,
+            ),
         );
     }
 
@@ -225,32 +237,20 @@ class SqlTest extends AbstractTestCase
         $col3 = new stdClass();
         $col3->table = 'table3';
 
-        $fields_meta = [
-            $col1,
-            $col2,
-            $col3,
-        ];
+        $fieldsMeta = [$col1, $col2, $col3];
         $this->assertFalse(
-            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fields_meta])
+            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fieldsMeta]),
         );
 
         // should not matter on where the odd column occurs
-        $fields_meta = [
-            $col2,
-            $col3,
-            $col1,
-        ];
+        $fieldsMeta = [$col2, $col3, $col1];
         $this->assertFalse(
-            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fields_meta])
+            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fieldsMeta]),
         );
 
-        $fields_meta = [
-            $col3,
-            $col1,
-            $col2,
-        ];
+        $fieldsMeta = [$col3, $col1, $col2];
         $this->assertFalse(
-            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fields_meta])
+            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fieldsMeta]),
         );
     }
 
@@ -265,14 +265,10 @@ class SqlTest extends AbstractTestCase
         $col2->table = 'table1';
         $col3 = new stdClass();
         $col3->table = 'table1';
-        $fields_meta = [
-            $col1,
-            $col2,
-            $col3,
-        ];
+        $fieldsMeta = [$col1, $col2, $col3];
 
         $this->assertTrue(
-            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fields_meta])
+            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fieldsMeta]),
         );
     }
 
@@ -289,32 +285,20 @@ class SqlTest extends AbstractTestCase
         $col3 = new stdClass();
         $col3->table = 'table1';
 
-        $fields_meta = [
-            $col1,
-            $col2,
-            $col3,
-        ];
+        $fieldsMeta = [$col1, $col2, $col3];
         $this->assertTrue(
-            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fields_meta])
+            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fieldsMeta]),
         );
 
         // should not matter on where the function column occurs
-        $fields_meta = [
-            $col2,
-            $col3,
-            $col1,
-        ];
+        $fieldsMeta = [$col2, $col3, $col1];
         $this->assertTrue(
-            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fields_meta])
+            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fieldsMeta]),
         );
 
-        $fields_meta = [
-            $col3,
-            $col1,
-            $col2,
-        ];
+        $fieldsMeta = [$col3, $col1, $col2];
         $this->assertTrue(
-            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fields_meta])
+            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fieldsMeta]),
         );
     }
 
@@ -330,30 +314,15 @@ class SqlTest extends AbstractTestCase
         $col2->table = '';
         $col3 = new stdClass();
         $col3->table = '';
-        $fields_meta = [
-            $col1,
-            $col2,
-            $col3,
-        ];
+        $fieldsMeta = [$col1, $col2, $col3];
 
         $this->assertFalse(
-            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fields_meta])
+            $this->callFunction($this->sql, Sql::class, 'resultSetHasJustOneTable', [$fieldsMeta]),
         );
     }
 
-    /**
-     * @return mixed
-     */
-    private function parseAndAnalyze(string $sqlQuery)
-    {
-        global $db;
-
-        [$analyzedSqlResults] = ParseAnalyze::sqlQuery($sqlQuery, $db);
-
-        return $analyzedSqlResults;
-    }
-
-    public function dataProviderCountQueryResults(): array
+    /** @return mixed[][] */
+    public static function dataProviderCountQueryResults(): array
     {
         // sql query
         // session tmpval
@@ -389,168 +358,34 @@ class SqlTest extends AbstractTestCase
                     . 'where al.successfull = 1 group by al.user_id ) AS `last_log` ON last_log.id = l.id'
                     . ' ) as cnt',
             ],
-            [
-                'SELECT * FROM company_users WHERE id != 0 LIMIT 0, 10',
-                ['max_rows' => 250],
-                -1,
-                -1,
-            ],
-            [
-                'SELECT * FROM company_users WHERE id != 0',
-                [
-                    'max_rows' => 250,
-                    'pos' => -1,
-                ],
-                -1,
-                -2,
-            ],
-            [
-                'SELECT * FROM company_users WHERE id != 0',
-                [
-                    'max_rows' => 250,
-                    'pos' => -1,
-                ],
-                -1,
-                -2,
-            ],
-            [
-                'SELECT * FROM company_users WHERE id != 0',
-                [
-                    'max_rows' => 250,
-                    'pos' => 250,
-                ],
-                -1,
-                249,
-            ],
-            [
-                'SELECT * FROM company_users WHERE id != 0',
-                [
-                    'max_rows' => 250,
-                    'pos' => 4,
-                ],
-                2,
-                6,
-            ],
-            [
-                'SELECT * FROM company_users WHERE id != 0',
-                [
-                    'max_rows' => 'all',
-                    'pos' => 4,
-                ],
-                2,
-                2,
-            ],
-            [
-                null,
-                [],
-                2,
-                0,
-            ],
-            [
-
-                'SELECT * FROM company_users LIMIT 1,4',
-                [
-                    'max_rows' => 10,
-                    'pos' => 4,
-                ],
-                20,
-                20,
-
-            ],
-            [
-
-                'SELECT * FROM company_users',
-                [
-                    'max_rows' => 10,
-                    'pos' => 4,
-                ],
-                20,
-                4,
-            ],
-            [
-
-                'SELECT * FROM company_users WHERE not_working_count != 0',
-                [
-                    'max_rows' => 10,
-                    'pos' => 4,
-                ],
-                20,
-                0,
-            ],
-            [
-
-                'SELECT * FROM company_users WHERE working_count = 0',
-                [
-                    'max_rows' => 10,
-                    'pos' => 4,
-                ],
-                20,
-                15,
-
-            ],
-            [
-                'UPDATE company_users SET a=1 WHERE working_count = 0',
-                [
-                    'max_rows' => 10,
-                    'pos' => 4,
-                ],
-                20,
-                20,
-            ],
-            [
-                'UPDATE company_users SET a=1 WHERE working_count = 0',
-                [
-                    'max_rows' => 'all',
-                    'pos' => 4,
-                ],
-                20,
-                20,
-            ],
-            [
-                'UPDATE company_users SET a=1 WHERE working_count = 0',
-                ['max_rows' => 15],
-                20,
-                20,
-            ],
-            [
-                'SELECT * FROM company_users WHERE id != 0',
-                [
-                    'max_rows' => 250,
-                    'pos' => 4,
-                ],
-                2,
-                6,
-                true,
-            ],
+            ['SELECT * FROM company_users WHERE id != 0 LIMIT 0, 10', ['max_rows' => 250], -1, -1],
+            ['SELECT * FROM company_users WHERE id != 0', ['max_rows' => 250, 'pos' => -1], -1, -2],
+            ['SELECT * FROM company_users WHERE id != 0', ['max_rows' => 250, 'pos' => -1], -1, -2],
+            ['SELECT * FROM company_users WHERE id != 0', ['max_rows' => 250, 'pos' => 250], -1, 249],
+            ['SELECT * FROM company_users WHERE id != 0', ['max_rows' => 250, 'pos' => 4], 2, 6],
+            ['SELECT * FROM company_users WHERE id != 0', ['max_rows' => 'all', 'pos' => 4], 2, 2],
+            [null, [], 2, 0],
+            ['SELECT * FROM company_users LIMIT 1,4', ['max_rows' => 10, 'pos' => 4], 20, 20],
+            ['SELECT * FROM company_users', ['max_rows' => 10, 'pos' => 4], 20, 4],
+            ['SELECT * FROM company_users WHERE not_working_count != 0', ['max_rows' => 10, 'pos' => 4], 20, 0],
+            ['SELECT * FROM company_users WHERE working_count = 0', ['max_rows' => 10, 'pos' => 4], 20, 15],
+            ['UPDATE company_users SET a=1 WHERE working_count = 0', ['max_rows' => 10, 'pos' => 4], 20, 20],
+            ['UPDATE company_users SET a=1 WHERE working_count = 0', ['max_rows' => 'all', 'pos' => 4], 20, 20],
+            ['UPDATE company_users SET a=1 WHERE working_count = 0', ['max_rows' => 15], 20, 20],
+            ['SELECT * FROM company_users WHERE id != 0', ['max_rows' => 250, 'pos' => 4], 2, 6, true],
             [
                 'SELECT *, (SELECT COUNT(*) FROM tbl1) as c1, (SELECT 1 FROM tbl2) as c2 '
                 . 'FROM company_users WHERE id != 0',
-                [
-                    'max_rows' => 250,
-                    'pos' => 4,
-                ],
+                ['max_rows' => 250, 'pos' => 4],
                 2,
                 6,
                 true,
             ],
-            [
-
-                'SELECT * FROM company_users',
-                [
-                    'max_rows' => 10,
-                    'pos' => 4,
-                ],
-                20,
-                18,
-                true,
-            ],
+            ['SELECT * FROM company_users', ['max_rows' => 10, 'pos' => 4], 20, 18, true],
             [
                 'SELECT *, 1, (SELECT COUNT(*) FROM tbl1) as c1, '
                 . '(SELECT 1 FROM tbl2) as c2 FROM company_users WHERE subquery_case = 0',
-                [
-                    'max_rows' => 10,
-                    'pos' => 4,
-                ],
+                ['max_rows' => 10, 'pos' => 4],
                 20,
                 42,
 
@@ -565,16 +400,15 @@ class SqlTest extends AbstractTestCase
         ];
     }
 
-    /**
-     * @dataProvider dataProviderCountQueryResults
-     */
+    /** @param mixed[] $sessionTmpVal */
+    #[DataProvider('dataProviderCountQueryResults')]
     public function testCountQueryResults(
-        ?string $sqlQuery,
+        string|null $sqlQuery,
         array $sessionTmpVal,
         int $numRows,
         int $expectedNumRows,
         bool $justBrowsing = false,
-        ?string $expectedCountQuery = null
+        string|null $expectedCountQuery = null,
     ): void {
         if ($justBrowsing) {
             $GLOBALS['cfg']['Server']['DisableIS'] = true;
@@ -582,14 +416,12 @@ class SqlTest extends AbstractTestCase
 
         $_SESSION['tmpval'] = $sessionTmpVal;
 
-        $analyzed_sql_results = $sqlQuery === null ? [] : $this->parseAndAnalyze($sqlQuery);
-
         if ($expectedCountQuery !== null) {
             $this->dummyDbi->addResult(
                 $expectedCountQuery,
                 [[$expectedNumRows]],
                 [],
-                []
+                [],
             );
         }
 
@@ -602,11 +434,11 @@ class SqlTest extends AbstractTestCase
                 $justBrowsing,
                 'my_dataset',// db
                 'company_users',// table
-                $analyzed_sql_results,
-            ]
+                ParseAnalyze::sqlQuery($sqlQuery ?? '', $GLOBALS['db'])[0],
+            ],
         );
-        $this->assertSame($expectedNumRows, $result);
-        $this->assertAllQueriesConsumed();
+        $this->assertEquals($expectedNumRows, $result);
+        $this->dummyDbi->assertAllQueriesConsumed();
     }
 
     public function testExecuteQueryAndSendQueryResponse(): void
@@ -621,10 +453,10 @@ class SqlTest extends AbstractTestCase
             ],
             ['country_id', 'country', 'last_update'],
             [
-                new FieldMetadata(MYSQLI_TYPE_SHORT, 0, (object) ['length' => 5]),
-                new FieldMetadata(MYSQLI_TYPE_VAR_STRING, 0, (object) ['length' => 200]),
-                new FieldMetadata(MYSQLI_TYPE_TIMESTAMP, 0, (object) ['length' => 19]),
-            ]
+                FieldHelper::fromArray(['type' => MYSQLI_TYPE_SHORT, 'length' => 5]),
+                FieldHelper::fromArray(['type' => MYSQLI_TYPE_VAR_STRING, 'length' => 200]),
+                FieldHelper::fromArray(['type' => MYSQLI_TYPE_TIMESTAMP, 'length' => 19]),
+            ],
         );
         $this->dummyDbi->addResult(
             'SHOW TABLE STATUS FROM `sakila` WHERE `Name` LIKE \'country%\'',
@@ -673,7 +505,7 @@ class SqlTest extends AbstractTestCase
                 'Comment',
                 'Max_index_length',
                 'Temporary',
-            ]
+            ],
         );
         $this->dummyDbi->addResult(
             'SHOW CREATE TABLE `sakila`.`country`',
@@ -689,7 +521,7 @@ class SqlTest extends AbstractTestCase
                     . ') ENGINE=InnoDB AUTO_INCREMENT=110 DEFAULT CHARSET=utf8mb4',
                 ],
             ],
-            ['Table', 'Create Table']
+            ['Table', 'Create Table'],
         );
         $this->dummyDbi->addResult('SELECT COUNT(*) FROM `sakila`.`country`', [['109']]);
         $this->dummyDbi->addResult(
@@ -729,7 +561,7 @@ class SqlTest extends AbstractTestCase
                     '',
                 ],
             ],
-            ['Field', 'Type', 'Collation', 'Null', 'Key', 'Default', 'Extra', 'Privileges', 'Comment']
+            ['Field', 'Type', 'Collation', 'Null', 'Key', 'Default', 'Extra', 'Privileges', 'Comment'],
         );
         $this->dummyDbi->addResult(
             'SHOW COLUMNS FROM `sakila`.`country`',
@@ -738,17 +570,17 @@ class SqlTest extends AbstractTestCase
                 ['country', 'varchar(50)', 'NO', '', null, ''],
                 ['last_update', 'timestamp', 'NO', '', 'current_timestamp()', 'on update current_timestamp()'],
             ],
-            ['Field', 'Type', 'Null', 'Key', 'Default', 'Extra']
+            ['Field', 'Type', 'Null', 'Key', 'Default', 'Extra'],
         );
         $this->dummyDbi->addResult(
             'SHOW INDEXES FROM `sakila`.`country`',
             [['country', '0', 'PRIMARY', 'country_id']],
-            ['Table', 'Non_unique', 'Key_name', 'Column_name']
+            ['Table', 'Non_unique', 'Key_name', 'Column_name'],
         );
         $this->dummyDbi->addResult(
-            'SELECT TABLE_NAME FROM information_schema.VIEWS'
+            'SELECT 1 FROM information_schema.VIEWS'
             . ' WHERE TABLE_SCHEMA = \'sakila\' AND TABLE_NAME = \'country\' AND IS_UPDATABLE = \'YES\'',
-            []
+            [],
         );
         $_SESSION['sql_from_query_box'] = true;
         $GLOBALS['db'] = 'sakila';
@@ -770,7 +602,7 @@ class SqlTest extends AbstractTestCase
             null,
             null,
             'SELECT * FROM `sakila`.`country` LIMIT 0, 3;',
-            null
+            null,
         );
         $this->assertStringContainsString('Showing rows 0 -  2 (3 total', $actual);
         $this->assertStringContainsString('SELECT * FROM `sakila`.`country` LIMIT 0, 3;', $actual);
@@ -780,5 +612,136 @@ class SqlTest extends AbstractTestCase
         $this->assertStringContainsString('data-type="int"', $actual);
         $this->assertStringContainsString('data-type="string"', $actual);
         $this->assertStringContainsString('data-type="timestamp"', $actual);
+    }
+
+    public function testGetDetailedProfilingStatsWithoutData(): void
+    {
+        $method = new ReflectionMethod($this->sql, 'getDetailedProfilingStats');
+        $this->assertSame([], $method->invoke($this->sql, []));
+    }
+
+    public function testGetDetailedProfilingStatsWithZeroTotalTime(): void
+    {
+        $method = new ReflectionMethod($this->sql, 'getDetailedProfilingStats');
+        $profiling = [
+            ['Status' => 'Starting', 'Duration' => '0'],
+            ['Status' => 'checking permissions', 'Duration' => '0'],
+        ];
+        $this->assertSame([], $method->invoke($this->sql, $profiling));
+    }
+
+    public function testGetDetailedProfilingStatsWithData(): void
+    {
+        $method = new ReflectionMethod($this->sql, 'getDetailedProfilingStats');
+        $profiling = [
+            ['Status' => 'Starting', 'Duration' => '0.000017'],
+            ['Status' => 'checking permissions', 'Duration' => '0.000003'],
+            ['Status' => 'Opening tables', 'Duration' => '0.000152'],
+            ['Status' => 'After opening tables', 'Duration' => '0.000004'],
+            ['Status' => 'System lock', 'Duration' => '0.000002'],
+            ['Status' => 'table lock', 'Duration' => '0.000003'],
+            ['Status' => 'Opening tables', 'Duration' => '0.000008'],
+            ['Status' => 'After opening tables', 'Duration' => '0.000002'],
+            ['Status' => 'System lock', 'Duration' => '0.000002'],
+            ['Status' => 'table lock', 'Duration' => '0.000012'],
+            ['Status' => 'Unlocking tables', 'Duration' => '0.000003'],
+            ['Status' => 'closing tables', 'Duration' => '0.000005'],
+            ['Status' => 'init', 'Duration' => '0.000007'],
+            ['Status' => 'Optimizing', 'Duration' => '0.000004'],
+            ['Status' => 'Statistics', 'Duration' => '0.000006'],
+            ['Status' => 'Preparing', 'Duration' => '0.000006'],
+            ['Status' => 'Executing', 'Duration' => '0.000002'],
+            ['Status' => 'Sending data', 'Duration' => '0.000029'],
+            ['Status' => 'End of update loop', 'Duration' => '0.000003'],
+            ['Status' => 'Query end', 'Duration' => '0.000002'],
+            ['Status' => 'Commit', 'Duration' => '0.000002'],
+            ['Status' => 'closing tables', 'Duration' => '0.000002'],
+            ['Status' => 'Unlocking tables', 'Duration' => '0.000001'],
+            ['Status' => 'closing tables', 'Duration' => '0.000002'],
+            ['Status' => 'Starting cleanup', 'Duration' => '0.000002'],
+            ['Status' => 'Freeing items', 'Duration' => '0.000002'],
+            ['Status' => 'Updating status', 'Duration' => '0.000007'],
+            ['Status' => 'Reset for next command', 'Duration' => '0.000009'],
+        ];
+        $expected = [
+            'total_time' => 0.000299,
+            'states' => [
+                'Starting' => ['total_time' => 0.000017, 'calls' => 1],
+                'Checking Permissions' => ['total_time' => 0.000003, 'calls' => 1],
+                'Opening Tables' => ['total_time' => 0.00016, 'calls' => 2],
+                'After Opening Tables' => ['total_time' => 0.000006, 'calls' => 2],
+                'System Lock' => ['total_time' => 0.000004, 'calls' => 2],
+                'Table Lock' => ['total_time' => 0.000015, 'calls' => 2],
+                'Unlocking Tables' => ['total_time' => 0.000004, 'calls' => 2],
+                'Closing Tables' => ['total_time' => 0.000009, 'calls' => 3],
+                'Init' => ['total_time' => 0.000007, 'calls' => 1],
+                'Optimizing' => ['total_time' => 0.000004, 'calls' => 1],
+                'Statistics' => ['total_time' => 0.000006, 'calls' => 1],
+                'Preparing' => ['total_time' => 0.000006, 'calls' => 1],
+                'Executing' => ['total_time' => 0.000002, 'calls' => 1],
+                'Sending Data' => ['total_time' => 0.000029, 'calls' => 1],
+                'End Of Update Loop' => ['total_time' => 0.000003, 'calls' => 1],
+                'Query End' => ['total_time' => 0.000002, 'calls' => 1],
+                'Commit' => ['total_time' => 0.000002, 'calls' => 1],
+                'Starting Cleanup' => ['total_time' => 0.000002, 'calls' => 1],
+                'Freeing Items' => ['total_time' => 0.000002, 'calls' => 1],
+                'Updating Status' => ['total_time' => 0.000007, 'calls' => 1],
+                'Reset For Next Command' => ['total_time' => 0.000009, 'calls' => 1],
+            ],
+            'chart' => [
+                'Starting' => 0.000017,
+                'Checking Permissions' => 0.000003,
+                'Opening Tables' => 0.00016,
+                'After Opening Tables' => 0.000006,
+                'System Lock' => 0.000004,
+                'Table Lock' => 0.000015,
+                'Unlocking Tables' => 0.000004,
+                'Closing Tables' => 0.000009,
+                'Init' => 0.000007,
+                'Optimizing' => 0.000004,
+                'Statistics' => 0.000006,
+                'Preparing' => 0.000006,
+                'Executing' => 0.000002,
+                'Sending Data' => 0.000029,
+                'End Of Update Loop' => 0.000003,
+                'Query End' => 0.000002,
+                'Commit' => 0.000002,
+                'Starting Cleanup' => 0.000002,
+                'Freeing Items' => 0.000002,
+                'Updating Status' => 0.000007,
+                'Reset For Next Command' => 0.000009,
+            ],
+            'profile' => [
+                ['status' => 'Starting', 'duration' => '17 µ', 'duration_raw' => '0.000017'],
+                ['status' => 'Checking Permissions', 'duration' => '3 µ', 'duration_raw' => '0.000003'],
+                ['status' => 'Opening Tables', 'duration' => '152 µ', 'duration_raw' => '0.000152'],
+                ['status' => 'After Opening Tables', 'duration' => '4 µ', 'duration_raw' => '0.000004'],
+                ['status' => 'System Lock', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Table Lock', 'duration' => '3 µ', 'duration_raw' => '0.000003'],
+                ['status' => 'Opening Tables', 'duration' => '8 µ', 'duration_raw' => '0.000008'],
+                ['status' => 'After Opening Tables', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'System Lock', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Table Lock', 'duration' => '12 µ', 'duration_raw' => '0.000012'],
+                ['status' => 'Unlocking Tables', 'duration' => '3 µ', 'duration_raw' => '0.000003'],
+                ['status' => 'Closing Tables', 'duration' => '5 µ', 'duration_raw' => '0.000005'],
+                ['status' => 'Init', 'duration' => '7 µ', 'duration_raw' => '0.000007'],
+                ['status' => 'Optimizing', 'duration' => '4 µ', 'duration_raw' => '0.000004'],
+                ['status' => 'Statistics', 'duration' => '6 µ', 'duration_raw' => '0.000006'],
+                ['status' => 'Preparing', 'duration' => '6 µ', 'duration_raw' => '0.000006'],
+                ['status' => 'Executing', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Sending Data', 'duration' => '29 µ', 'duration_raw' => '0.000029'],
+                ['status' => 'End Of Update Loop', 'duration' => '3 µ', 'duration_raw' => '0.000003'],
+                ['status' => 'Query End', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Commit', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Closing Tables', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Unlocking Tables', 'duration' => '1 µ', 'duration_raw' => '0.000001'],
+                ['status' => 'Closing Tables', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Starting Cleanup', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Freeing Items', 'duration' => '2 µ', 'duration_raw' => '0.000002'],
+                ['status' => 'Updating Status', 'duration' => '7 µ', 'duration_raw' => '0.000007'],
+                ['status' => 'Reset For Next Command', 'duration' => '9 µ', 'duration_raw' => '0.000009'],
+            ],
+        ];
+        $this->assertSame($expected, $method->invoke($this->sql, $profiling));
     }
 }

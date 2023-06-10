@@ -7,11 +7,6 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Plugins\Schema\Eps;
 
-use PhpMyAdmin\Core;
-use PhpMyAdmin\ResponseRenderer;
-
-use function strlen;
-
 /**
  * This Class is EPS Library and
  * helps in developing structure of EPS Schema Export
@@ -20,34 +15,24 @@ use function strlen;
  */
 class Eps
 {
-    /** @var string */
-    public $font = 'Arial';
+    public string $font = 'Arial';
 
-    /** @var int */
-    public $fontSize = 12;
-
-    /** @var string */
-    public $stringCommands;
+    public int $fontSize = 12;
 
     /**
-     * Upon instantiation This starts writing the EPS Document.
      * %!PS-Adobe-3.0 EPSF-3.0 This is the MUST first comment to include
      * it shows/tells that the Post Script document is purely under
      * Document Structuring Convention [DSC] and is Compliant
      * Encapsulated Post Script Document
      */
-    public function __construct()
-    {
-        $this->stringCommands = '';
-        $this->stringCommands .= "%!PS-Adobe-3.0 EPSF-3.0 \n";
-    }
+    public string $stringCommands = "%!PS-Adobe-3.0 EPSF-3.0 \n";
 
     /**
      * Set document title
      *
      * @param string $value sets the title text
      */
-    public function setTitle($value): void
+    public function setTitle(string $value): void
     {
         $this->stringCommands .= '%%Title: ' . $value . "\n";
     }
@@ -57,7 +42,7 @@ class Eps
      *
      * @param string $value sets the author
      */
-    public function setAuthor($value): void
+    public function setAuthor(string $value): void
     {
         $this->stringCommands .= '%%Creator: ' . $value . "\n";
     }
@@ -67,7 +52,7 @@ class Eps
      *
      * @param string $value sets the date
      */
-    public function setDate($value): void
+    public function setDate(string $value): void
     {
         $this->stringCommands .= '%%CreationDate: ' . $value . "\n";
     }
@@ -77,7 +62,7 @@ class Eps
      *
      * @param string $orientation sets the orientation
      */
-    public function setOrientation($orientation): void
+    public function setOrientation(string $orientation): void
     {
         $this->stringCommands .= "%%PageOrder: Ascend \n";
         if ($orientation === 'L') {
@@ -116,7 +101,7 @@ class Eps
      *
      * @return string return the font name e.g Arial
      */
-    public function getFont()
+    public function getFont(): string
     {
         return $this->font;
     }
@@ -137,26 +122,26 @@ class Eps
      * drawing the lines from x,y source to x,y destination and set the
      * width of the line. lines helps in showing relationships of tables
      *
-     * @param int $x_from    The x_from attribute defines the start
-     *                       left position of the element
-     * @param int $y_from    The y_from attribute defines the start
-     *                       right position of the element
-     * @param int $x_to      The x_to attribute defines the end
-     *                       left position of the element
-     * @param int $y_to      The y_to attribute defines the end
-     *                       right position of the element
+     * @param int $xFrom     The x_from attribute defines the start
+     *                        left position of the element
+     * @param int $yFrom     The y_from attribute defines the start
+     *                        right position of the element
+     * @param int $xTo       The x_to attribute defines the end
+     *                        left position of the element
+     * @param int $yTo       The y_to attribute defines the end
+     *                        right position of the element
      * @param int $lineWidth Sets the width of the line e.g 2
      */
     public function line(
-        $x_from = 0,
-        $y_from = 0,
-        $x_to = 0,
-        $y_to = 0,
-        $lineWidth = 0
+        int $xFrom = 0,
+        int $yFrom = 0,
+        int $xTo = 0,
+        int $yTo = 0,
+        int $lineWidth = 0,
     ): void {
         $this->stringCommands .= $lineWidth . " setlinewidth  \n";
-        $this->stringCommands .= $x_from . ' ' . $y_from . " moveto \n";
-        $this->stringCommands .= $x_to . ' ' . $y_to . " lineto \n";
+        $this->stringCommands .= $xFrom . ' ' . $yFrom . " moveto \n";
+        $this->stringCommands .= $xTo . ' ' . $yTo . " lineto \n";
         $this->stringCommands .= "stroke \n";
     }
 
@@ -166,24 +151,24 @@ class Eps
      * drawing the rectangle from x,y source to x,y destination and set the
      * width of the line. rectangles drawn around the text shown of fields
      *
-     * @param int $x_from    The x_from attribute defines the start
-     *                       left position of the element
-     * @param int $y_from    The y_from attribute defines the start
-     *                       right position of the element
-     * @param int $x_to      The x_to attribute defines the end
-     *                       left position of the element
-     * @param int $y_to      The y_to attribute defines the end
-     *                       right position of the element
+     * @param int $xFrom     The x_from attribute defines the start
+     *                        left position of the element
+     * @param int $yFrom     The y_from attribute defines the start
+     *                        right position of the element
+     * @param int $xTo       The x_to attribute defines the end
+     *                        left position of the element
+     * @param int $yTo       The y_to attribute defines the end
+     *                        right position of the element
      * @param int $lineWidth Sets the width of the line e.g 2
      */
-    public function rect($x_from, $y_from, $x_to, $y_to, $lineWidth): void
+    public function rect(int $xFrom, int $yFrom, int $xTo, int $yTo, int $lineWidth): void
     {
         $this->stringCommands .= $lineWidth . " setlinewidth  \n";
         $this->stringCommands .= "newpath \n";
-        $this->stringCommands .= $x_from . ' ' . $y_from . " moveto \n";
-        $this->stringCommands .= '0 ' . $y_to . " rlineto \n";
-        $this->stringCommands .= $x_to . " 0 rlineto \n";
-        $this->stringCommands .= '0 -' . $y_to . " rlineto \n";
+        $this->stringCommands .= $xFrom . ' ' . $yFrom . " moveto \n";
+        $this->stringCommands .= '0 ' . $yTo . " rlineto \n";
+        $this->stringCommands .= $xTo . " 0 rlineto \n";
+        $this->stringCommands .= '0 -' . $yTo . " rlineto \n";
         $this->stringCommands .= "closepath \n";
         $this->stringCommands .= "stroke \n";
     }
@@ -198,7 +183,7 @@ class Eps
      * @param int $x The x attribute defines the left position of the element
      * @param int $y The y attribute defines the right position of the element
      */
-    public function moveTo($x, $y): void
+    public function moveTo(int $x, int $y): void
     {
         $this->stringCommands .= $x . ' ' . $y . " moveto \n";
     }
@@ -208,7 +193,7 @@ class Eps
      *
      * @param string $text The string to be displayed
      */
-    public function show($text): void
+    public function show(string $text): void
     {
         $this->stringCommands .= '(' . $text . ") show \n";
     }
@@ -220,7 +205,7 @@ class Eps
      * @param int    $x    X attribute defines the left position of the element
      * @param int    $y    Y attribute defines the right position of the element
      */
-    public function showXY($text, $x, $y): void
+    public function showXY(string $text, int $x, int $y): void
     {
         $this->moveTo($x, $y);
         $this->show($text);
@@ -234,24 +219,8 @@ class Eps
         $this->stringCommands .= "showpage \n";
     }
 
-    /**
-     * Output EPS Document for download
-     *
-     * @param string $fileName name of the eps document
-     */
-    public function showOutput($fileName): void
+    public function getOutputData(): string
     {
-        // if(ob_get_clean()){
-        //ob_end_clean();
-        //}
-        $output = $this->stringCommands;
-        ResponseRenderer::getInstance()
-            ->disable();
-        Core::downloadHeader(
-            $fileName,
-            'image/x-eps',
-            strlen($output)
-        );
-        print $output;
+        return $this->stringCommands;
     }
 }

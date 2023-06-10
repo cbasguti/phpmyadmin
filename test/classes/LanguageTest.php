@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests;
 
+use PhpMyAdmin\Language;
 use PhpMyAdmin\LanguageManager;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 
 use function _ngettext;
 use function count;
@@ -12,14 +16,11 @@ use function file_exists;
 use function is_readable;
 use function strtolower;
 
-/**
- * @covers \PhpMyAdmin\Language
- * @covers \PhpMyAdmin\LanguageManager
- */
+#[CoversClass(Language::class)]
+#[CoversClass(LanguageManager::class)]
 class LanguageTest extends AbstractTestCase
 {
-    /** @var LanguageManager */
-    private $manager;
+    private LanguageManager $manager;
 
     /**
      * Setup for Language tests.
@@ -27,6 +28,7 @@ class LanguageTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         $loc = LOCALE_PATH . '/cs/LC_MESSAGES/phpmyadmin.mo';
         if (! is_readable($loc)) {
             $this->markTestSkipped('Missing compiled locales.');
@@ -38,6 +40,7 @@ class LanguageTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         // Ensure we have English locale after tests
         $lang = $this->manager->getLanguage('en');
         if ($lang === false) {
@@ -98,7 +101,7 @@ class LanguageTest extends AbstractTestCase
                 $lang->getCode(),
                 strtolower($lang->getEnglishName()),
                 'Maybe this language does not exist in LanguageManager class'
-                . ', see: https://github.com/phpmyadmin/phpmyadmin/issues/16300.'
+                . ', see: https://github.com/phpmyadmin/phpmyadmin/issues/16300.',
             );
         }
     }
@@ -152,9 +155,8 @@ class LanguageTest extends AbstractTestCase
      * @param string $agent   Value for HTTP User-Agent header
      * @param string $default Value for default language
      * @param string $expect  Expected language code
-     *
-     * @dataProvider selectDataProvider
      */
+    #[DataProvider('selectDataProvider')]
     public function testSelect(
         string $lang,
         string $post,
@@ -163,7 +165,7 @@ class LanguageTest extends AbstractTestCase
         string $accept,
         string $agent,
         string $default,
-        string $expect
+        string $expect,
     ): void {
         if ($expect !== 'en' && ! file_exists(LOCALE_PATH . '/' . $expect . '/LC_MESSAGES/phpmyadmin.mo')) {
             // This could happen after removing incomplete .mo files.
@@ -198,7 +200,7 @@ class LanguageTest extends AbstractTestCase
      *
      * @return string[][]
      */
-    public function selectDataProvider(): array
+    public static function selectDataProvider(): array
     {
         return [
             ['cs', 'en', '', '', '', '', '', 'cs'],
@@ -230,10 +232,9 @@ class LanguageTest extends AbstractTestCase
      * Test for setting and parsing locales
      *
      * @param string $locale locale name
-     *
-     * @group large
-     * @dataProvider listLocales
      */
+    #[DataProvider('listLocales')]
+    #[Group('large')]
     public function testGettext(string $locale): void
     {
         $GLOBALS['config']->set('FilterLanguages', '');
@@ -248,16 +249,16 @@ class LanguageTest extends AbstractTestCase
 
         $this->assertEquals(
             $locale,
-            $this->manager->getCurrentLanguage()->getCode()
+            $this->manager->getCurrentLanguage()->getCode(),
         );
     }
 
     /**
      * Data provider to generate list of available locales.
      *
-     * @return array with arrays of available locales
+     * @return mixed[] with arrays of available locales
      */
-    public function listLocales(): array
+    public static function listLocales(): array
     {
         $ret = [];
         foreach (LanguageManager::getInstance()->availableLanguages() as $language) {

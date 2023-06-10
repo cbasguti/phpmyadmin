@@ -6,21 +6,21 @@ namespace PhpMyAdmin\Tests\Plugins\TwoFactor;
 
 use PhpMyAdmin\Http\ServerRequest;
 use PhpMyAdmin\Plugins\TwoFactor\WebAuthn;
+use PhpMyAdmin\Plugins\TwoFactorPlugin;
 use PhpMyAdmin\ResponseRenderer;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\TwoFactor;
 use PhpMyAdmin\WebAuthn\Server;
 use PhpMyAdmin\WebAuthn\WebAuthnException;
+use PHPUnit\Framework\Attributes\CoversClass;
 use Psr\Http\Message\UriInterface;
 
 use function array_column;
 use function json_decode;
 
-/**
- * @covers \PhpMyAdmin\Plugins\TwoFactor\WebAuthn
- * @covers \PhpMyAdmin\Plugins\TwoFactorPlugin
- * @covers \PhpMyAdmin\WebAuthn\WebAuthnException
- */
+#[CoversClass(WebAuthn::class)]
+#[CoversClass(TwoFactorPlugin::class)]
+#[CoversClass(WebAuthnException::class)]
 class WebAuthnTest extends AbstractTestCase
 {
     public function testIdNameAndDescription(): void
@@ -30,7 +30,7 @@ class WebAuthnTest extends AbstractTestCase
         $this->assertSame(
             'Provides authentication using hardware security tokens supporting the WebAuthn/FIDO2 protocol,'
             . ' such as a YubiKey.',
-            WebAuthn::getDescription()
+            WebAuthn::getDescription(),
         );
     }
 
@@ -39,13 +39,12 @@ class WebAuthnTest extends AbstractTestCase
         $GLOBALS['lang'] = 'en';
         $GLOBALS['server'] = 1;
         $GLOBALS['text_dir'] = 'ltr';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
 
         $uri = $this->createStub(UriInterface::class);
         $uri->method('getHost')->willReturn('test.localhost');
         $request = $this->createStub(ServerRequest::class);
         $request->method('getUri')->willReturn($uri);
-        $GLOBALS['request'] = $request;
 
         $twoFactor = $this->createStub(TwoFactor::class);
         $twoFactor->user = 'test_user';
@@ -75,11 +74,12 @@ class WebAuthnTest extends AbstractTestCase
             $this->equalTo('test_user'),
             $this->anything(),
             $this->equalTo('test.localhost'),
-            $this->equalTo([['type' => 'public-key', 'id' => 'cHVibGljS2V5Q3JlZGVudGlhbElkMQ']])
+            $this->equalTo([['type' => 'public-key', 'id' => 'cHVibGljS2V5Q3JlZGVudGlhbElkMQ']]),
         )->willReturn($expectedRequestOptions);
 
         $webAuthn = new WebAuthn($twoFactor);
         $webAuthn->setServer($server);
+        $webAuthn->serverRequest = $request;
         $actual = $webAuthn->render();
 
         $optionsFromSession = $_SESSION['WebAuthnCredentialRequestOptions'] ?? null;
@@ -102,13 +102,12 @@ class WebAuthnTest extends AbstractTestCase
         $GLOBALS['lang'] = 'en';
         $GLOBALS['server'] = 1;
         $GLOBALS['text_dir'] = 'ltr';
-        $GLOBALS['PMA_PHP_SELF'] = 'index.php';
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
 
         $uri = $this->createStub(UriInterface::class);
         $uri->method('getHost')->willReturn('test.localhost');
         $request = $this->createStub(ServerRequest::class);
         $request->method('getUri')->willReturn($uri);
-        $GLOBALS['request'] = $request;
 
         $twoFactor = $this->createStub(TwoFactor::class);
         $twoFactor->user = 'test_user';
@@ -126,11 +125,12 @@ class WebAuthnTest extends AbstractTestCase
         $server->expects($this->once())->method('getCredentialCreationOptions')->with(
             $this->equalTo('test_user'),
             $this->anything(),
-            $this->equalTo('test.localhost')
+            $this->equalTo('test.localhost'),
         )->willReturn($expectedCreationOptions);
 
         $webAuthn = new WebAuthn($twoFactor);
         $webAuthn->setServer($server);
+        $webAuthn->serverRequest = $request;
         $actual = $webAuthn->setup();
 
         $optionsFromSession = $_SESSION['WebAuthnCredentialCreationOptions'] ?? null;
@@ -153,8 +153,8 @@ class WebAuthnTest extends AbstractTestCase
         $_SESSION = [];
         $request = $this->createStub(ServerRequest::class);
         $request->method('getParsedBodyParam')->willReturnMap([['webauthn_creation_response', '', '']]);
-        $GLOBALS['request'] = $request;
         $webAuthn = new WebAuthn($this->createStub(TwoFactor::class));
+        $webAuthn->serverRequest = $request;
         $this->assertFalse($webAuthn->configure());
         $this->assertSame('', $webAuthn->getError());
     }
@@ -164,8 +164,8 @@ class WebAuthnTest extends AbstractTestCase
         $_SESSION['WebAuthnCredentialCreationOptions'] = '';
         $request = $this->createStub(ServerRequest::class);
         $request->method('getParsedBodyParam')->willReturnMap([['webauthn_creation_response', '', '{}']]);
-        $GLOBALS['request'] = $request;
         $webAuthn = new WebAuthn($this->createStub(TwoFactor::class));
+        $webAuthn->serverRequest = $request;
         $this->assertFalse($webAuthn->configure());
         $this->assertStringContainsString('Two-factor authentication failed:', $webAuthn->getError());
     }
@@ -175,7 +175,6 @@ class WebAuthnTest extends AbstractTestCase
         $_SESSION['WebAuthnCredentialCreationOptions'] = '{}';
         $request = $this->createStub(ServerRequest::class);
         $request->method('getParsedBodyParam')->willReturnMap([['webauthn_creation_response', '', '{}']]);
-        $GLOBALS['request'] = $request;
 
         $server = $this->createMock(Server::class);
         $server->expects($this->once())->method('parseAndValidateAttestationResponse')
@@ -183,6 +182,7 @@ class WebAuthnTest extends AbstractTestCase
 
         $webAuthn = new WebAuthn($this->createStub(TwoFactor::class));
         $webAuthn->setServer($server);
+        $webAuthn->serverRequest = $request;
         $this->assertFalse($webAuthn->configure());
         $this->assertStringContainsString('Two-factor authentication failed.', $webAuthn->getError());
     }
@@ -192,7 +192,6 @@ class WebAuthnTest extends AbstractTestCase
         $_SESSION['WebAuthnCredentialCreationOptions'] = '{}';
         $request = $this->createStub(ServerRequest::class);
         $request->method('getParsedBodyParam')->willReturnMap([['webauthn_creation_response', '', '{}']]);
-        $GLOBALS['request'] = $request;
 
         $twoFactor = $this->createStub(TwoFactor::class);
         $twoFactor->config = ['backend' => '', 'settings' => []];
@@ -203,11 +202,12 @@ class WebAuthnTest extends AbstractTestCase
         $server->expects($this->once())->method('parseAndValidateAttestationResponse')->with(
             $this->equalTo('{}'),
             $this->equalTo('{}'),
-            $this->equalTo($request)
+            $this->equalTo($request),
         )->willReturn($credential);
 
         $webAuthn = new WebAuthn($twoFactor);
         $webAuthn->setServer($server);
+        $webAuthn->serverRequest = $request;
         $this->assertTrue($webAuthn->configure());
         /** @psalm-var array{backend: string, settings: mixed[]} $config */
         $config = $twoFactor->config;
@@ -219,7 +219,7 @@ class WebAuthnTest extends AbstractTestCase
                     'credentials' => ['cHVibGljS2V5Q3JlZGVudGlhbElkMQ==' => $credential],
                 ],
             ],
-            $config
+            $config,
         );
     }
 
@@ -228,8 +228,8 @@ class WebAuthnTest extends AbstractTestCase
         $_SESSION = [];
         $request = $this->createStub(ServerRequest::class);
         $request->method('getParsedBodyParam')->willReturnMap([['webauthn_request_response', '', '']]);
-        $GLOBALS['request'] = $request;
         $webAuthn = new WebAuthn($this->createStub(TwoFactor::class));
+        $webAuthn->serverRequest = $request;
         $this->assertFalse($webAuthn->check());
         $this->assertSame('', $webAuthn->getError());
     }
@@ -239,8 +239,8 @@ class WebAuthnTest extends AbstractTestCase
         $_SESSION['WebAuthnCredentialRequestOptions'] = '';
         $request = $this->createStub(ServerRequest::class);
         $request->method('getParsedBodyParam')->willReturnMap([['webauthn_request_response', '', '{}']]);
-        $GLOBALS['request'] = $request;
         $webAuthn = new WebAuthn($this->createStub(TwoFactor::class));
+        $webAuthn->serverRequest = $request;
         $this->assertFalse($webAuthn->check());
         $this->assertStringContainsString('Two-factor authentication failed:', $webAuthn->getError());
     }
@@ -250,7 +250,6 @@ class WebAuthnTest extends AbstractTestCase
         $_SESSION['WebAuthnCredentialRequestOptions'] = '{"challenge":"challenge"}';
         $request = $this->createStub(ServerRequest::class);
         $request->method('getParsedBodyParam')->willReturnMap([['webauthn_request_response', '', '{}']]);
-        $GLOBALS['request'] = $request;
 
         $server = $this->createMock(Server::class);
         $server->expects($this->once())->method('parseAndValidateAssertionResponse')
@@ -258,6 +257,7 @@ class WebAuthnTest extends AbstractTestCase
 
         $webAuthn = new WebAuthn($this->createStub(TwoFactor::class));
         $webAuthn->setServer($server);
+        $webAuthn->serverRequest = $request;
         $this->assertFalse($webAuthn->check());
         $this->assertStringContainsString('Two-factor authentication failed.', $webAuthn->getError());
     }
@@ -267,7 +267,6 @@ class WebAuthnTest extends AbstractTestCase
         $_SESSION['WebAuthnCredentialRequestOptions'] = '{"challenge":"challenge"}';
         $request = $this->createStub(ServerRequest::class);
         $request->method('getParsedBodyParam')->willReturnMap([['webauthn_request_response', '', '{}']]);
-        $GLOBALS['request'] = $request;
 
         $twoFactor = $this->createStub(TwoFactor::class);
         $twoFactor->config = [
@@ -289,11 +288,12 @@ class WebAuthnTest extends AbstractTestCase
             $this->equalTo('{}'),
             $this->equalTo([['type' => 'public-key', 'id' => 'cHVibGljS2V5Q3JlZGVudGlhbElkMQ']]),
             $this->equalTo('challenge'),
-            $this->equalTo($request)
+            $this->equalTo($request),
         );
 
         $webAuthn = new WebAuthn($twoFactor);
         $webAuthn->setServer($server);
+        $webAuthn->serverRequest = $request;
         $this->assertTrue($webAuthn->check());
     }
 }

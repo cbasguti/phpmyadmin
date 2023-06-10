@@ -4,19 +4,18 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\Tests\Selenium;
 
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\Group;
+
 use function sleep;
 
-/**
- * @coversNothing
- */
+#[CoversNothing]
 class ServerSettingsTest extends TestBase
 {
     /**
      * Create a test database for this test class
-     *
-     * @var bool
      */
-    protected static $createDatabase = false;
+    protected static bool $createDatabase = false;
 
     /**
      * setUp function
@@ -24,12 +23,11 @@ class ServerSettingsTest extends TestBase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->login();
         $this->expandMore();
         $this->waitForElement('partialLinkText', 'Settings')->click();
         $this->waitAjax();
-
-        $this->waitForElement('xpath', "//a[@class='nav-link text-nowrap' and contains(., 'Settings')]");
     }
 
     /**
@@ -41,24 +39,20 @@ class ServerSettingsTest extends TestBase
         $ele = $this->waitForElement(
             'xpath',
             "//div[contains(@class, 'tab-pane') and contains(@class, 'show')"
-                . " and contains(@class, 'active')]//input[@value='Apply']"
+                . " and contains(@class, 'active')]//input[@value='Apply']",
         );
         $this->scrollToBottom();
         $this->moveto($ele);
         $ele->click();
 
-        $this->waitUntilElementIsPresent(
-            'xpath',
-            "//div[@class='alert alert-success' and contains(., 'Configuration has been saved')]",
-            5000
-        );
+        $success = $this->waitUntilElementIsPresent('cssSelector', '.alert-success', 5000);
+        $this->assertStringContainsString('Configuration has been saved', $success->getText());
     }
 
     /**
      * Tests whether hiding a database works or not
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testHideDatabase(): void
     {
         $this->createDatabase();
@@ -74,7 +68,7 @@ class ServerSettingsTest extends TestBase
 
         $this->saveConfig();
         $this->assertFalse(
-            $this->isElementPresent('partialLinkText', $this->databaseName)
+            $this->isElementPresent('partialLinkText', $this->databaseName),
         );
 
         $this->waitForElement('xpath', "//a[contains(@href, '#Databases')]")->click();
@@ -82,15 +76,14 @@ class ServerSettingsTest extends TestBase
         $this->waitForElement('name', 'Servers-1-hide_db')->clear();
         $this->saveConfig();
         $this->assertTrue(
-            $this->isElementPresent('partialLinkText', $this->databaseName)
+            $this->isElementPresent('partialLinkText', $this->databaseName),
         );
     }
 
     /**
      * Tests whether the various settings tabs are displayed when clicked
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testSettingsTabsAreDisplayed(): void
     {
         $this->byPartialLinkText('SQL queries')->click();
@@ -100,26 +93,25 @@ class ServerSettingsTest extends TestBase
 
         $this->byPartialLinkText('SQL Query box')->click();
         $this->assertTrue(
-            $this->byId('Sql_box')->isDisplayed()
+            $this->byId('Sql_box')->isDisplayed(),
         );
         $this->assertFalse(
-            $this->byId('Sql_queries')->isDisplayed()
+            $this->byId('Sql_queries')->isDisplayed(),
         );
 
         $this->byCssSelector("a[href='#Sql_queries']")->click();
         $this->assertFalse(
-            $this->byId('Sql_box')->isDisplayed()
+            $this->byId('Sql_box')->isDisplayed(),
         );
         $this->assertTrue(
-            $this->byId('Sql_queries')->isDisplayed()
+            $this->byId('Sql_queries')->isDisplayed(),
         );
     }
 
     /**
      * Tests if hiding the logo works or not
-     *
-     * @group large
      */
+    #[Group('large')]
     public function testHideLogo(): void
     {
         $this->byPartialLinkText('Navigation panel')->click();
@@ -130,14 +122,14 @@ class ServerSettingsTest extends TestBase
         $this->saveConfig();
         sleep(1);
         $this->assertFalse(
-            $this->isElementPresent('id', 'imgpmalogo')
+            $this->isElementPresent('id', 'imgpmalogo'),
         );
 
         $this->byCssSelector("a[href='#NavigationDisplayLogo']")->click();
         $this->saveConfig();
         sleep(1);
         $this->assertTrue(
-            $this->isElementPresent('id', 'imgpmalogo')
+            $this->isElementPresent('id', 'imgpmalogo'),
         );
     }
 }

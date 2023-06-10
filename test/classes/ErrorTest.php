@@ -5,18 +5,17 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\Error;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 use function preg_match;
 
 use const DIRECTORY_SEPARATOR;
 
-/**
- * @covers \PhpMyAdmin\Error
- */
+#[CoversClass(Error::class)]
 class ErrorTest extends AbstractTestCase
 {
-    /** @var Error */
-    protected $object;
+    protected Error $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -25,6 +24,7 @@ class ErrorTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->object = new Error(2, 'Compile Error', 'error.txt', 15);
     }
 
@@ -35,6 +35,7 @@ class ErrorTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
@@ -43,14 +44,7 @@ class ErrorTest extends AbstractTestCase
      */
     public function testSetBacktrace(): void
     {
-        $bt = [
-            [
-                'file' => 'bt1',
-                'line' => 2,
-                'function' => 'bar',
-                'args' => ['foo' => $this],
-            ],
-        ];
+        $bt = [['file' => 'bt1', 'line' => 2, 'function' => 'bar', 'args' => ['foo' => $this]]];
         $this->object->setBacktrace($bt);
         $bt[0]['args']['foo'] = '<Class:PhpMyAdmin\Tests\ErrorTest>';
         $this->assertEquals($bt, $this->object->getBacktrace());
@@ -70,9 +64,8 @@ class ErrorTest extends AbstractTestCase
      *
      * @param string $file     actual
      * @param string $expected expected
-     *
-     * @dataProvider filePathProvider
      */
+    #[DataProvider('filePathProvider')]
     public function testSetFile(string $file, string $expected): void
     {
         $this->object->setFile($file);
@@ -82,24 +75,18 @@ class ErrorTest extends AbstractTestCase
     /**
      * Data provider for setFile
      *
-     * @return array
+     * @return mixed[]
      */
-    public function filePathProvider(): array
+    public static function filePathProvider(): array
     {
         return [
-            [
-                './ChangeLog',
-                '.' . DIRECTORY_SEPARATOR . 'ChangeLog',
-            ],
+            ['./ChangeLog', '.' . DIRECTORY_SEPARATOR . 'ChangeLog'],
             [
                 __FILE__,
                 '.' . DIRECTORY_SEPARATOR . 'test' . DIRECTORY_SEPARATOR
                     . 'classes' . DIRECTORY_SEPARATOR . 'ErrorTest.php',
             ],
-            [
-                './NONEXISTING',
-                'NONEXISTING',
-            ],
+            ['./NONEXISTING', 'NONEXISTING'],
         ];
     }
 
@@ -110,7 +97,7 @@ class ErrorTest extends AbstractTestCase
     {
         $this->assertEquals(
             1,
-            preg_match('/^([a-z0-9]*)$/', $this->object->getHash())
+            preg_match('/^([a-z0-9]*)$/', $this->object->getHash()),
         );
     }
 
@@ -120,8 +107,8 @@ class ErrorTest extends AbstractTestCase
     public function testGetBacktraceDisplay(): void
     {
         $this->assertStringContainsString(
-            'PHPUnit\Framework\TestResult->run(<Class:PhpMyAdmin\Tests\ErrorTest>)<br>',
-            $this->object->getBacktraceDisplay()
+            'PHPUnit\Framework\TestRunner->run(<Class:PhpMyAdmin\Tests\ErrorTest>)',
+            $this->object->getBacktraceDisplay(),
         );
     }
 
@@ -130,10 +117,18 @@ class ErrorTest extends AbstractTestCase
      */
     public function testGetDisplay(): void
     {
-        $this->assertStringContainsString(
-            '<div class="alert alert-danger" role="alert"><strong>Warning</strong>',
-            $this->object->getDisplay()
+        $actual = $this->object->getDisplay();
+        $this->assertStringStartsWith(
+            '<div class="alert alert-danger" role="alert"><p><strong>Warning</strong> in error.txt#15</p>'
+            . '<img src="themes/dot.gif" title="" alt="" class="icon ic_s_error"> Compile Error'
+            . '<p class="mt-3"><strong>Backtrace</strong></p><ol class="list-group"><li class="list-group-item">',
+            $actual,
         );
+        $this->assertStringContainsString(
+            'PHPUnit\Framework\TestRunner->run(<Class:PhpMyAdmin\Tests\ErrorTest>)</li><li class="list-group-item">',
+            $actual,
+        );
+        $this->assertStringEndsWith('</li></ol></div>' . "\n", $actual);
     }
 
     /**
@@ -158,30 +153,10 @@ class ErrorTest extends AbstractTestCase
     public function testGetBacktrace(): void
     {
         $bt = [
-            [
-                'file' => 'bt1',
-                'line' => 2,
-                'function' => 'bar',
-                'args' => ['foo' => 1],
-            ],
-            [
-                'file' => 'bt2',
-                'line' => 2,
-                'function' => 'bar',
-                'args' => ['foo' => 2],
-            ],
-            [
-                'file' => 'bt3',
-                'line' => 2,
-                'function' => 'bar',
-                'args' => ['foo' => 3],
-            ],
-            [
-                'file' => 'bt4',
-                'line' => 2,
-                'function' => 'bar',
-                'args' => ['foo' => 4],
-            ],
+            ['file' => 'bt1', 'line' => 2, 'function' => 'bar', 'args' => ['foo' => 1]],
+            ['file' => 'bt2', 'line' => 2, 'function' => 'bar', 'args' => ['foo' => 2]],
+            ['file' => 'bt3', 'line' => 2, 'function' => 'bar', 'args' => ['foo' => 3]],
+            ['file' => 'bt4', 'line' => 2, 'function' => 'bar', 'args' => ['foo' => 4]],
         ];
 
         $this->object->setBacktrace($bt);

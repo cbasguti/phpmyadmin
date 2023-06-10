@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Plugins\Schema\Eps;
 
 use PhpMyAdmin\Plugins\Schema\RelationStats;
+use PhpMyAdmin\Plugins\Schema\TableStats;
 
 use function sqrt;
 
@@ -24,21 +25,23 @@ use function sqrt;
 class RelationStatsEps extends RelationStats
 {
     /**
-     * @param Eps    $diagram       The EPS diagram
-     * @param string $master_table  The master table name
-     * @param string $master_field  The relation field in the master table
-     * @param string $foreign_table The foreign table name
-     * @param string $foreign_field The relation field in the foreign table
+     * @param Eps        $diagram      The EPS diagram
+     * @param TableStats $masterTable  The master table name
+     * @param string     $masterField  The relation field in the master table
+     * @param TableStats $foreignTable The foreign table name
+     * @param string     $foreignField The relation field in the foreign table
      */
     public function __construct(
-        $diagram,
-        $master_table,
-        $master_field,
-        $foreign_table,
-        $foreign_field
+        Eps $diagram,
+        TableStats $masterTable,
+        string $masterField,
+        TableStats $foreignTable,
+        string $foreignField,
     ) {
         $this->wTick = 10;
-        parent::__construct($diagram, $master_table, $master_field, $foreign_table, $foreign_field);
+
+        parent::__construct($diagram, $masterTable, $masterField, $foreignTable, $foreignField);
+
         $this->ySrc += 10;
         $this->yDest += 10;
     }
@@ -61,7 +64,7 @@ class RelationStatsEps extends RelationStats
             $this->ySrc,
             $this->xDest + $this->destDir * $this->wTick,
             $this->yDest,
-            1
+            1,
         );
         $root2 = 2 * sqrt(2);
         $this->diagram->line(
@@ -69,28 +72,28 @@ class RelationStatsEps extends RelationStats
             $this->ySrc,
             $this->xSrc + $this->srcDir * (0.75 - 1 / $root2) * $this->wTick,
             $this->ySrc + $this->wTick / $root2,
-            1
+            1,
         );
         $this->diagram->line(
             $this->xSrc + $this->srcDir * $this->wTick * 0.75,
             $this->ySrc,
             $this->xSrc + $this->srcDir * (0.75 - 1 / $root2) * $this->wTick,
             $this->ySrc - $this->wTick / $root2,
-            1
+            1,
         );
         $this->diagram->line(
             $this->xDest + $this->destDir * $this->wTick / 2,
             $this->yDest,
             $this->xDest + $this->destDir * (0.5 + 1 / $root2) * $this->wTick,
             $this->yDest + $this->wTick / $root2,
-            1
+            1,
         );
         $this->diagram->line(
             $this->xDest + $this->destDir * $this->wTick / 2,
             $this->yDest,
             $this->xDest + $this->destDir * (0.5 + 1 / $root2) * $this->wTick,
             $this->yDest - $this->wTick / $root2,
-            1
+            1,
         );
     }
 }

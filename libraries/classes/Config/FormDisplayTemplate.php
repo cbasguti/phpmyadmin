@@ -8,32 +8,24 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Config;
 
 use PhpMyAdmin\Config;
-use PhpMyAdmin\Sanitize;
 use PhpMyAdmin\Template;
 
 use function array_shift;
-use function implode;
+use function json_encode;
+
+use const JSON_HEX_TAG;
 
 /**
  * PhpMyAdmin\Config\FormDisplayTemplate class
  */
 class FormDisplayTemplate
 {
-    /** @var int */
-    public $group;
+    public int $group = 0;
 
-    /** @var Config */
-    protected $config;
+    public Template $template;
 
-    /** @var Template */
-    public $template;
-
-    /**
-     * @param Config $config Config instance
-     */
-    public function __construct(Config $config)
+    public function __construct(protected Config $config)
     {
-        $this->config = $config;
         $this->template = new Template();
     }
 
@@ -55,22 +47,22 @@ class FormDisplayTemplate
      * o comment - (string) tooltip comment
      * o comment_warning - (bool) whether this comments warns about something
      *
-     * @param string     $path           config option path
-     * @param string     $name           config option name
-     * @param string     $type           type of config option
-     * @param mixed      $value          current value
-     * @param string     $description    verbose description
-     * @param bool       $valueIsDefault whether value is default
-     * @param array|null $opts           see above description
+     * @param string       $path           config option path
+     * @param string       $name           config option name
+     * @param string       $type           type of config option
+     * @param mixed        $value          current value
+     * @param string       $description    verbose description
+     * @param bool         $valueIsDefault whether value is default
+     * @param mixed[]|null $opts           see above description
      */
     public function displayInput(
-        $path,
-        $name,
-        $type,
-        $value,
-        $description = '',
-        $valueIsDefault = true,
-        $opts = null
+        string $path,
+        string $name,
+        string $type,
+        mixed $value,
+        string $description = '',
+        bool $valueIsDefault = true,
+        array|null $opts = null,
     ): string {
         $isSetupScript = $this->config->get('is_setup');
         $optionIsDisabled = ! $isSetupScript && isset($opts['userprefs_allow']) && ! $opts['userprefs_allow'];
@@ -135,41 +127,35 @@ class FormDisplayTemplate
     /**
      * Appends JS validation code to $js_array
      *
-     * @param string       $fieldId    ID of field to validate
-     * @param string|array $validators validators callback
-     * @param array        $jsArray    will be updated with javascript code
+     * @param string         $fieldId    ID of field to validate
+     * @param string|mixed[] $validators validators callback
+     * @param mixed[]        $jsArray    will be updated with javascript code
      */
-    public function addJsValidate($fieldId, $validators, array &$jsArray): void
+    public function addJsValidate(string $fieldId, string|array $validators, array &$jsArray): void
     {
         foreach ((array) $validators as $validator) {
             $validator = (array) $validator;
             $vName = array_shift($validator);
-            $vArgs = [];
-            foreach ($validator as $arg) {
-                $vArgs[] = Sanitize::escapeJsString($arg);
-            }
-
-            $vArgs = $vArgs ? ", ['" . implode("', '", $vArgs) . "']" : '';
-            $jsArray[] = "registerFieldValidator('" . $fieldId . "', '" . $vName . "', true" . $vArgs . ')';
+            $vArgs = $validator !== [] ? ', ' . json_encode($validator, JSON_HEX_TAG) : '';
+            $jsArray[] = "window.Config.registerFieldValidator('"
+                . $fieldId . "', '" . $vName . "', true" . $vArgs . ')';
         }
     }
 
     /**
      * Displays error list
      *
-     * @param string $name      Name of item with errors
-     * @param array  $errorList List of errors to show
+     * @param string  $name      Name of item with errors
+     * @param mixed[] $errorList List of errors to show
      *
      * @return string HTML for errors
      */
-    public function displayErrors($name, array $errorList): string
+    public function displayErrors(string $name, array $errorList): string
     {
-        return $this->template->render('config/form_display/errors', [
-            'name' => $name,
-            'error_list' => $errorList,
-        ]);
+        return $this->template->render('config/form_display/errors', ['name' => $name, 'error_list' => $errorList]);
     }
 
+    /** @param mixed[] $data */
     public function display(array $data): string
     {
         return $this->template->render('config/form_display/display', $data);

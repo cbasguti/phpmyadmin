@@ -6,10 +6,9 @@ namespace PhpMyAdmin\Tests\Query;
 
 use PhpMyAdmin\Query\Generator;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Query\Generator
- */
+#[CoversClass(Generator::class)]
 class GeneratorTest extends AbstractTestCase
 {
     public function testGetColumnsSql(): void
@@ -18,16 +17,16 @@ class GeneratorTest extends AbstractTestCase
             'SHOW  COLUMNS FROM `mydb`.`mytable`',
             Generator::getColumnsSql(
                 'mydb',
-                'mytable'
-            )
+                'mytable',
+            ),
         );
         $this->assertEquals(
             'SHOW  COLUMNS FROM `mydb`.`mytable` LIKE \'_idcolumn\'',
             Generator::getColumnsSql(
                 'mydb',
                 'mytable',
-                '_idcolumn'
-            )
+                '_idcolumn',
+            ),
         );
         $this->assertEquals(
             'SHOW FULL COLUMNS FROM `mydb`.`mytable`',
@@ -35,8 +34,8 @@ class GeneratorTest extends AbstractTestCase
                 'mydb',
                 'mytable',
                 null,
-                true
-            )
+                true,
+            ),
         );
         $this->assertEquals(
             'SHOW FULL COLUMNS FROM `mydb`.`mytable` LIKE \'_idcolumn\'',
@@ -44,8 +43,8 @@ class GeneratorTest extends AbstractTestCase
                 'mydb',
                 'mytable',
                 '_idcolumn',
-                true
-            )
+                true,
+            ),
         );
     }
 
@@ -55,16 +54,16 @@ class GeneratorTest extends AbstractTestCase
             'SHOW INDEXES FROM `mydb`.`mytable`',
             Generator::getTableIndexesSql(
                 'mydb',
-                'mytable'
-            )
+                'mytable',
+            ),
         );
         $this->assertEquals(
             'SHOW INDEXES FROM `mydb`.`mytable` WHERE (1)',
             Generator::getTableIndexesSql(
                 'mydb',
                 'mytable',
-                '1'
-            )
+                '1',
+            ),
         );
     }
 
@@ -76,8 +75,8 @@ class GeneratorTest extends AbstractTestCase
                 'mydb',
                 'mytable',
                 'oldIndexName',
-                'newIndexName'
-            )
+                'newIndexName',
+            ),
         );
     }
 
@@ -88,40 +87,40 @@ class GeneratorTest extends AbstractTestCase
             Generator::getQueryForReorderingTable(
                 'mytable',
                 'myOrderField',
-                ''
-            )
+                '',
+            ),
         );
         $this->assertEquals(
             'ALTER TABLE `mytable` ORDER BY `myOrderField` ASC;',
             Generator::getQueryForReorderingTable(
                 'mytable',
                 'myOrderField',
-                'S'
-            )
+                'S',
+            ),
         );
         $this->assertEquals(
             'ALTER TABLE `mytable` ORDER BY `myOrderField` ASC;',
             Generator::getQueryForReorderingTable(
                 'mytable',
                 'myOrderField',
-                'DESC'
-            )
+                'DESC',
+            ),
         );
         $this->assertEquals(
             'ALTER TABLE `mytable` ORDER BY `myOrderField` DESC;',
             Generator::getQueryForReorderingTable(
                 'mytable',
                 'myOrderField',
-                'desc'
-            )
+                'desc',
+            ),
         );
         $this->assertEquals(
             'ALTER TABLE `mytable` ORDER BY `myOrderField` ASC;',
             Generator::getQueryForReorderingTable(
                 'mytable',
                 'myOrderField',
-                null
-            )
+                null,
+            ),
         );
     }
 
@@ -132,32 +131,51 @@ class GeneratorTest extends AbstractTestCase
             Generator::getQueryForPartitioningTable(
                 'mytable',
                 '',
-                []
-            )
+                [],
+            ),
         );
         $this->assertEquals(
             'ALTER TABLE `mytable`  PARTITION p1;',
             Generator::getQueryForPartitioningTable(
                 'mytable',
                 '',
-                ['p1']
-            )
+                ['p1'],
+            ),
         );
         $this->assertEquals(
             'ALTER TABLE `mytable`  PARTITION p1, p2;',
             Generator::getQueryForPartitioningTable(
                 'mytable',
                 '',
-                ['p1', 'p2']
-            )
+                ['p1', 'p2'],
+            ),
         );
         $this->assertEquals(
             'ALTER TABLE `mytable` COALESCE PARTITION 2',
             Generator::getQueryForPartitioningTable(
                 'mytable',
                 'COALESCE',
-                ['p1', 'p2']
-            )
+                ['p1', 'p2'],
+            ),
+        );
+    }
+
+    /**
+     * Test for buildSqlQuery
+     */
+    public function testBuildSqlQuery(): void
+    {
+        $queryFields = ['a', 'b'];
+        $valueSets = ['1', '2'];
+
+        $this->assertEquals(
+            'INSERT IGNORE INTO `table` (a, b) VALUES (1), (2)',
+            Generator::buildInsertSqlQuery('table', true, $queryFields, $valueSets),
+        );
+
+        $this->assertEquals(
+            'INSERT INTO `table` (a, b) VALUES (1), (2)',
+            Generator::buildInsertSqlQuery('table', false, $queryFields, $valueSets),
         );
     }
 }

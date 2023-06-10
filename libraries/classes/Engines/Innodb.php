@@ -22,22 +22,20 @@ class Innodb extends StorageEngine
     /**
      * Returns array with variable names related to InnoDB storage engine
      *
-     * @return array   variable names
+     * @return mixed[]   variable names
      */
-    public function getVariables()
+    public function getVariables(): array
     {
         return [
             'innodb_data_home_dir' => [
                 'title' => __('Data home directory'),
                 'desc' => __('The common part of the directory path for all InnoDB data files.'),
             ],
-            'innodb_data_file_path' => [
-                'title' => __('Data files'),
-            ],
+            'innodb_data_file_path' => ['title' => __('Data files')],
             'innodb_autoextend_increment' => [
                 'title' => __('Autoextend increment'),
                 'desc' => __(
-                    'The increment size for extending the size of an autoextending tablespace when it becomes full.'
+                    'The increment size for extending the size of an autoextending tablespace when it becomes full.',
                 ),
                 'type' => StorageEngine::DETAILS_TYPE_NUMERIC,
             ],
@@ -87,7 +85,7 @@ class Innodb extends StorageEngine
      *
      * @return string  SQL query LIKE pattern
      */
-    public function getVariablesLikePattern()
+    public function getVariablesLikePattern(): string
     {
         return 'innodb\\_%';
     }
@@ -95,19 +93,15 @@ class Innodb extends StorageEngine
     /**
      * Get information pages
      *
-     * @return array detail pages
+     * @return string[] detail pages
      */
-    public function getInfoPages()
+    public function getInfoPages(): array
     {
         if ($this->support < StorageEngine::SUPPORT_YES) {
             return [];
         }
 
-        $pages = [];
-        $pages['Bufferpool'] = __('Buffer Pool');
-        $pages['Status'] = __('InnoDB Status');
-
-        return $pages;
+        return ['Bufferpool' => __('Buffer Pool'), 'Status' => __('InnoDB Status')];
     }
 
     /**
@@ -115,17 +109,15 @@ class Innodb extends StorageEngine
      *
      * @return string  html table with stats
      */
-    public function getPageBufferpool()
+    public function getPageBufferpool(): string
     {
-        global $dbi;
-
         // The following query is only possible because we know
         // that we are on MySQL 5 here (checked above)!
         // side note: I love MySQL 5 for this. :-)
         $sql = 'SHOW STATUS'
             . ' WHERE Variable_name LIKE \'Innodb\\_buffer\\_pool\\_%\''
             . ' OR Variable_name = \'Innodb_page_size\';';
-        $status = $dbi->fetchResult($sql, 0, 1);
+        $status = $GLOBALS['dbi']->fetchResult($sql, 0, 1);
 
         /** @var string[] $bytes */
         $bytes = Util::formatByteDown($status['Innodb_buffer_pool_pages_total'] * $status['Innodb_page_size']);
@@ -228,8 +220,8 @@ class Innodb extends StorageEngine
                         $status['Innodb_buffer_pool_reads'] * 100
                         / $status['Innodb_buffer_pool_read_requests'],
                         3,
-                        2
-                    )
+                        2,
+                    ),
                 ) . ' %') . "\n"
             . '</td>' . "\n"
             . '        </tr>' . "\n"
@@ -243,8 +235,8 @@ class Innodb extends StorageEngine
                         $status['Innodb_buffer_pool_wait_free'] * 100
                         / $status['Innodb_buffer_pool_write_requests'],
                         3,
-                        2
-                    )
+                        2,
+                    ),
                 ) . ' %') . "\n"
             . '</td>' . "\n"
             . '        </tr>' . "\n"
@@ -259,14 +251,12 @@ class Innodb extends StorageEngine
      *
      * @return string  result of SHOW ENGINE INNODB STATUS inside pre tags
      */
-    public function getPageStatus()
+    public function getPageStatus(): string
     {
-        global $dbi;
-
         return '<pre id="pre_innodb_status">' . "\n"
-            . htmlspecialchars((string) $dbi->fetchValue(
+            . htmlspecialchars((string) $GLOBALS['dbi']->fetchValue(
                 'SHOW ENGINE INNODB STATUS;',
-                'Status'
+                'Status',
             )) . "\n" . '</pre>' . "\n";
     }
 
@@ -276,7 +266,7 @@ class Innodb extends StorageEngine
      *
      * @return string  mysql helppage filename
      */
-    public function getMysqlHelpPage()
+    public function getMysqlHelpPage(): string
     {
         return 'innodb-storage-engine';
     }
@@ -286,11 +276,9 @@ class Innodb extends StorageEngine
      *
      * @return string the version number, or empty if not running as a plugin
      */
-    public function getInnodbPluginVersion()
+    public function getInnodbPluginVersion(): string
     {
-        global $dbi;
-
-        return $dbi->fetchValue('SELECT @@innodb_version;') ?: '';
+        return (string) $GLOBALS['dbi']->fetchValue('SELECT @@innodb_version;');
     }
 
     /**
@@ -300,11 +288,9 @@ class Innodb extends StorageEngine
      *
      * @return string|null the InnoDB file format
      */
-    public function getInnodbFileFormat(): ?string
+    public function getInnodbFileFormat(): string|null
     {
-        global $dbi;
-
-        $value = $dbi->fetchValue("SHOW GLOBAL VARIABLES LIKE 'innodb_file_format';", 1);
+        $value = $GLOBALS['dbi']->fetchValue("SHOW GLOBAL VARIABLES LIKE 'innodb_file_format';", 1);
 
         if ($value === false) {
             // This variable does not exist anymore on MariaDB >= 10.6.0
@@ -322,8 +308,6 @@ class Innodb extends StorageEngine
      */
     public function supportsFilePerTable(): bool
     {
-        global $dbi;
-
-        return $dbi->fetchValue("SHOW GLOBAL VARIABLES LIKE 'innodb_file_per_table';", 1) === 'ON';
+        return $GLOBALS['dbi']->fetchValue("SHOW GLOBAL VARIABLES LIKE 'innodb_file_per_table';", 1) === 'ON';
     }
 }

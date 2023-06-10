@@ -7,14 +7,12 @@ namespace PhpMyAdmin\Tests\Navigation;
 use PhpMyAdmin\Navigation\NavigationTree;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Navigation\NavigationTree
- */
+#[CoversClass(NavigationTree::class)]
 class NavigationTreeTest extends AbstractTestCase
 {
-    /** @var NavigationTree */
-    protected $object;
+    protected NavigationTree $object;
 
     /**
      * Sets up the fixture.
@@ -22,9 +20,14 @@ class NavigationTreeTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
+
         parent::setGlobalConfig();
+
         parent::setTheme();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 1;
         $GLOBALS['cfg']['Server']['host'] = 'localhost';
         $GLOBALS['cfg']['Server']['user'] = 'user';
@@ -35,9 +38,8 @@ class NavigationTreeTest extends AbstractTestCase
 
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = '';
-        $GLOBALS['PMA_PHP_SELF'] = '';
 
-        $this->object = new NavigationTree(new Template(), $this->dbi);
+        $this->object = new NavigationTree(new Template(), $GLOBALS['dbi']);
     }
 
     /**
@@ -46,6 +48,7 @@ class NavigationTreeTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
@@ -83,22 +86,26 @@ class NavigationTreeTest extends AbstractTestCase
         $GLOBALS['cfg']['NavigationTreeDbSeparator'] = '__';
 
         // phpcs:disable Generic.Files.LineLength.TooLong
-        $this->dummyDbi->addResult(
+        $dummyDbi = $this->createDbiDummy();
+        $dummyDbi->addResult(
             'SELECT `SCHEMA_NAME` FROM `INFORMATION_SCHEMA`.`SCHEMATA`, (SELECT DB_first_level FROM ( SELECT DISTINCT SUBSTRING_INDEX(SCHEMA_NAME, \'__\', 1) DB_first_level FROM INFORMATION_SCHEMA.SCHEMATA WHERE TRUE ) t ORDER BY DB_first_level ASC LIMIT 0, 100) t2 WHERE TRUE AND 1 = LOCATE(CONCAT(DB_first_level, \'__\'), CONCAT(SCHEMA_NAME, \'__\')) ORDER BY SCHEMA_NAME ASC',
             [['functions__a'], ['functions__b']],
-            ['SCHEMA_NAME']
+            ['SCHEMA_NAME'],
         );
-        $this->dummyDbi->addResult(
+        $dummyDbi->addResult(
             'SELECT COUNT(*) FROM ( SELECT DISTINCT SUBSTRING_INDEX(SCHEMA_NAME, \'__\', 1) DB_first_level FROM INFORMATION_SCHEMA.SCHEMATA WHERE TRUE ) t',
-            [['2']]
+            [['2']],
         );
-        $this->dummyDbi->addResult(
+        $dummyDbi->addResult(
             'SELECT COUNT(*) FROM ( SELECT DISTINCT SUBSTRING_INDEX(SCHEMA_NAME, \'__\', 1) DB_first_level FROM INFORMATION_SCHEMA.SCHEMATA WHERE TRUE ) t',
-            [['2']]
+            [['2']],
         );
         // phpcs:enable
 
-        $object = new NavigationTree(new Template(), $this->dbi);
+        $dbi = $this->createDatabaseInterface($dummyDbi);
+        $GLOBALS['dbi'] = $dbi;
+
+        $object = new NavigationTree(new Template(), $dbi);
         $result = $object->renderState();
         $this->assertStringContainsString('<li class="first navGroup">', $result);
         $this->assertStringContainsString('functions' . "\n", $result);

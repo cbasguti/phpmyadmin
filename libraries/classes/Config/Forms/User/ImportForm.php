@@ -13,10 +13,8 @@ use function __;
 
 class ImportForm extends BaseForm
 {
-    /**
-     * @return array
-     */
-    public static function getForms()
+    /** @return mixed[] */
+    public static function getForms(): array
     {
         return [
             'Import_defaults' => [
@@ -26,11 +24,7 @@ class ImportForm extends BaseForm
                 'Import/skip_queries',
                 'enable_drag_drop_import',
             ],
-            'Sql' => [
-                'Import/sql_compatibility',
-                'Import/sql_no_auto_value_on_zero',
-                'Import/sql_read_as_multibytes',
-            ],
+            'Sql' => ['Import/sql_compatibility', 'Import/sql_no_auto_value_on_zero', 'Import/sql_read_as_multibytes'],
             'Csv' => [
                 ':group:' . __('CSV'),
                 'Import/csv_replace',
@@ -59,10 +53,7 @@ class ImportForm extends BaseForm
         ];
     }
 
-    /**
-     * @return string
-     */
-    public static function getName()
+    public static function getName(): string
     {
         return __('Import');
     }

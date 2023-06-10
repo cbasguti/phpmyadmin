@@ -11,14 +11,12 @@ use PhpMyAdmin\Navigation\Navigation;
 use PhpMyAdmin\Template;
 use PhpMyAdmin\Tests\AbstractTestCase;
 use PhpMyAdmin\Url;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\Navigation\Navigation
- */
+#[CoversClass(Navigation::class)]
 class NavigationTest extends AbstractTestCase
 {
-    /** @var Navigation */
-    protected $object;
+    protected Navigation $object;
 
     /**
      * Sets up the fixture.
@@ -26,7 +24,10 @@ class NavigationTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
         parent::setLanguage();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 1;
         $GLOBALS['db'] = 'db';
         $GLOBALS['table'] = '';
@@ -44,7 +45,7 @@ class NavigationTest extends AbstractTestCase
         $this->object = new Navigation(
             new Template(),
             new Relation($GLOBALS['dbi']),
-            $GLOBALS['dbi']
+            $GLOBALS['dbi'],
         );
     }
 
@@ -54,6 +55,7 @@ class NavigationTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
@@ -71,8 +73,8 @@ class NavigationTest extends AbstractTestCase
         $dbi->expects($this->once())
             ->method('tryQueryAsControlUser')
             ->with($expectedQuery);
-        $dbi->expects($this->any())->method('escapeString')
-            ->will($this->returnArgument(0));
+        $dbi->expects($this->any())->method('quoteString')
+            ->will($this->returnCallback(static fn (string $string): string => "'" . $string . "'"));
 
         $GLOBALS['dbi'] = $dbi;
         $this->object = new Navigation(new Template(), new Relation($dbi), $dbi);
@@ -94,8 +96,8 @@ class NavigationTest extends AbstractTestCase
             ->method('tryQueryAsControlUser')
             ->with($expectedQuery);
 
-        $dbi->expects($this->any())->method('escapeString')
-            ->will($this->returnArgument(0));
+        $dbi->expects($this->any())->method('quoteString')
+            ->will($this->returnCallback(static fn (string $string): string => "'" . $string . "'"));
         $GLOBALS['dbi'] = $dbi;
         $this->object = new Navigation(new Template(), new Relation($dbi), $dbi);
         $this->object->unhideNavigationItem('itemName', 'itemType', 'db');
@@ -112,7 +114,7 @@ class NavigationTest extends AbstractTestCase
             '<a class="unhideNavItem ajax" href="' . Url::getFromRoute('/navigation') . '" data-post="'
             . 'unhideNavItem=1&itemType=table&'
             . 'itemName=tableName&dbName=db&lang=en">',
-            $html
+            $html,
         );
     }
 }

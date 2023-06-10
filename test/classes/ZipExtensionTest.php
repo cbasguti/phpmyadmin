@@ -5,75 +5,66 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\ZipExtension;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use ZipArchive;
 
 use function file_put_contents;
 use function tempnam;
 use function unlink;
 
-/**
- * @covers \PhpMyAdmin\ZipExtension
- * @requires extension zip
- */
+#[CoversClass(ZipExtension::class)]
+#[RequiresPhpExtension('zip')]
 class ZipExtensionTest extends AbstractTestCase
 {
-    /** @var ZipExtension */
-    private $zipExtension;
+    private ZipExtension $zipExtension;
 
     protected function setUp(): void
     {
         parent::setUp();
+
         $this->zipExtension = new ZipExtension(new ZipArchive());
     }
 
     /**
      * Test for getContents
      *
-     * @param string      $file           path to zip file
-     * @param string|null $specific_entry regular expression to match a file
-     * @param mixed       $output         expected output
-     *
-     * @dataProvider provideTestGetContents
+     * @param string                $file          path to zip file
+     * @param string|null           $specificEntry regular expression to match a file
+     * @param array<string, string> $output        expected output
+     * @psalm-param array{error: string, data: string} $output
      */
-    public function testGetContents(string $file, ?string $specific_entry, $output): void
+    #[DataProvider('provideTestGetContents')]
+    public function testGetContents(string $file, string|null $specificEntry, array $output): void
     {
         $this->assertEquals(
-            $this->zipExtension->getContents($file, $specific_entry),
-            $output
+            $this->zipExtension->getContents($file, $specificEntry),
+            $output,
         );
     }
 
     /**
-     * Provider for testGetZipContents
-     *
-     * @return array
+     * @return array<string, array<int, array<string, string>|string|null>>
+     * @psalm-return array<string, array{string, string|null, array{error: string, data: string}}>
      */
-    public function provideTestGetContents(): array
+    public static function provideTestGetContents(): array
     {
         return [
             'null as specific entry' => [
                 './test/test_data/test.zip',
                 null,
-                [
-                    'error' => '',
-                    'data' => 'TEST FILE' . "\n",
-                ],
+                ['error' => '', 'data' => 'TEST FILE' . "\n"],
             ],
             'an existent specific entry' => [
                 './test/test_data/test.zip',
                 '/test.file/',
-                [
-                    'error' => '',
-                    'data' => 'TEST FILE' . "\n",
-                ],
+                ['error' => '', 'data' => 'TEST FILE' . "\n"],
             ],
             'a nonexistent specific entry' => [
                 './test/test_data/test.zip',
                 '/foobar/',
-                [
-                    'error' => 'Error in ZIP archive: Could not find "/foobar/"',
-                    'data' => '',
-                ],
+                ['error' => 'Error in ZIP archive: Could not find "/foobar/"', 'data' => ''],
             ],
         ];
     }
@@ -81,33 +72,31 @@ class ZipExtensionTest extends AbstractTestCase
     /**
      * Test for findFile
      *
-     * @param string $file        path to zip file
-     * @param string $file_regexp regular expression for the file name to match
-     * @param mixed  $output      expected output
-     *
-     * @dataProvider provideTestFindFile
+     * @param string      $file       path to zip file
+     * @param string      $fileRegexp regular expression for the file name to match
+     * @param string|bool $output     expected output
+     * @psalm-param string|false $output
      */
-    public function testFindFile(string $file, string $file_regexp, $output): void
+    #[DataProvider('provideTestFindFile')]
+    public function testFindFile(string $file, string $fileRegexp, string|bool $output): void
     {
         $this->assertEquals(
-            $this->zipExtension->findFile($file, $file_regexp),
-            $output
+            $this->zipExtension->findFile($file, $fileRegexp),
+            $output,
         );
     }
 
     /**
      * Provider for testFindFileFromZipArchive
      *
-     * @return array Test data
+     * @return array<int, array<int, string|bool>>
+     * @psalm-return array<int, array{string, string, string|false}>
      */
-    public function provideTestFindFile(): array
+    public static function provideTestFindFile(): array
     {
         return [
-            [
-                './test/test_data/test.zip',
-                '/test/',
-                'test.file',
-            ],
+            ['./test/test_data/test.zip', '/test/', 'test.file'],
+            ['./test/test_data/test.zip', '/invalid/', false],
         ];
     }
 
@@ -118,7 +107,7 @@ class ZipExtensionTest extends AbstractTestCase
     {
         $this->assertEquals(
             $this->zipExtension->getNumberOfFiles('./test/test_data/test.zip'),
-            1
+            1,
         );
     }
 
@@ -130,15 +119,15 @@ class ZipExtensionTest extends AbstractTestCase
         $this->assertFalse(
             $this->zipExtension->extract(
                 './test/test_data/test.zip',
-                'wrongName'
-            )
+                'wrongName',
+            ),
         );
         $this->assertEquals(
             "TEST FILE\n",
             $this->zipExtension->extract(
                 './test/test_data/test.zip',
-                'test.file'
-            )
+                'test.file',
+            ),
         );
     }
 
@@ -148,8 +137,8 @@ class ZipExtensionTest extends AbstractTestCase
     public function testCreateSingleFile(): void
     {
         $file = $this->zipExtension->createFile('Test content', 'test.txt');
-        $this->assertNotEmpty($file);
         $this->assertIsString($file);
+        $this->assertNotEmpty($file);
 
         $tmp = tempnam('./', 'zip-test');
         $this->assertNotFalse($tmp);
@@ -157,7 +146,7 @@ class ZipExtensionTest extends AbstractTestCase
 
         $zip = new ZipArchive();
         $this->assertTrue(
-            $zip->open($tmp)
+            $zip->open($tmp),
         );
 
         $this->assertEquals(0, $zip->locateName('test.txt'));
@@ -174,11 +163,8 @@ class ZipExtensionTest extends AbstractTestCase
         $this->assertFalse(
             $this->zipExtension->createFile(
                 'Content',
-                [
-                    'name1.txt',
-                    'name2.txt',
-                ]
-            )
+                ['name1.txt', 'name2.txt'],
+            ),
         );
     }
 
@@ -188,17 +174,11 @@ class ZipExtensionTest extends AbstractTestCase
     public function testCreateMultiFile(): void
     {
         $file = $this->zipExtension->createFile(
-            [
-                'Content',
-                'Content2',
-            ],
-            [
-                'name1.txt',
-                'name2.txt',
-            ]
+            ['Content', 'Content2'],
+            ['name1.txt', 'name2.txt'],
         );
-        $this->assertNotEmpty($file);
         $this->assertIsString($file);
+        $this->assertNotEmpty($file);
 
         $tmp = tempnam('./', 'zip-test');
         $this->assertNotFalse($tmp);
@@ -206,7 +186,7 @@ class ZipExtensionTest extends AbstractTestCase
 
         $zip = new ZipArchive();
         $this->assertTrue(
-            $zip->open($tmp)
+            $zip->open($tmp),
         );
 
         $this->assertEquals(0, $zip->locateName('name1.txt'));

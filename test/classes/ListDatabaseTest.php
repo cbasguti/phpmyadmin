@@ -5,18 +5,15 @@ declare(strict_types=1);
 namespace PhpMyAdmin\Tests;
 
 use PhpMyAdmin\ListDatabase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
-/**
- * @covers \PhpMyAdmin\ListDatabase<extended>
- */
+#[CoversClass(ListDatabase::class)]
 class ListDatabaseTest extends AbstractTestCase
 {
     /**
      * ListDatabase instance
-     *
-     * @var ListDatabase
      */
-    private $object;
+    private ListDatabase $object;
 
     /**
      * SetUp for test cases
@@ -24,6 +21,8 @@ class ListDatabaseTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 1;
         $GLOBALS['cfg']['Server']['DisableIS'] = false;
         $GLOBALS['cfg']['Server']['only_db'] = ['single\\_db'];
@@ -31,12 +30,12 @@ class ListDatabaseTest extends AbstractTestCase
     }
 
     /**
-     * Test for ListDatabase::getEmpty
+     * Test for ListDatabase::getDefault
      */
     public function testEmpty(): void
     {
         $arr = new ListDatabase();
-        $this->assertEquals('', $arr->getEmpty());
+        $this->assertEquals('', $arr->getDefault());
     }
 
     /**
@@ -54,24 +53,14 @@ class ListDatabaseTest extends AbstractTestCase
 
         $GLOBALS['db'] = 'db';
         $this->assertEquals(
-            [
-                [
-                    'name' => 'single_db',
-                    'is_selected' => false,
-                ],
-            ],
-            $arr->getList()
+            [['name' => 'single_db', 'is_selected' => false]],
+            $arr->getList(),
         );
 
         $GLOBALS['db'] = 'single_db';
         $this->assertEquals(
-            [
-                [
-                    'name' => 'single_db',
-                    'is_selected' => true,
-                ],
-            ],
-            $arr->getList()
+            [['name' => 'single_db', 'is_selected' => true]],
+            $arr->getList(),
         );
     }
 
@@ -86,9 +75,9 @@ class ListDatabaseTest extends AbstractTestCase
                 $this->object,
                 ListDatabase::class,
                 'checkHideDatabase',
-                []
+                [],
             ),
-            ''
+            '',
         );
     }
 
@@ -100,13 +89,13 @@ class ListDatabaseTest extends AbstractTestCase
         $GLOBALS['db'] = '';
         $this->assertEquals(
             $this->object->getDefault(),
-            ''
+            '',
         );
 
         $GLOBALS['db'] = 'mysql';
         $this->assertEquals(
             $this->object->getDefault(),
-            'mysql'
+            'mysql',
         );
     }
 }

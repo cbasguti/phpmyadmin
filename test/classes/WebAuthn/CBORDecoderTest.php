@@ -7,6 +7,8 @@ namespace PhpMyAdmin\Tests\WebAuthn;
 use PhpMyAdmin\WebAuthn\CBORDecoder;
 use PhpMyAdmin\WebAuthn\DataStream;
 use PhpMyAdmin\WebAuthn\WebAuthnException;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 use function base64_decode;
@@ -14,18 +16,12 @@ use function hex2bin;
 
 use const INF;
 
-/**
- * @covers \PhpMyAdmin\WebAuthn\CBORDecoder
- * @covers \PhpMyAdmin\WebAuthn\DataStream
- */
+#[CoversClass(CBORDecoder::class)]
+#[CoversClass(DataStream::class)]
 class CBORDecoderTest extends TestCase
 {
-    /**
-     * @param mixed $expected
-     *
-     * @dataProvider dataProviderForTestDecode
-     */
-    public function testDecode(string $encoded, $expected): void
+    #[DataProvider('dataProviderForTestDecode')]
+    public function testDecode(string $encoded, mixed $expected): void
     {
         $decoder = new CBORDecoder();
         $data = hex2bin($encoded);
@@ -33,10 +29,8 @@ class CBORDecoderTest extends TestCase
         $this->assertSame($expected, $decoder->decode(new DataStream($data)));
     }
 
-    /**
-     * @psalm-return iterable<int, array{string, mixed}>
-     */
-    public function dataProviderForTestDecode(): iterable
+    /** @psalm-return iterable<int, array{string, mixed}> */
+    public static function dataProviderForTestDecode(): iterable
     {
         return [
             ['00', 0],
@@ -133,10 +127,7 @@ class CBORDecoderTest extends TestCase
             ],
             [
                 '82a263616c672664747970656a7075626C69632D6B6579a263616c6739010064747970656a7075626C69632D6B6579',
-                [
-                    ['alg' => -7, 'type' => 'public-key'],
-                    ['alg' => -257, 'type' => 'public-key'],
-                ],
+                [['alg' => -7,'type' => 'public-key'], ['alg' => -257,'type' => 'public-key']],
             ],
             [
                 'A501020326200121582065eda5a12577c2bae829437fe338701a10aaa375e1bb5b5de108de439c08551d'
@@ -163,9 +154,7 @@ class CBORDecoderTest extends TestCase
         }
     }
 
-    /**
-     * @dataProvider indefiniteLengthValuesProvider
-     */
+    #[DataProvider('indefiniteLengthValuesProvider')]
     public function testDecodeForNotSupportedValues(string $encoded): void
     {
         $decoder = new CBORDecoder();
@@ -175,10 +164,8 @@ class CBORDecoderTest extends TestCase
         $decoder->decode(new DataStream($data));
     }
 
-    /**
-     * @psalm-return iterable<int, array{string}>
-     */
-    public function indefiniteLengthValuesProvider(): iterable
+    /** @psalm-return iterable<int, array{string}> */
+    public static function indefiniteLengthValuesProvider(): iterable
     {
         return [
             ['5f42010243030405ff'], // (_ h'0102', h'030405')

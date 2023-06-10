@@ -6,16 +6,14 @@ namespace PhpMyAdmin\Tests\Engines;
 
 use PhpMyAdmin\Engines\Innodb;
 use PhpMyAdmin\Tests\AbstractTestCase;
+use PHPUnit\Framework\Attributes\CoversClass;
 
 use function __;
 
-/**
- * @covers \PhpMyAdmin\Engines\Innodb
- */
+#[CoversClass(Innodb::class)]
 class InnodbTest extends AbstractTestCase
 {
-    /** @var Innodb */
-    protected $object;
+    protected Innodb $object;
 
     /**
      * Sets up the fixture, for example, opens a network connection.
@@ -24,6 +22,8 @@ class InnodbTest extends AbstractTestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $GLOBALS['dbi'] = $this->createDatabaseInterface();
         $GLOBALS['server'] = 0;
         $this->object = new Innodb('innodb');
     }
@@ -35,6 +35,7 @@ class InnodbTest extends AbstractTestCase
     protected function tearDown(): void
     {
         parent::tearDown();
+
         unset($this->object);
     }
 
@@ -49,13 +50,12 @@ class InnodbTest extends AbstractTestCase
                     'title' => __('Data home directory'),
                     'desc' => __('The common part of the directory path for all InnoDB data files.'),
                 ],
-                'innodb_data_file_path' => [
-                    'title' => __('Data files'),
-                ],
+                'innodb_data_file_path' => ['title' => __('Data files')],
                 'innodb_autoextend_increment' => [
                     'title' => __('Autoextend increment'),
                     'desc' => __(
-                        'The increment size for extending the size of an autoextending tablespace when it becomes full.'
+                        'The increment size for extending the size of'
+                        . ' an autoextending tablespace when it becomes full.',
                     ),
                     'type' => 2,
                 ],
@@ -64,10 +64,7 @@ class InnodbTest extends AbstractTestCase
                     'desc' => __('The size of the memory buffer InnoDB uses to cache data and indexes of its tables.'),
                     'type' => 1,
                 ],
-                'innodb_additional_mem_pool_size' => [
-                    'title' => 'innodb_additional_mem_pool_size',
-                    'type' => 1,
-                ],
+                'innodb_additional_mem_pool_size' => ['title' => 'innodb_additional_mem_pool_size', 'type' => 1],
                 'innodb_buffer_pool_awe_mem_mb' => ['type' => 1],
                 'innodb_checksums' => [],
                 'innodb_commit_concurrency' => [],
@@ -97,7 +94,7 @@ class InnodbTest extends AbstractTestCase
                 'innodb_thread_concurrency' => ['type' => 2],
                 'innodb_thread_sleep_delay' => ['type' => 2],
             ],
-            $this->object->getVariables()
+            $this->object->getVariables(),
         );
     }
 
@@ -108,7 +105,7 @@ class InnodbTest extends AbstractTestCase
     {
         $this->assertEquals(
             'innodb\\_%',
-            $this->object->getVariablesLikePattern()
+            $this->object->getVariablesLikePattern(),
         );
     }
 
@@ -119,15 +116,12 @@ class InnodbTest extends AbstractTestCase
     {
         $this->assertEquals(
             [],
-            $this->object->getInfoPages()
+            $this->object->getInfoPages(),
         );
         $this->object->support = 2;
         $this->assertEquals(
-            [
-                'Bufferpool' => 'Buffer Pool',
-                'Status' => 'InnoDB Status',
-            ],
-            $this->object->getInfoPages()
+            ['Bufferpool' => 'Buffer Pool', 'Status' => 'InnoDB Status'],
+            $this->object->getInfoPages(),
         );
     }
 
@@ -210,7 +204,7 @@ class InnodbTest extends AbstractTestCase
             '        </tr>' . "\n" .
             '    </tbody>' . "\n" .
             '</table>' . "\n",
-            $this->object->getPageBufferpool()
+            $this->object->getPageBufferpool(),
         );
     }
 
@@ -221,7 +215,7 @@ class InnodbTest extends AbstractTestCase
     {
         $this->assertEquals(
             '<pre id="pre_innodb_status">' . "\n\n" . '</pre>' . "\n",
-            $this->object->getPageStatus()
+            $this->object->getPageStatus(),
         );
     }
 
@@ -232,12 +226,12 @@ class InnodbTest extends AbstractTestCase
     {
         $this->assertEquals(
             '',
-            $this->object->getPage('Status')
+            $this->object->getPage('Status'),
         );
         $this->object->support = 2;
         $this->assertEquals(
             '<pre id="pre_innodb_status">' . "\n\n" . '</pre>' . "\n",
-            $this->object->getPage('Status')
+            $this->object->getPage('Status'),
         );
     }
 
@@ -248,7 +242,7 @@ class InnodbTest extends AbstractTestCase
     {
         $this->assertEquals(
             'innodb-storage-engine',
-            $this->object->getMysqlHelpPage()
+            $this->object->getMysqlHelpPage(),
         );
     }
 
@@ -259,7 +253,7 @@ class InnodbTest extends AbstractTestCase
     {
         $this->assertEquals(
             '1.1.8',
-            $this->object->getInnodbPluginVersion()
+            $this->object->getInnodbPluginVersion(),
         );
     }
 
@@ -269,7 +263,7 @@ class InnodbTest extends AbstractTestCase
     public function testSupportsFilePerTable(): void
     {
         $this->assertFalse(
-            $this->object->supportsFilePerTable()
+            $this->object->supportsFilePerTable(),
         );
     }
 
@@ -280,7 +274,7 @@ class InnodbTest extends AbstractTestCase
     {
         $this->assertEquals(
             'Antelope',
-            $this->object->getInnodbFileFormat()
+            $this->object->getInnodbFileFormat(),
         );
     }
 }

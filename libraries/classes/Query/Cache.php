@@ -15,8 +15,8 @@ use function is_array;
  */
 class Cache
 {
-    /** @var array[] Table data cache */
-    private $tableCache = [];
+    /** @var mixed[][] Table data cache */
+    private array $tableCache = [];
 
     /**
      * Caches table data so Table does not require to issue
@@ -42,10 +42,10 @@ class Cache
     /**
      * Set an item in table cache using dot notation.
      *
-     * @param array|null $contentPath Array with the target path
-     * @param mixed      $value       Target value
+     * @param mixed[]|null $contentPath Array with the target path
+     * @param mixed        $value       Target value
      */
-    public function cacheTableContent(?array $contentPath, $value): void
+    public function cacheTableContent(array|null $contentPath, mixed $value): void
     {
         $loc = &$this->tableCache;
 
@@ -75,16 +75,17 @@ class Cache
     /**
      * Get a cached value from table cache.
      *
-     * @param array $contentPath Array of the name of the target value
-     * @param mixed $default     Return value on cache miss
+     * @param mixed[] $contentPath Array of the name of the target value
+     * @param mixed   $default     Return value on cache miss
      *
      * @return mixed cached value or default
      */
-    public function getCachedTableContent(array $contentPath, $default = null)
+    public function getCachedTableContent(array $contentPath, mixed $default = null): mixed
     {
         return Util::getValueByKey($this->tableCache, $contentPath, $default);
     }
 
+    /** @return mixed[][] */
     public function getCache(): array
     {
         return $this->tableCache;

@@ -22,152 +22,65 @@ class Font
     /**
      * Get list with characters and the corresponding width modifiers.
      *
-     * @return array with characters and corresponding width modifier
+     * @return mixed[] with characters and corresponding width modifier
      */
     public function getCharLists(): array
     {
-        // list of characters and their width modifiers
-        $charLists = [];
-
-        //ijl
-        $charLists[] = [
-            'chars' => [
-                'i',
-                'j',
-                'l',
+        return [
+            //ijl
+            ['chars' => ['i', 'j', 'l'], 'modifier' => 0.23],
+            //f
+            ['chars' => ['f'], 'modifier' => 0.27],
+            //tI
+            ['chars' => ['t', 'I'], 'modifier' => 0.28],
+            //r
+            ['chars' => ['r'], 'modifier' => 0.34],
+            //1
+            ['chars' => ['1'], 'modifier' => 0.49],
+            //cksvxyzJ
+            ['chars' => ['c', 'k', 's', 'v', 'x', 'y', 'z', 'J'], 'modifier' => 0.5],
+            //abdeghnopquL023456789
+            [
+                'chars' => [
+                    'a',
+                    'b',
+                    'd',
+                    'e',
+                    'g',
+                    'h',
+                    'n',
+                    'o',
+                    'p',
+                    'q',
+                    'u',
+                    'L',
+                    '0',
+                    '2',
+                    '3',
+                    '4',
+                    '5',
+                    '6',
+                    '7',
+                    '8',
+                    '9',
+                ],
+                'modifier' => 0.56,
             ],
-            'modifier' => 0.23,
+            //FTZ
+            ['chars' => ['F', 'T', 'Z'], 'modifier' => 0.61],
+            //ABEKPSVXY
+            ['chars' => ['A', 'B', 'E', 'K', 'P', 'S', 'V', 'X', 'Y'], 'modifier' => 0.67],
+            //wCDHNRU
+            ['chars' => ['w', 'C', 'D', 'H', 'N', 'R', 'U'], 'modifier' => 0.73],
+            //GOQ
+            ['chars' => ['G', 'O', 'Q'], 'modifier' => 0.78],
+            //mM
+            ['chars' => ['m', 'M'], 'modifier' => 0.84],
+            //W
+            ['chars' => ['W'], 'modifier' => 0.95],
+            //" "
+            ['chars' => [' '], 'modifier' => 0.28],
         ];
-        //f
-        $charLists[] = [
-            'chars' => ['f'],
-            'modifier' => 0.27,
-        ];
-        //tI
-        $charLists[] = [
-            'chars' => [
-                't',
-                'I',
-            ],
-            'modifier' => 0.28,
-        ];
-        //r
-        $charLists[] = [
-            'chars' => ['r'],
-            'modifier' => 0.34,
-        ];
-        //1
-        $charLists[] = [
-            'chars' => ['1'],
-            'modifier' => 0.49,
-        ];
-        //cksvxyzJ
-        $charLists[] = [
-            'chars' => [
-                'c',
-                'k',
-                's',
-                'v',
-                'x',
-                'y',
-                'z',
-                'J',
-            ],
-            'modifier' => 0.5,
-        ];
-        //abdeghnopquL023456789
-        $charLists[] = [
-            'chars' => [
-                'a',
-                'b',
-                'd',
-                'e',
-                'g',
-                'h',
-                'n',
-                'o',
-                'p',
-                'q',
-                'u',
-                'L',
-                '0',
-                '2',
-                '3',
-                '4',
-                '5',
-                '6',
-                '7',
-                '8',
-                '9',
-            ],
-            'modifier' => 0.56,
-        ];
-        //FTZ
-        $charLists[] = [
-            'chars' => [
-                'F',
-                'T',
-                'Z',
-            ],
-            'modifier' => 0.61,
-        ];
-        //ABEKPSVXY
-        $charLists[] = [
-            'chars' => [
-                'A',
-                'B',
-                'E',
-                'K',
-                'P',
-                'S',
-                'V',
-                'X',
-                'Y',
-            ],
-            'modifier' => 0.67,
-        ];
-        //wCDHNRU
-        $charLists[] = [
-            'chars' => [
-                'w',
-                'C',
-                'D',
-                'H',
-                'N',
-                'R',
-                'U',
-            ],
-            'modifier' => 0.73,
-        ];
-        //GOQ
-        $charLists[] = [
-            'chars' => [
-                'G',
-                'O',
-                'Q',
-            ],
-            'modifier' => 0.78,
-        ];
-        //mM
-        $charLists[] = [
-            'chars' => [
-                'm',
-                'M',
-            ],
-            'modifier' => 0.84,
-        ];
-        //W
-        $charLists[] = [
-            'chars' => ['W'],
-            'modifier' => 0.95,
-        ];
-        //" "
-        $charLists[] = [
-            'chars' => [' '],
-            'modifier' => 0.28,
-        ];
-
-        return $charLists;
     }
 
     /**
@@ -176,10 +89,10 @@ class Font
      * The text element width is calculated depending on font name
      * and font size.
      *
-     * @param string     $text      string of which the width will be calculated
-     * @param string     $font      name of the font like Arial,sans-serif etc
-     * @param int        $fontSize  size of font
-     * @param array|null $charLists list of characters and their width modifiers
+     * @param string       $text      string of which the width will be calculated
+     * @param string       $font      name of the font like Arial,sans-serif etc
+     * @param int          $fontSize  size of font
+     * @param mixed[]|null $charLists list of characters and their width modifiers
      *
      * @return int width of the text
      */
@@ -187,18 +100,16 @@ class Font
         string $text,
         string $font,
         int $fontSize,
-        ?array $charLists = null
+        array|null $charLists = null,
     ): int {
         if (
-            ! isset($charLists[0]['chars'], $charLists[0]['modifier']) || empty($charLists)
+            ! isset($charLists[0]['chars'], $charLists[0]['modifier'])
             || ! is_array($charLists[0]['chars'])
         ) {
             $charLists = $this->getCharLists();
         }
 
-        /*
-         * Start by counting the width, giving each character a modifying value
-         */
+        // Start by counting the width, giving each character a modifying value
         $count = 0;
 
         foreach ($charLists as $charList) {
@@ -214,25 +125,19 @@ class Font
         $modifier = 1;
         $font = mb_strtolower($font);
         switch ($font) {
-            /*
-             * no modifier for arial and sans-serif
-             */
             case 'arial':
             case 'sans-serif':
+                // no modifier for arial and sans-serif
                 break;
-            /*
-             * .92 modifier for time, serif, brushscriptstd, and californian fb
-             */
             case 'times':
             case 'serif':
             case 'brushscriptstd':
             case 'californian fb':
+                // .92 modifier for time, serif, brushscriptstd, and californian fb
                 $modifier = .92;
                 break;
-            /*
-             * 1.23 modifier for broadway
-             */
             case 'broadway':
+                // 1.23 modifier for broadway
                 $modifier = 1.23;
                 break;
         }

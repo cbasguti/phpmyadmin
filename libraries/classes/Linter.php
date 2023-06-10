@@ -13,11 +13,9 @@ use PhpMyAdmin\SqlParser\UtfString;
 use PhpMyAdmin\SqlParser\Utils\Error as ParserError;
 
 use function __;
-use function defined;
 use function htmlspecialchars;
 use function mb_strlen;
 use function sprintf;
-use function strlen;
 
 /**
  * The linter itself.
@@ -29,11 +27,11 @@ class Linter
      *
      * @param string|UtfString $str String to be analyzed.
      *
-     * @return array
+     * @return int[]
      */
-    public static function getLines($str)
+    public static function getLines(string|UtfString $str): array
     {
-        if ((! ($str instanceof UtfString)) && defined('USE_UTF_STRINGS') && USE_UTF_STRINGS) {
+        if ((! ($str instanceof UtfString))) {
             // If the lexer uses UtfString for processing then the position will
             // represent the position of the character and not the position of
             // the byte.
@@ -52,8 +50,7 @@ class Linter
         // first byte of the third character. The fourth and the last one
         // (which is actually a new line) aren't going to be processed at
         // all.
-        $len = $str instanceof UtfString ?
-            $str->length() : strlen($str);
+        $len = $str->length();
 
         $lines = [0];
         for ($i = 0; $i < $len; ++$i) {
@@ -70,12 +67,12 @@ class Linter
     /**
      * Computes the number of the line and column given an absolute position.
      *
-     * @param array $lines The starting position of each line.
-     * @param int   $pos   The absolute position
+     * @param mixed[] $lines The starting position of each line.
+     * @param int     $pos   The absolute position
      *
-     * @return array
+     * @return mixed[]
      */
-    public static function findLineNumberAndColumn(array $lines, $pos)
+    public static function findLineNumberAndColumn(array $lines, int $pos): array
     {
         $line = 0;
         foreach ($lines as $lineNo => $lineStart) {
@@ -86,10 +83,7 @@ class Linter
             $line = $lineNo;
         }
 
-        return [
-            $line,
-            $pos - $lines[$line],
-        ];
+        return [$line, $pos - $lines[$line]];
     }
 
     /**
@@ -97,9 +91,9 @@ class Linter
      *
      * @param string $query The query to be checked.
      *
-     * @return array
+     * @return mixed[]
      */
-    public static function lint($query)
+    public static function lint(string $query): array
     {
         // Disabling lint for huge queries to save some resources.
         if (mb_strlen($query) > 10000) {
@@ -132,8 +126,6 @@ class Linter
 
         /**
          * The response containing of all errors.
-         *
-         * @var array
          */
         $response = [];
 
@@ -148,12 +140,12 @@ class Linter
         // Building the response.
         foreach ($errors as $error) {
             // Starting position of the string that caused the error.
-            [$fromLine, $fromColumn] = static::findLineNumberAndColumn($lines, $error[3]);
+            [$fromLine, $fromColumn] = static::findLineNumberAndColumn($lines, (int) $error[3]);
 
             // Ending position of the string that caused the error.
             [$toLine, $toColumn] = static::findLineNumberAndColumn(
                 $lines,
-                $error[3] + mb_strlen((string) $error[2])
+                $error[3] + mb_strlen((string) $error[2]),
             );
 
             // Building the response.
@@ -161,7 +153,7 @@ class Linter
                 'message' => sprintf(
                     __('%1$s (near <code>%2$s</code>)'),
                     htmlspecialchars((string) $error[0]),
-                    htmlspecialchars((string) $error[2])
+                    htmlspecialchars((string) $error[2]),
                 ),
                 'fromLine' => $fromLine,
                 'fromColumn' => $fromColumn,

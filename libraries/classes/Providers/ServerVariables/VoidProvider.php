@@ -6,22 +6,23 @@ namespace PhpMyAdmin\Providers\ServerVariables;
 
 class VoidProvider implements ServerVariablesProviderInterface
 {
-    public function getVariableType(string $name): ?string
+    public function getVariableType(string $name): string|null
     {
         return null;
     }
 
+    /** @return mixed[] */
     public function getStaticVariables(): array
     {
         return [];
     }
 
-    public function getDocLinkByNameMariaDb(string $name): ?string
+    public function getDocLinkByNameMariaDb(string $name): string|null
     {
         return null;
     }
 
-    public function getDocLinkByNameMysql(string $name): ?string
+    public function getDocLinkByNameMysql(string $name): string|null
     {
         return null;
     }

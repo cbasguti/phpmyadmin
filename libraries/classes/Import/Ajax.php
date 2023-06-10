@@ -6,9 +6,12 @@ namespace PhpMyAdmin\Import;
 
 use PhpMyAdmin\Core;
 
+use function defined;
 use function function_exists;
+use function header;
 use function ini_get;
 use function json_encode;
+use function sprintf;
 use function ucwords;
 use function uniqid;
 
@@ -19,23 +22,25 @@ final class Ajax
 {
     /**
      * Sets up some variables for upload progress
+     *
+     * @return mixed[]
      */
     public static function uploadProgressSetup(): array
     {
         /**
          * constant for differentiating array in $_SESSION variable
          */
-        $SESSION_KEY = '__upload_status';
+        $sessionKey = '__upload_status';
 
         /**
          * sets default plugin for handling the import process
          */
-        $_SESSION[$SESSION_KEY]['handler'] = '';
+        $_SESSION[$sessionKey]['handler'] = '';
 
         /**
          * unique ID for each upload
          */
-        $upload_id = uniqid('');
+        $uploadId = ! defined('TESTSUITE') ? uniqid('') : 'abc1234567890';
 
         /**
          * list of available plugins
@@ -52,17 +57,13 @@ final class Ajax
             $check = $plugin . 'Check';
 
             if (self::$check()) {
-                $upload_class = 'PhpMyAdmin\Plugins\Import\Upload\Upload' . ucwords($plugin);
-                $_SESSION[$SESSION_KEY]['handler'] = $upload_class;
+                $uploadClass = 'PhpMyAdmin\Plugins\Import\Upload\Upload' . ucwords($plugin);
+                $_SESSION[$sessionKey]['handler'] = $uploadClass;
                 break;
             }
         }
 
-        return [
-            $SESSION_KEY,
-            $upload_id,
-            $plugins,
-        ];
+        return [$sessionKey, $uploadId, $plugins];
     }
 
     /**
@@ -71,7 +72,7 @@ final class Ajax
      */
     public static function progressCheck(): bool
     {
-        return function_exists('uploadprogress_get_info');
+        return ! defined('TESTSUITE') && function_exists('uploadprogress_get_info');
     }
 
     /**
@@ -79,7 +80,7 @@ final class Ajax
      */
     public static function sessionCheck(): bool
     {
-        return ini_get('session.upload_progress.enabled') === '1';
+        return ! defined('TESTSUITE') && ini_get('session.upload_progress.enabled') === '1';
     }
 
     /**
@@ -99,11 +100,14 @@ final class Ajax
      *
      * @param string $id ID of transfer, usually $upload_id
      */
-    public static function status($id): void
+    public static function status(string $id): void
     {
-        Core::headerJSON();
+        foreach (Core::headerJSON() as $name => $value) {
+            header(sprintf('%s: %s', $name, $value));
+        }
+
         echo json_encode(
-            $_SESSION[$GLOBALS['SESSION_KEY']]['handler']::getUploadStatus($id)
+            $_SESSION[$GLOBALS['SESSION_KEY']]['handler']::getUploadStatus($id),
         );
     }
 }

@@ -12,11 +12,11 @@ final class FlashMessages
 {
     private const STORAGE_KEY = 'flashMessages';
 
-    /** @var array */
-    private $storage;
+    /** @var mixed[] */
+    private array $storage;
 
     /** @var array<string, string[]> */
-    private $previousMessages = [];
+    private array $previousMessages = [];
 
     public function __construct()
     {
@@ -43,7 +43,7 @@ final class FlashMessages
     }
 
     /** @return string[]|null */
-    public function getMessage(string $key): ?array
+    public function getMessage(string $key): array|null
     {
         return $this->previousMessages[$key] ?? null;
     }

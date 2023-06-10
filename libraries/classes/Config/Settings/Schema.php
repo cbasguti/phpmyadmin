@@ -9,88 +9,163 @@ namespace PhpMyAdmin\Config\Settings;
 use function in_array;
 
 /**
+ * Schema export defaults
+ *
  * @psalm-immutable
  */
 final class Schema
 {
     /**
-     * @var string
+     * ```php
+     * $cfg['Schema']['format'] = 'pdf';
+     * ```
+     *
      * @psalm-var 'pdf'|'eps'|'dia'|'svg'
      */
-    public $format;
-
-    /** @var bool */
-    public $pdf_show_color;
-
-    /** @var bool */
-    public $pdf_show_keys;
-
-    /** @var bool */
-    public $pdf_all_tables_same_width;
+    public string $format;
 
     /**
-     * @var string
+     * ```php
+     * $cfg['Schema']['pdf_show_color'] = true;
+     * ```
+     */
+    public bool $pdf_show_color;
+
+    /**
+     * ```php
+     * $cfg['Schema']['pdf_show_keys'] = false;
+     * ```
+     */
+    public bool $pdf_show_keys;
+
+    /**
+     * ```php
+     * $cfg['Schema']['pdf_all_tables_same_width'] = false;
+     * ```
+     */
+    public bool $pdf_all_tables_same_width;
+
+    /**
+     * ```php
+     * $cfg['Schema']['pdf_orientation'] = 'L';
+     * ```
+     *
      * @psalm-var 'L'|'P'
      */
-    public $pdf_orientation;
-
-    /** @var string */
-    public $pdf_paper;
-
-    /** @var bool */
-    public $pdf_show_grid;
-
-    /** @var bool */
-    public $pdf_with_doc;
+    public string $pdf_orientation;
 
     /**
-     * @var string
+     * ```php
+     * $cfg['Schema']['pdf_paper'] = 'A4';
+     * ```
+     */
+    public string $pdf_paper;
+
+    /**
+     * ```php
+     * $cfg['Schema']['pdf_show_grid'] = false;
+     * ```
+     */
+    public bool $pdf_show_grid;
+
+    /**
+     * ```php
+     * $cfg['Schema']['pdf_with_doc'] = true;
+     * ```
+     */
+    public bool $pdf_with_doc;
+
+    /**
+     * ```php
+     * $cfg['Schema']['pdf_table_order'] = '';
+     * ```
+     *
      * @psalm-var ''|'name_asc'|'name_desc'
      */
-    public $pdf_table_order;
-
-    /** @var bool */
-    public $dia_show_color;
-
-    /** @var bool */
-    public $dia_show_keys;
+    public string $pdf_table_order;
 
     /**
-     * @var string
+     * ```php
+     * $cfg['Schema']['dia_show_color'] = true;
+     * ```
+     */
+    public bool $dia_show_color;
+
+    /**
+     * ```php
+     * $cfg['Schema']['dia_show_keys'] = false;
+     * ```
+     */
+    public bool $dia_show_keys;
+
+    /**
+     * ```php
+     * $cfg['Schema']['dia_orientation'] = 'L';
+     * ```
+     *
      * @psalm-var 'L'|'P'
      */
-    public $dia_orientation;
-
-    /** @var string */
-    public $dia_paper;
-
-    /** @var bool */
-    public $eps_show_color;
-
-    /** @var bool */
-    public $eps_show_keys;
-
-    /** @var bool */
-    public $eps_all_tables_same_width;
+    public string $dia_orientation;
 
     /**
-     * @var string
+     * ```php
+     * $cfg['Schema']['dia_paper'] = 'A4';
+     * ```
+     */
+    public string $dia_paper;
+
+    /**
+     * ```php
+     * $cfg['Schema']['eps_show_color'] = true;
+     * ```
+     */
+    public bool $eps_show_color;
+
+    /**
+     * ```php
+     * $cfg['Schema']['eps_show_keys'] = false;
+     * ```
+     */
+    public bool $eps_show_keys;
+
+    /**
+     * ```php
+     * $cfg['Schema']['eps_all_tables_same_width'] = false;
+     * ```
+     */
+    public bool $eps_all_tables_same_width;
+
+    /**
+     * ```php
+     * $cfg['Schema']['eps_orientation'] = 'L';
+     * ```
+     *
      * @psalm-var 'L'|'P'
      */
-    public $eps_orientation;
-
-    /** @var bool */
-    public $svg_show_color;
-
-    /** @var bool */
-    public $svg_show_keys;
-
-    /** @var bool */
-    public $svg_all_tables_same_width;
+    public string $eps_orientation;
 
     /**
-     * @param array<int|string, mixed> $schema
+     * ```php
+     * $cfg['Schema']['svg_show_color'] = true;
+     * ```
      */
+    public bool $svg_show_color;
+
+    /**
+     * ```php
+     * $cfg['Schema']['svg_show_keys'] = false;
+     * ```
+     */
+    public bool $svg_show_keys;
+
+    /**
+     * ```php
+     * $cfg['Schema']['svg_all_tables_same_width'] = false;
+     * ```
+     */
+    public bool $svg_all_tables_same_width;
+
+    /** @param array<int|string, mixed> $schema */
     public function __construct(array $schema = [])
     {
         $this->format = $this->setFormat($schema);
@@ -115,6 +190,33 @@ final class Schema
         $this->svg_all_tables_same_width = $this->setSvgAllTablesSameWidth($schema);
     }
 
+    /** @return array<string, string|bool> */
+    public function asArray(): array
+    {
+        return [
+            'format' => $this->format,
+            'pdf_show_color' => $this->pdf_show_color,
+            'pdf_show_keys' => $this->pdf_show_keys,
+            'pdf_all_tables_same_width' => $this->pdf_all_tables_same_width,
+            'pdf_orientation' => $this->pdf_orientation,
+            'pdf_paper' => $this->pdf_paper,
+            'pdf_show_grid' => $this->pdf_show_grid,
+            'pdf_with_doc' => $this->pdf_with_doc,
+            'pdf_table_order' => $this->pdf_table_order,
+            'dia_show_color' => $this->dia_show_color,
+            'dia_show_keys' => $this->dia_show_keys,
+            'dia_orientation' => $this->dia_orientation,
+            'dia_paper' => $this->dia_paper,
+            'eps_show_color' => $this->eps_show_color,
+            'eps_show_keys' => $this->eps_show_keys,
+            'eps_all_tables_same_width' => $this->eps_all_tables_same_width,
+            'eps_orientation' => $this->eps_orientation,
+            'svg_show_color' => $this->svg_show_color,
+            'svg_show_keys' => $this->svg_show_keys,
+            'svg_all_tables_same_width' => $this->svg_all_tables_same_width,
+        ];
+    }
+
     /**
      * @param array<int|string, mixed> $schema
      *
@@ -129,9 +231,7 @@ final class Schema
         return 'pdf';
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setPdfShowColor(array $schema): bool
     {
         if (isset($schema['pdf_show_color'])) {
@@ -141,9 +241,7 @@ final class Schema
         return true;
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setPdfShowKeys(array $schema): bool
     {
         if (isset($schema['pdf_show_keys'])) {
@@ -153,9 +251,7 @@ final class Schema
         return false;
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setPdfAllTablesSameWidth(array $schema): bool
     {
         if (isset($schema['pdf_all_tables_same_width'])) {
@@ -179,9 +275,7 @@ final class Schema
         return 'L';
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setPdfPaper(array $schema): string
     {
         if (isset($schema['pdf_paper'])) {
@@ -191,9 +285,7 @@ final class Schema
         return 'A4';
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setPdfShowGrid(array $schema): bool
     {
         if (isset($schema['pdf_show_grid'])) {
@@ -203,9 +295,7 @@ final class Schema
         return false;
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setPdfWithDoc(array $schema): bool
     {
         if (isset($schema['pdf_with_doc'])) {
@@ -231,9 +321,7 @@ final class Schema
         return '';
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setDiaShowColor(array $schema): bool
     {
         if (isset($schema['dia_show_color'])) {
@@ -243,9 +331,7 @@ final class Schema
         return true;
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setDiaShowKeys(array $schema): bool
     {
         if (isset($schema['dia_show_keys'])) {
@@ -269,9 +355,7 @@ final class Schema
         return 'L';
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setDiaPaper(array $schema): string
     {
         if (isset($schema['dia_paper'])) {
@@ -281,9 +365,7 @@ final class Schema
         return 'A4';
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setEpsShowColor(array $schema): bool
     {
         if (isset($schema['eps_show_color'])) {
@@ -293,9 +375,7 @@ final class Schema
         return true;
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setEpsShowKeys(array $schema): bool
     {
         if (isset($schema['eps_show_keys'])) {
@@ -305,9 +385,7 @@ final class Schema
         return false;
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setEpsAllTablesSameWidth(array $schema): bool
     {
         if (isset($schema['eps_all_tables_same_width'])) {
@@ -331,9 +409,7 @@ final class Schema
         return 'L';
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setSvgShowColor(array $schema): bool
     {
         if (isset($schema['svg_show_color'])) {
@@ -343,9 +419,7 @@ final class Schema
         return true;
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setSvgShowKeys(array $schema): bool
     {
         if (isset($schema['svg_show_keys'])) {
@@ -355,9 +429,7 @@ final class Schema
         return false;
     }
 
-    /**
-     * @param array<int|string, mixed> $schema
-     */
+    /** @param array<int|string, mixed> $schema */
     private function setSvgAllTablesSameWidth(array $schema): bool
     {
         if (isset($schema['svg_all_tables_same_width'])) {

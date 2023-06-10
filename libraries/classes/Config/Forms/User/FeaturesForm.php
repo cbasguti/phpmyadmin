@@ -13,10 +13,8 @@ use function __;
 
 class FeaturesForm extends BaseForm
 {
-    /**
-     * @return array
-     */
-    public static function getForms()
+    /** @return mixed[] */
+    public static function getForms(): array
     {
         $result = [
             'General' => [
@@ -49,12 +47,7 @@ class FeaturesForm extends BaseForm
                 'TextareaRows',
                 'LongtextDoubleTextarea',
             ],
-            'Page_titles' => [
-                'TitleDefault',
-                'TitleTable',
-                'TitleDatabase',
-                'TitleServer',
-            ],
+            'Page_titles' => ['TitleDefault', 'TitleTable', 'TitleDatabase', 'TitleServer'],
             'Warnings' => [
                 'PmaNoRelation_DisableWarning',
                 'SuhosinDisableWarning',
@@ -82,10 +75,7 @@ class FeaturesForm extends BaseForm
         return $result;
     }
 
-    /**
-     * @return string
-     */
-    public static function getName()
+    public static function getName(): string
     {
         return __('Features');
     }

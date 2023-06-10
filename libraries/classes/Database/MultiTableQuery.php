@@ -26,54 +26,18 @@ use function md5;
 class MultiTableQuery
 {
     /**
-     * DatabaseInterface instance
-     *
-     * @var DatabaseInterface
-     */
-    private $dbi;
-
-    /**
-     * Database name
-     *
-     * @var string
-     */
-    private $db;
-
-    /**
-     * Default number of columns
-     *
-     * @var int
-     */
-    private $defaultNoOfColumns;
-
-    /**
      * Table names
      *
-     * @var array
+     * @var array<int, string>
      */
-    private $tables;
+    private array $tables;
 
-    /** @var Template */
-    public $template;
-
-    /**
-     * @param DatabaseInterface $dbi                DatabaseInterface instance
-     * @param Template          $template           Template instance
-     * @param string            $dbName             Database name
-     * @param int               $defaultNoOfColumns Default number of columns
-     */
     public function __construct(
-        DatabaseInterface $dbi,
-        Template $template,
-        $dbName,
-        $defaultNoOfColumns = 3
+        private DatabaseInterface $dbi,
+        public Template $template,
+        private string $db,
+        private int $defaultNoOfColumns = 3,
     ) {
-        $this->dbi = $dbi;
-        $this->db = $dbName;
-        $this->defaultNoOfColumns = $defaultNoOfColumns;
-
-        $this->template = $template;
-
         $this->tables = $this->dbi->getTables($this->db);
     }
 
@@ -82,13 +46,13 @@ class MultiTableQuery
      *
      * @return string Multi-Table query page HTML
      */
-    public function getFormHtml()
+    public function getFormHtml(): string
     {
         $tables = [];
         foreach ($this->tables as $table) {
             $tables[$table]['hash'] = md5($table);
             $tables[$table]['columns'] = array_keys(
-                $this->dbi->getColumns($this->db, $table)
+                $this->dbi->getColumns($this->db, $table),
             );
         }
 
@@ -105,26 +69,24 @@ class MultiTableQuery
      * @param string $sqlQuery The query to parse
      * @param string $db       The current database
      */
-    public static function displayResults($sqlQuery, $db): string
+    public static function displayResults(string $sqlQuery, string $db): string
     {
-        global $dbi;
-
         [, $db] = ParseAnalyze::sqlQuery($sqlQuery, $db);
 
         $goto = Url::getFromRoute('/database/multi-table-query');
 
-        $relation = new Relation($dbi);
+        $relation = new Relation($GLOBALS['dbi']);
         $sql = new Sql(
-            $dbi,
+            $GLOBALS['dbi'],
             $relation,
-            new RelationCleanup($dbi, $relation),
-            new Operations($dbi, $relation),
+            new RelationCleanup($GLOBALS['dbi'], $relation),
+            new Operations($GLOBALS['dbi'], $relation),
             new Transformations(),
-            new Template()
+            new Template(),
         );
 
         return $sql->executeQueryAndSendQueryResponse(
-            null, // analyzed_sql_results
+            null,
             false, // is_gotofile
             $db, // db
             null, // table
@@ -137,7 +99,7 @@ class MultiTableQuery
             null, // disp_query
             null, // disp_message
             $sqlQuery, // sql_query
-            null // complete_query
+            null, // complete_query
         );
     }
 }

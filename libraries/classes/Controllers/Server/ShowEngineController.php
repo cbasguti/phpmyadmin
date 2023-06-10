@@ -17,13 +17,9 @@ use PhpMyAdmin\Url;
  */
 final class ShowEngineController extends AbstractController
 {
-    /** @var DatabaseInterface */
-    private $dbi;
-
-    public function __construct(ResponseRenderer $response, Template $template, DatabaseInterface $dbi)
+    public function __construct(ResponseRenderer $response, Template $template, private DatabaseInterface $dbi)
     {
         parent::__construct($response, $template);
-        $this->dbi = $dbi;
     }
 
     /**
@@ -32,9 +28,7 @@ final class ShowEngineController extends AbstractController
      */
     public function __invoke(ServerRequest $request, array $params): void
     {
-        global $errorUrl;
-
-        $errorUrl = Url::getFromRoute('/');
+        $GLOBALS['errorUrl'] = Url::getFromRoute('/');
 
         if ($this->dbi->isSuperUser()) {
             $this->dbi->selectDb('mysql');
@@ -57,9 +51,6 @@ final class ShowEngineController extends AbstractController
             ];
         }
 
-        $this->render('server/engines/show', [
-            'engine' => $engine,
-            'page' => $page,
-        ]);
+        $this->render('server/engines/show', ['engine' => $engine, 'page' => $page]);
     }
 }

@@ -4,27 +4,16 @@ declare(strict_types=1);
 
 namespace PhpMyAdmin\ConfigStorage\Features;
 
-use PhpMyAdmin\Dbal\DatabaseName;
-use PhpMyAdmin\Dbal\TableName;
+use PhpMyAdmin\Identifiers\DatabaseName;
+use PhpMyAdmin\Identifiers\TableName;
 
-/**
- * @psalm-immutable
- */
+/** @psalm-immutable */
 final class PdfFeature
 {
-    /** @var DatabaseName */
-    public $database;
-
-    /** @var TableName */
-    public $pdfPages;
-
-    /** @var TableName */
-    public $tableCoords;
-
-    public function __construct(DatabaseName $database, TableName $pdfPages, TableName $tableCoords)
-    {
-        $this->database = $database;
-        $this->pdfPages = $pdfPages;
-        $this->tableCoords = $tableCoords;
+    public function __construct(
+        public DatabaseName $database,
+        public TableName $pdfPages,
+        public TableName $tableCoords,
+    ) {
     }
 }

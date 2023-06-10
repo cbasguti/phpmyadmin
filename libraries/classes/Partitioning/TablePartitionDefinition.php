@@ -12,24 +12,8 @@ use function min;
 
 final class TablePartitionDefinition
 {
-    /**
-     * @param array|null $details Details that may be pre-filled
-     *
-     * @return array
-     */
-    public static function getDetails(?array $details = null): array
-    {
-        if (! isset($details)) {
-            $details = self::generateDetails();
-        }
-
-        return $details;
-    }
-
-    /**
-     * @return array
-     */
-    private static function generateDetails(): array
+    /** @return mixed[] */
+    public static function getDetails(): array
     {
         $partitionDetails = self::extractDetailsFromRequest();
 
@@ -54,7 +38,7 @@ final class TablePartitionDefinition
     /**
      * Extract some partitioning and subpartitioning parameters from the request
      *
-     * @return array
+     * @return mixed[]
      */
     private static function extractDetailsFromRequest(): array
     {
@@ -68,35 +52,31 @@ final class TablePartitionDefinition
         $details = array_merge(
             $partitionParams,
             //Keep $_POST values, but only for keys that are in $partitionParams
-            array_intersect_key($_POST, $partitionParams)
+            array_intersect_key($_POST, $partitionParams),
         );
 
-        $details['partition_count'] = self::extractPartitionCount('partition_count') ?: 0;
-        $details['subpartition_count'] = self::extractPartitionCount('subpartition_count') ?: 0;
+        $details['partition_count'] = self::extractPartitionCount('partition_count');
+        $details['subpartition_count'] = self::extractPartitionCount('subpartition_count');
 
         return $details;
     }
 
-    /**
-     * @param string $paramLabel Label searched in request
-     */
+    /** @param string $paramLabel Label searched in request */
     private static function extractPartitionCount(string $paramLabel): int
     {
         if (isset($_POST[$paramLabel]) && is_numeric($_POST[$paramLabel])) {
             // MySQL's limit is 8192, so do not allow more
             // @see https://dev.mysql.com/doc/refman/en/partitioning-limitations.html
-            $count = min((int) $_POST[$paramLabel], 8192);
-        } else {
-            $count = 0;
+            return min((int) $_POST[$paramLabel], 8192);
         }
 
-        return $count;
+        return 0;
     }
 
     /**
-     * @param array $partitionDetails Details of partitions
+     * @param mixed[] $partitionDetails Details of partitions
      *
-     * @return array
+     * @return mixed[]
      */
     private static function extractPartitions(array $partitionDetails): array
     {
